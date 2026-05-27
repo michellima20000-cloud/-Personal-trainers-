@@ -1,0 +1,6 @@
+{
+  "name": "GymPulse",
+  "description": "Plataforma completa para personal trainers gerenciarem alunos, treinos, agendas e evolução física.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

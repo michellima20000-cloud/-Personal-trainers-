@@ -1,0 +1,113 @@
+/**
+ * GymPulse TypeScript Definitions
+ */
+
+export type Objective = 'Hipertrofia' | 'Emagrecimento' | 'Condicionamento' | 'Definição' | 'Reabilitação';
+
+export type PlanType = 'Mensal' | 'Trimestral' | 'Semestral';
+
+export interface Student {
+  id: string;
+  name: string;
+  avatar: string;
+  age: number;
+  weight: number;
+  height: number;
+  objective: Objective;
+  restrictions: string;
+  history: string;
+  plan: PlanType;
+  status: 'Ativo' | 'Inativo';
+  joinedAt: string;
+  nextPayment: string;
+  value: number;
+}
+
+export interface Exercise {
+  id: string;
+  name: string;
+  category: 'Peito' | 'Costas' | 'Ombro' | 'Bíceps' | 'Tríceps' | 'Pernas' | 'Glúteos' | 'Abdômen' | 'Cardio';
+  videoUrl: string;
+  description: string;
+  gifUrl?: string;
+}
+
+export interface WorkoutExercise {
+  id: string;
+  exerciseId: string;
+  name: string;
+  sets: number;
+  reps: string; // e.g. "12", "10-12", "FALHA"
+  restSec: number;
+  weightCc: number; // weight target in kg
+  notes: string;
+  // Student interaction properties
+  completed?: boolean;
+  userLoggedWeight?: number;
+  userFeedback?: string;
+  videoCompleted?: boolean;
+}
+
+export interface TrainingSheet {
+  A: WorkoutExercise[];
+  B: WorkoutExercise[];
+  C: WorkoutExercise[];
+  D: WorkoutExercise[];
+  E: WorkoutExercise[];
+}
+
+export interface EvolutionRecord {
+  id: string;
+  studentId: string;
+  date: string;
+  weight: number;
+  bmi: number;
+  bodyFat?: number;
+  armRight?: number;
+  armLeft?: number;
+  waist?: number;
+  chest?: number;
+  legRight?: number;
+  legLeft?: number;
+  notes: string;
+  photoUrl?: string;
+}
+
+export interface AgendaEvent {
+  id: string;
+  studentId?: string;
+  studentName?: string;
+  title: string;
+  date: string;
+  time: string;
+  type: 'Presencial' | 'Online';
+  durationMin: number;
+  notes?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: 'trainer' | 'student';
+  text: string;
+  timestamp: string;
+  fileType?: 'image' | 'audio' | 'video';
+  fileUrl?: string;
+  audioDuration?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  studentId: string;
+  studentName: string;
+  title: string;
+  message: string;
+  channel: 'push' | 'whatsapp' | 'email';
+  type: 'reminder' | 'motivation' | 'plan' | 'workout';
+  sentAt: string;
+}
+
+export interface RevenueLog {
+  month: string;
+  total: number;
+  payments: number;
+}
