@@ -3,7 +3,7 @@ import {
   Users, Dumbbell, Calendar, MessageSquare, Bell, CreditCard, 
   SwitchCamera, ChevronRight, RefreshCw, BarChart2, Star, Shield, HelpCircle, X
 } from 'lucide-react';
-import { Student, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog } from './types';
+import { Student, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, AccessLog } from './types';
 import { 
   INITIAL_STUDENTS, 
   INITIAL_SHEETS, 
@@ -15,11 +15,42 @@ import {
 } from './mockData';
 import TrainerDashboard from './components/TrainerDashboard';
 import StudentDashboard from './components/StudentDashboard';
+import LoginScreen from './components/LoginScreen';
 
 const LOCAL_STORAGE_KEY = 'gympulse_sandbox_state_v1';
 
+const INITIAL_ACCESS_LOGS: AccessLog[] = [
+  {
+    id: 'log_seed_1',
+    role: 'trainer',
+    userName: 'Personal Trainer',
+    timestamp: '27/05/2026 09:00:15',
+    action: 'Acesso ao Painel Principal (Consultoria)',
+    device: 'Computador Desktop'
+  },
+  {
+    id: 'log_seed_2',
+    role: 'student',
+    userId: 's1',
+    userName: 'Ana Silva',
+    timestamp: '27/05/2026 10:15:30',
+    action: 'Acesso ao Portal do Aluno (Visualização de Treinos)',
+    device: 'Dispositivo Móvel'
+  },
+  {
+    id: 'log_seed_3',
+    role: 'student',
+    userId: 's2',
+    userName: 'Carlos Souza',
+    timestamp: '27/05/2026 11:30:10',
+    action: 'Acesso ao Portal do Aluno (Registro de Pesagem)',
+    device: 'Dispositivo Móvel'
+  }
+];
+
 export default function App() {
   const [role, setRole] = useState<'trainer' | 'student'>('trainer');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   
   // Unified Local Databases
   const [students, setStudents] = useState<Student[]>([]);
@@ -29,6 +60,7 @@ export default function App() {
   const [chats, setChats] = useState<Record<string, ChatMessage[]>>({});
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [revenueLogs, setRevenueLogs] = useState<RevenueLog[]>([]);
+  const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
 
   // Selected student inside the student area role view
   const [activeStudentId, setActiveStudentId] = useState<string>('');
@@ -43,6 +75,12 @@ export default function App() {
   // Load state on mount
   useEffect(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    
+    // Parse URL parameters for invitation links
+    const params = new URLSearchParams(window.location.search);
+    const urlRole = params.get('role');
+    const urlStudentId = params.get('studentId');
+
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
@@ -53,15 +91,36 @@ export default function App() {
         setChats(parsed.chats || INITIAL_CHATS);
         setNotifications(parsed.notifications || INITIAL_NOTIFICATIONS);
         setRevenueLogs(parsed.revenueLogs || REVENUE_LOGS);
+        setAccessLogs(parsed.accessLogs || INITIAL_ACCESS_LOGS);
         
-        const firstId = parsed.students?.[0]?.id || INITIAL_STUDENTS[0].id;
+        const firstId = urlStudentId || parsed.students?.[0]?.id || INITIAL_STUDENTS[0].id;
         setActiveStudentId(firstId);
+        
+        if (urlRole === 'student') {
+          setRole('student');
+          setIsLoggedIn(true);
+          addSyncLog(`Link de convite detectado: Logado como Aluno.`);
+        } else if (urlRole === 'trainer') {
+          setRole('trainer');
+          setIsLoggedIn(true);
+          addSyncLog(`Link administrativo consultor detectado.`);
+        } else {
+          setIsLoggedIn(parsed.isLoggedIn || false);
+          setRole(parsed.role || 'trainer');
+        }
+
         addSyncLog('Estado anterior restaurado com sucesso do localStorage.');
       } catch (err) {
         loadDefaults();
       }
     } else {
       loadDefaults();
+      if (urlRole === 'student' && urlStudentId) {
+        setRole('student');
+        setActiveStudentId(urlStudentId);
+        setIsLoggedIn(true);
+        addSyncLog(`Link de convite detectado: Logado como Aluno.`);
+      }
     }
   }, []);
 
@@ -73,6 +132,7 @@ export default function App() {
     setChats(INITIAL_CHATS);
     setNotifications(INITIAL_NOTIFICATIONS);
     setRevenueLogs(REVENUE_LOGS);
+    setAccessLogs(INITIAL_ACCESS_LOGS);
     setActiveStudentId(INITIAL_STUDENTS[0].id);
     addSyncLog('Dados de demonstração padrão carregados no aplicativo.');
   };
@@ -85,7 +145,10 @@ export default function App() {
     newAgenda: AgendaEvent[],
     newChats: Record<string, ChatMessage[]>,
     newNotifications: AppNotification[],
-    newRevenue: RevenueLog[]
+    newRevenue: RevenueLog[],
+    newAccessLogs?: AccessLog[],
+    newIsLoggedIn?: boolean,
+    newLoggedInRole?: 'trainer' | 'student'
   ) => {
     const data = {
       students: newStudents,
@@ -94,10 +157,47 @@ export default function App() {
       agenda: newAgenda,
       chats: newChats,
       notifications: newNotifications,
-      revenueLogs: newRevenue
+      revenueLogs: newRevenue,
+      accessLogs: newAccessLogs || accessLogs,
+      isLoggedIn: newIsLoggedIn !== undefined ? newIsLoggedIn : isLoggedIn,
+      role: newLoggedInRole !== undefined ? newLoggedInRole : role
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
   };
+
+  // Automatically record access log when role/active student switches
+  useEffect(() => {
+    if (students.length === 0) return;
+    if (!isLoggedIn) return; // Only log active accesses when user is logged in
+
+    const uid = role === 'student' ? activeStudentId : 'trainer';
+    const uName = role === 'student'
+      ? (students.find(s => s.id === activeStudentId)?.name || 'Aluno')
+      : 'Personal Trainer';
+    const actionDesc = role === 'student'
+      ? `Acessou o portal do aluno (${uName})`
+      : 'Acessou o painel de administração (Personal)';
+
+    const newLog: AccessLog = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      role,
+      userId: role === 'student' ? activeStudentId : undefined,
+      userName: uName,
+      timestamp: new Date().toLocaleString('pt-BR'),
+      action: actionDesc,
+      device: navigator.userAgent.includes('Mobi') ? 'Dispositivo Móvel' : 'Computador Desktop'
+    };
+
+    setAccessLogs(prev => {
+      // Prevent double triggers within same 2 seconds of action
+      if (prev.length > 0 && prev[0].userId === uid && prev[0].role === role) {
+        return prev;
+      }
+      const updated = [newLog, ...prev];
+      saveState(students, sheets, evolution, agenda, chats, notifications, revenueLogs, updated);
+      return updated;
+    });
+  }, [role, activeStudentId, students.length, isLoggedIn]);
 
   const addSyncLog = (message: string) => {
     const timestampStr = new Date().toLocaleTimeString('pt-BR');
@@ -347,6 +447,66 @@ export default function App() {
     addSyncLog(`Aluno "${targetStudent?.name}" marcou o "Treino ${workoutLetter}" como CONCLUÍDO. Cargas atualizadas.`);
   };
 
+  const handleLoginSuccess = (enteredRole: 'trainer' | 'student', studentId?: string) => {
+    setRole(enteredRole);
+    if (studentId) {
+      setActiveStudentId(studentId);
+    }
+    setIsLoggedIn(true);
+    
+    // Save state
+    saveState(
+      students,
+      sheets,
+      evolution,
+      agenda,
+      chats,
+      notifications,
+      revenueLogs,
+      accessLogs,
+      true, // isLoggedIn
+      enteredRole
+    );
+
+    addSyncLog(`Login bem-sucedido! Acesso concedido à área de: ${enteredRole === 'trainer' ? 'Personal Trainer' : 'Aluno'}.`);
+  };
+
+  const handleLogout = () => {
+    const uName = role === 'student'
+      ? (students.find(s => s.id === activeStudentId)?.name || 'Aluno')
+      : 'Personal Trainer';
+
+    // Record access logout log
+    const newLog: AccessLog = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      role,
+      userId: role === 'student' ? activeStudentId : undefined,
+      userName: uName,
+      timestamp: new Date().toLocaleString('pt-BR'),
+      action: `Logout efetuado com sucesso da conta.`,
+      device: navigator.userAgent.includes('Mobi') ? 'Dispositivo Móvel' : 'Computador Desktop'
+    };
+
+    const updatedLogs = [newLog, ...accessLogs];
+    setAccessLogs(updatedLogs);
+
+    setIsLoggedIn(false);
+    addSyncLog(`Logout efetuado para: ${uName}. Sessão encerrada.`);
+    
+    saveState(
+      students,
+      sheets,
+      evolution,
+      agenda,
+      chats,
+      notifications,
+      revenueLogs,
+      updatedLogs,
+      false, // isLoggedIn
+      role
+    );
+  };
+
   const handleTriggerAutoResponse = (studentId: string) => {
     const student = students.find(s => s.id === studentId);
     if (!student) return;
@@ -368,6 +528,7 @@ export default function App() {
     if (confirm('Deseja redefinir todo o banco de dados local para os dados padrão iniciais de simulação?')) {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
       loadDefaults();
+      setIsLoggedIn(false);
     }
   };
 
@@ -375,84 +536,97 @@ export default function App() {
     <div className="bg-[#09090b] min-h-screen text-neutral-100 flex flex-col antialiased selection:bg-[#39FF14] selection:text-black">
       
       {/* Top Controller: Role Sandbox Switcher */}
-      <div className="bg-[#18181b] border-b border-[#39FF14]/30 text-xs py-3 px-4 md:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-[#39FF14]/10 text-[#39FF14] px-2.5 py-1 rounded border border-[#39FF14]/20 font-mono text-[9px] uppercase tracking-wider font-extrabold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-[#39FF14] rounded-full animate-pulse"></span>
-              Fidelidade Máxima (Sandbox Ativa)
+      {isLoggedIn && (
+        <div className="bg-[#18181b] border-b border-[#39FF14]/30 text-xs py-3 px-4 md:px-8">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-[#39FF14]/10 text-[#39FF14] px-2.5 py-1 rounded border border-[#39FF14]/20 font-mono text-[9px] uppercase tracking-wider font-extrabold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-[#39FF14] rounded-full animate-pulse"></span>
+                Fidelidade Máxima (Autenticado)
+              </div>
+              <p className="text-neutral-300 text-[11px] leading-tight text-center md:text-left">
+                Troque rapidamente as visões para testes: 
+                <strong className="text-white font-semibold"> Personal cria treinos ➔ Aluno treina ➔ Profissional acompanha painel!</strong>
+              </p>
             </div>
-            <p className="text-neutral-300 text-[11px] leading-tight text-center md:text-left">
-              Altere os papéis para simular o ciclo: 
-              <strong className="text-white"> Personal monta treino ➜ Aluno treina e anota medicação ➜ Personal acompanha progresso!</strong>
-            </p>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setRole('trainer');
-                addSyncLog('Alternou para visualização do Personal Trainer.');
-              }}
-              className={`px-4.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition ${role === 'trainer' ? 'bg-[#39FF14] text-black' : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white'}`}
-            >
-              <Users size={14} /> Sou Personal Trainer
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setRole('trainer');
+                  addSyncLog('Alternou sandbox para visualização do Personal Trainer.');
+                }}
+                className={`px-4.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer text-xs ${role === 'trainer' ? 'bg-[#39FF14] text-black font-extrabold shadow-sm shadow-[#39FF14]/20' : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white'}`}
+              >
+                <Users size={14} /> Ver como Personal
+              </button>
 
-            <button
-              onClick={() => {
-                setRole('student');
-                addSyncLog(`Alternou para visualização do Aluno ("${students.find(s=>s.id===activeStudentId)?.name || 'Perfil'}").`);
-              }}
-              className={`px-4.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition ${role === 'student' ? 'bg-[#39FF14] text-black' : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white'}`}
-            >
-              <Dumbbell size={14} /> Sou Aluno
-            </button>
+              <button
+                onClick={() => {
+                  setRole('student');
+                  addSyncLog(`Alternou sandbox para visualização do Aluno ("${students.find(s=>s.id===activeStudentId)?.name || 'Perfil'}").`);
+                }}
+                className={`px-4.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer text-xs ${role === 'student' ? 'bg-[#39FF14] text-black font-extrabold shadow-sm shadow-[#39FF14]/20' : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white'}`}
+              >
+                <Dumbbell size={14} /> Ver como Aluno
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Primary Dashboard views render based on active Sandbox Selector */}
       <div className="flex-1 flex flex-col">
-        {students.length > 0 && (
-          role === 'trainer' ? (
-            <TrainerDashboard
-              students={students}
-              sheets={sheets}
-              evolution={evolution}
-              agenda={agenda}
-              chats={chats}
-              notifications={notifications}
-              revenueLogs={revenueLogs}
-              onAddStudent={handleAddStudent}
-              onUpdateStudent={handleUpdateStudent}
-              onDeleteStudent={handleDeleteStudent}
-              onUpdateSheet={handleUpdateSheet}
-              onAddAgendaEvent={handleAddAgendaEvent}
-              onDeleteAgendaEvent={handleDeleteAgendaEvent}
-              onSendMessage={(id, text) => handleSendMessage(id, text, 'trainer')}
-              onSendNotification={handleSendNotification}
-              onTriggerAutoResponse={handleTriggerAutoResponse}
-            />
-          ) : (
-            <StudentDashboard
-              students={students}
-              sheets={sheets}
-              evolution={evolution}
-              chats={chats}
-              activeStudentId={activeStudentId}
-              onSelectStudent={(id) => {
-                setActiveStudentId(id);
-                addSyncLog(`Alterado aluno ativo no portal do aluno para: "${students.find(s=>s.id===id)?.name}".`);
-              }}
-              onUpdateSheetExercises={async (id, letter, items) => {
-                const currentSheet = sheets[id] || { A: [], B: [], C: [], D: [], E: [] };
-                handleUpdateSheet(id, { ...currentSheet, [letter]: items });
-              }}
-              onAddEvolutionRecord={handleAddEvolutionRecord}
-              onSendMessage={(id, text) => handleSendMessage(id, text, 'student')}
-              onCompleteWorkout={handleCompleteWorkout}
-            />
+        {!isLoggedIn ? (
+          <LoginScreen 
+            students={students} 
+            onLoginSuccess={handleLoginSuccess} 
+          />
+        ) : (
+          students.length > 0 && (
+            role === 'trainer' ? (
+              <TrainerDashboard
+                students={students}
+                sheets={sheets}
+                evolution={evolution}
+                agenda={agenda}
+                chats={chats}
+                notifications={notifications}
+                revenueLogs={revenueLogs}
+                accessLogs={accessLogs}
+                onAddStudent={handleAddStudent}
+                onUpdateStudent={handleUpdateStudent}
+                onDeleteStudent={handleDeleteStudent}
+                onUpdateSheet={handleUpdateSheet}
+                onAddAgendaEvent={handleAddAgendaEvent}
+                onDeleteAgendaEvent={handleDeleteAgendaEvent}
+                onSendMessage={(id, text) => handleSendMessage(id, text, 'trainer')}
+                onSendNotification={handleSendNotification}
+                onTriggerAutoResponse={handleTriggerAutoResponse}
+                onLogout={handleLogout}
+              />
+            ) : (
+              <StudentDashboard
+                students={students}
+                sheets={sheets}
+                evolution={evolution}
+                chats={chats}
+                activeStudentId={activeStudentId}
+                accessLogs={accessLogs}
+                onSelectStudent={(id) => {
+                  setActiveStudentId(id);
+                  addSyncLog(`Alterado aluno ativo no portal do aluno para: "${students.find(s=>s.id===id)?.name}".`);
+                }}
+                onUpdateSheetExercises={async (id, letter, items) => {
+                  const currentSheet = sheets[id] || { A: [], B: [], C: [], D: [], E: [] };
+                  handleUpdateSheet(id, { ...currentSheet, [letter]: items });
+                }}
+                onAddEvolutionRecord={handleAddEvolutionRecord}
+                onSendMessage={(id, text) => handleSendMessage(id, text, 'student')}
+                onCompleteWorkout={handleCompleteWorkout}
+                onLogout={handleLogout}
+              />
+            )
           )
         )}
       </div>

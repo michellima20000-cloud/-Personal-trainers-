@@ -4,11 +4,12 @@ import {
   Play, Pause, RotateCcw, Check, CheckCircle2, 
   Award, Clock, Eye, AlertCircle, Plus, Send, ChevronRight, 
   HelpCircle, Copy, Smartphone, CheckSquare, Sparkles, MessageCircle, X,
-  FileText
+  FileText, LogOut, Activity, ExternalLink, RefreshCw
 } from 'lucide-react';
-import { Student, Exercise, TrainingSheet, EvolutionRecord, ChatMessage, Objective, PlanType, WorkoutExercise } from '../types';
+import { Student, Exercise, TrainingSheet, EvolutionRecord, ChatMessage, Objective, PlanType, WorkoutExercise, AccessLog } from '../types';
 import { EXERCISE_BANK } from '../mockData';
 import { exportStudentReport } from '../utils/pdfGenerator';
+import ExerciseVisualizer from './ExerciseVisualizer';
 
 interface StudentDashboardProps {
   students: Student[];
@@ -16,12 +17,86 @@ interface StudentDashboardProps {
   evolution: Record<string, EvolutionRecord[]>;
   chats: Record<string, ChatMessage[]>;
   activeStudentId: string;
+  accessLogs: AccessLog[];
   onSelectStudent: (id: string) => void;
   onUpdateSheetExercises: (studentId: string, letter: 'A' | 'B' | 'C' | 'D' | 'E', exercises: WorkoutExercise[]) => void;
   onAddEvolutionRecord: (studentId: string, record: EvolutionRecord) => void;
   onSendMessage: (studentId: string, text: string) => void;
   onCompleteWorkout: (studentId: string, workoutLetter: 'A' | 'B' | 'C' | 'D' | 'E') => void;
+  onLogout?: () => void;
 }
+
+const EXERCISE_DETAILS: Record<string, {
+  musclesPrimary: string[];
+  musclesSecondary: string[];
+  breathing: { concentric: string; eccentric: string };
+  commonMistakes: string[];
+  setupSteps: string[];
+}> = {
+  'Peito': {
+    musclesPrimary: ['Peitoral Maior', 'Deltoide Anterior (Fibras Claviculares)'],
+    musclesSecondary: ['Tríceps Braquial', 'Serrátil Anterior', 'Sinergistas Estabilizadores'],
+    breathing: { concentric: 'Expire pela boca ao empurrar (fase concêntrica)', eccentric: 'Inspire pelo nariz ao descer o peso de forma controlada' },
+    commonMistakes: ['Tirar os ombros de trás (perda de adução das escápulas)', 'Descer a barra rápido demais batendo no peitoral', 'Estender excessivamente os cotovelos sem manter tensão ativa'],
+    setupSteps: ['Mantenha os calcanhares impulsionados contra o chão firmemente', 'Tracione suas escápulas para trás e para baixo (posição ativa)', 'Posicione os braços em um ângulo seguro de 45º a 60º em relação ao corpo']
+  },
+  'Costas': {
+    musclesPrimary: ['Latíssimo do Dorso (Dorsal)', 'Trapézio Intermediário/Inferior', 'Romboides'],
+    musclesSecondary: ['Bíceps Braquial', 'Deltoide Posterior', 'Redondo Maior', 'Braquial'],
+    breathing: { concentric: 'Expire pela boca ao tracionar/puxar a barra', eccentric: 'Inspire controladamente enquanto devolve a carga' },
+    commonMistakes: ['Usar o tronco para dar impulso (efeito gangorra)', 'Iniciar o movimento flexionando os braços antes das escápulas', 'Deixar os ombros subirem em direção às orelhas'],
+    setupSteps: ['Mantenha os joelhos semi-flexionados e quadril empinado para estabilização', 'Realize a "depressão escapular" ativa antes de iniciar a tração', 'Puxe direcionando os cotovelos para trás e em direção ao quadril']
+  },
+  'Ombro': {
+    musclesPrimary: ['Deltoide Lateral', 'Deltoide Anterior', 'Deltoide Posterior'],
+    musclesSecondary: ['Trapézio Superior', 'Tríceps Braquial', 'Supraespinhal'],
+    breathing: { concentric: 'Expire ao elevar os braços/halteres', eccentric: 'Inspire de forma contínua durante o retorno' },
+    commonMistakes: ['Subir os braços acima da linha dos ombros desalinhando o manguito', 'Curvar a coluna para trás para compensar carga pesada', 'Balançar o corpo inteiro'],
+    setupSteps: ['Projete o peitoral levemente para cima para estabilizar a coluna', 'Mantenha os cotovelos levemente flexionados e levemente rotacionados anteriorizados', 'Faça movimentos concêntricos potentes, sem usar impulsão']
+  },
+  'Bíceps': {
+    musclesPrimary: ['Bíceps Braquial (Cabeça Curta e Longa)', 'Braquial'],
+    musclesSecondary: ['Braquiorradial', 'Pronador Redondo', 'Flexores do Antebraço'],
+    breathing: { concentric: 'Expire totalmente no topo do movimento de flexão', eccentric: 'Inspire lentamente sustentando o peso na descida' },
+    commonMistakes: ['Projetar os cotovelos para frente ajudando no topo', 'Encurtar amplitude não estendendo o cotovelo completamente', 'Fazer movimentos rápidos perdendo a fase negativa'],
+    setupSteps: ['Trave os cotovelos firmemente nas costelas do seu tronco', 'Mantenha os ombros neutros e o peito bem aberto', 'Sinta a contração esmagando o bíceps no ápice da subida']
+  },
+  'Tríceps': {
+    musclesPrimary: ['Tríceps Braquial (Cabeças Lateral, Medial e Longa)'],
+    musclesSecondary: ['Ancôneo', 'Músculos Extensores do Punho e Dedos'],
+    breathing: { concentric: 'Expire na extensão total dos membros superiores', eccentric: 'Inspire enquanto flexiona controlando a aproximação' },
+    commonMistakes: ['Afastar os cotovelos para os lados perdendo alinhamento', 'Realizar o exercício com o ombro projetado para frente', 'Utilizar movimentos pendulares'],
+    setupSteps: ['Trave os ombros imóveis e mantenha os cotovelos paralelos', 'Foque na força isolada do tríceps estendendo até o final', 'Aperte ativamente os tríceps na contração máxima de pico']
+  },
+  'Pernas': {
+    musclesPrimary: ['Quadríceps Femoral', 'Glúteo Máximo', 'Posteriores da Coxa (Isquiotibiais)'],
+    musclesSecondary: ['Eretores da Espinha', 'Gastrocnêmio (Panturrilhas)', 'Sinergistas do Core'],
+    breathing: { concentric: 'Expire ao empurrar o solo para subir', eccentric: 'Inspire descendo o quadril de forma estável' },
+    commonMistakes: ['Joelhos colapsando para dentro (valgo dinâmico de joelho)', 'Retirar o calcanhar do solo jogando a carga nos dedos', 'Arredondar a coluna lombar na descida máxima'],
+    setupSteps: ['Posicione os pés alinhados com a largura dos ombros, apontando levemente para fora', 'Contraia o abdômen ("bracing") ativamente para blindar o tronco', 'Inicie descendo através da articulação do quadril, como se fosse se sentar']
+  },
+  'Glúteos': {
+    musclesPrimary: ['Glúteo Máximo', 'Glúteo Médio', 'Quadríceps Femoral'],
+    musclesSecondary: ['Músculos Isquiotibiais (Posteriores)', 'Eretores Espinhais de Lombar'],
+    breathing: { concentric: 'Expire na subida comprimindo forte a musculatura', eccentric: 'Inspire descendo o quadril com controle mecânico' },
+    commonMistakes: ['Hiperestender as costas comprimindo as vértebras', 'Não estender totalmente o quadril de forma completa', 'Não impulsionar a subida a partir do calcanhar'],
+    setupSteps: ['Apoie os calcanhares alinhados projetando força vertical reto para cima', 'Mantenha o queixo ligeiramente recolhido para manter a curvatura cervical', 'Trave o abdômen e esmague os glúteos de forma consciente no topo']
+  },
+  'Abdômen': {
+    musclesPrimary: ['Reto Abdominal', 'Oblíquo Interno e Externo'],
+    musclesSecondary: ['Transverso do Abdômen', 'Psoas Maior (Estabilizadores de Core)'],
+    breathing: { concentric: 'Sopre todo o ar esvaziando o pulmão na contração máxima', eccentric: 'Inspire alongando a parede abdominal sem desleixar as costas' },
+    commonMistakes: ['Puxar a cabeça forçando a cervical desnecessariamente', 'Subir girando o tronco usando flexores do quadril em vez de abdômen', 'Fazer os movimentos rápidos demais'],
+    setupSteps: ['Sinta as costelas se aproximando do osso do quadril ativamente', 'Esqueça os braços na nuca, apoie-os cruzados no tórax', 'Mantenha a lombar bem apoiada no colchonete ou banco']
+  },
+  'Cardio': {
+    musclesPrimary: ['Sistema Cardiorrespiratório', 'Gasto Metabólico Integral'],
+    musclesSecondary: ['Gastrocnêmio', 'Sóleo', 'Quadríceps', 'Isquiotibiais'],
+    breathing: { concentric: 'Mantenha a respiração cadenciada e constante', eccentric: 'Evite apneia (trancamento de ar)' },
+    commonMistakes: ['Impactar os pés de forma pesada ou correr curvado', 'Não monitorar batimentos ou exceder limites sem progressão lenta', 'Postura de ombros elevados'],
+    setupSteps: ['Utilize tênis com amortecimento ideal e confortável', 'Contraia levemente o core para dar sustentação vertical ao corpo', 'Inicie em ritmo calmo aumentando a intensidade de forma progressiva']
+  }
+};
 
 export default function StudentDashboard({
   students,
@@ -29,11 +104,13 @@ export default function StudentDashboard({
   evolution,
   chats,
   activeStudentId,
+  accessLogs,
   onSelectStudent,
   onUpdateSheetExercises,
   onAddEvolutionRecord,
   onSendMessage,
-  onCompleteWorkout
+  onCompleteWorkout,
+  onLogout
 }: StudentDashboardProps) {
   const currentStudent = students.find(s => s.id === activeStudentId) || students[0];
   
@@ -43,6 +120,12 @@ export default function StudentDashboard({
 
   // Exercise player overlay details state
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [selectedExerciseWeight, setSelectedExerciseWeight] = useState<number>(20);
+  const [exerciseModalTab, setExerciseModalTab] = useState<'virtual' | 'video'>('virtual');
+  const [isMetronomeActive, setIsMetronomeActive] = useState<boolean>(true);
+  const [metronomeProgress, setMetronomeProgress] = useState<number>(0);
+  const [metronomePhase, setMetronomePhase] = useState<'eccentric' | 'concentric' | 'pause' | 'ready'>('concentric');
+  const [checkedGuideSteps, setCheckedGuideSteps] = useState<Record<string, boolean>>({});
 
   // Training timer/stopwatch state
   const [timerMaxSeconds, setTimerMaxSeconds] = useState(90);
@@ -98,6 +181,40 @@ export default function StudentDashboard({
     }
     return () => clearInterval(interval);
   }, [timerIsActive, timerSeconds]);
+
+  // Metronome simulator logic for exercise demonstrations (repetition pacing guide)
+  useEffect(() => {
+    if (!selectedExercise || !isMetronomeActive) {
+      setMetronomeProgress(0);
+      setMetronomePhase('ready');
+      return;
+    }
+
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) % 7500;
+      
+      if (elapsed < 3000) {
+        // Eccentric (lowering/stretching): 0s to 3s
+        setMetronomePhase('eccentric');
+        setMetronomeProgress(Math.max(0, 100 - (elapsed / 3000) * 100));
+      } else if (elapsed < 4200) {
+        // Pause/Isometria: 3s to 4.2s
+        setMetronomePhase('pause');
+        setMetronomeProgress(0);
+      } else if (elapsed < 6200) {
+        // Concentric (pushing/pulling up, execution force): 4.2s to 6.2s
+        setMetronomePhase('concentric');
+        setMetronomeProgress(Math.min(100, ((elapsed - 4200) / 2000) * 100));
+      } else {
+        // Peak Contraction / Rest: 6.2s to 7.5s
+        setMetronomePhase('ready');
+        setMetronomeProgress(100);
+      }
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [selectedExercise, isMetronomeActive]);
 
   const handleToggleTimer = () => {
     setTimerIsActive(!timerIsActive);
@@ -316,6 +433,17 @@ export default function StudentDashboard({
               <FileText size={14} className="shrink-0" />
               <span>Gerar PDF Resumo</span>
             </button>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 hover:border-transparent rounded-xl px-4 py-2 text-xs font-extrabold transition-all duration-200 active:scale-95 cursor-pointer shadow-lg shadow-black/25"
+                title="Sair da minha conta"
+              >
+                <LogOut size={14} className="shrink-0" />
+                <span>Sair</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -448,7 +576,10 @@ export default function StudentDashboard({
                         {/* Integration explanatory video trigger */}
                         {bankEx && (
                           <button 
-                            onClick={() => setSelectedExercise(bankEx)}
+                            onClick={() => {
+                              setSelectedExercise(bankEx);
+                              setSelectedExerciseWeight(state.userLoggedWeight || exercise.weightCc || 15);
+                            }}
                             className="text-[#39FF14] hover:bg-[#39FF14]/15 border border-[#39FF14]/30 px-3 py-1.5 rounded-xl text-[10px] font-bold transition flex items-center gap-1 shrink-0 cursor-pointer"
                           >
                             <Play size={10} className="fill-[#39FF14]" /> Ver Execução
@@ -921,6 +1052,39 @@ export default function StudentDashboard({
 
             </div>
 
+            {/* My Login / Session Access Logs Section */}
+            <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono font-semibold">
+                <Clock size={16} className="text-[#39FF14]" /> Histórico de Acessos Recentes (Segurança)
+              </h4>
+              <p className="text-xs text-neutral-400 font-sans leading-relaxed">
+                Abaixo estão registrados os acessos recentes vinculados à sua conta na base de dados sincronizada:
+              </p>
+
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {accessLogs
+                  .filter(log => log.role === 'student' && log.userId === currentStudent.id)
+                  .map((log) => (
+                    <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2 h-2 rounded-full bg-[#39FF14] animate-pulse"></div>
+                        <div>
+                          <p className="font-semibold text-white">{log.action}</p>
+                          <p className="text-[10px] text-neutral-400 mt-0.5">{log.timestamp} • {log.device}</p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/35 px-2 py-0.5 rounded-full font-mono font-extrabold uppercase">
+                        ATIVO
+                      </span>
+                    </div>
+                  ))}
+
+                {accessLogs.filter(log => log.role === 'student' && log.userId === currentStudent.id).length === 0 && (
+                  <p className="text-xs text-neutral-500 font-mono text-center py-2">Nenhum registro de acesso recente.</p>
+                )}
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -928,44 +1092,345 @@ export default function StudentDashboard({
 
       {/* EXERCISE VIDEO MODAL PLAYER OVERLAY */}
       {selectedExercise && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in select-none">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-xl p-5 relative shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/92 backdrop-blur-md animate-fade-in select-none">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-xl p-5 md:p-6 relative shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto scrollbar-thin scrollbar-thumb-neutral-800">
             
+            {/* Close Modal button */}
             <button 
-              onClick={() => setSelectedExercise(null)}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-white p-1 hover:bg-neutral-800 rounded-lg transition"
+              onClick={() => {
+                setSelectedExercise(null);
+                setIsMetronomeActive(false);
+              }}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white p-2 hover:bg-neutral-800/80 rounded-xl transition duration-150 cursor-pointer"
+              title="Fechar painel"
             >
               <X size={18} />
             </button>
 
-            <div>
-              <span className="text-[10px] bg-[#39FF14]/15 text-[#39FF14] px-2 py-0.5 rounded font-mono uppercase font-bold">
+            {/* Title and Badge Info */}
+            <div className="space-y-1.5">
+              <span className="text-[9px] bg-[#39FF14]/15 text-[#39FF14] px-2.5 py-1 rounded-md font-mono uppercase font-extrabold border border-[#39FF14]/20">
                 {selectedExercise.category}
               </span>
-              <h3 className="text-md font-bold text-white mt-1.5 my-0 pr-6">{selectedExercise.name}</h3>
+              <h3 className="text-base md:text-lg font-bold text-white mt-2 my-0 pr-10 tracking-tight flex items-center gap-2">
+                <Dumbbell size={18} className="text-[#39FF14]" />
+                {selectedExercise.name}
+              </h3>
             </div>
 
-            {/* Video iframe embed */}
-            <div className="aspect-video bg-neutral-950 rounded-xl overflow-hidden border border-neutral-800/80 relative">
-              <iframe 
-                src={selectedExercise.videoUrl} 
-                title={selectedExercise.name}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowFullScreen
-                className="w-full h-full border-none"
-              ></iframe>
+            {/* Custom Interactive Tab Controls */}
+            <div className="flex border-b border-neutral-800 gap-1 mt-2">
+              <button
+                onClick={() => setExerciseModalTab('virtual')}
+                className={`px-4 py-2 text-xs font-extrabold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${exerciseModalTab === 'virtual' ? 'border-[#39FF14] text-[#39FF14]' : 'border-transparent text-neutral-400 hover:text-neutral-200'}`}
+              >
+                <Sparkles size={13} className="text-[#39FF14]" />
+                Guia Virtual de Postura por IA
+              </button>
+              <button
+                onClick={() => setExerciseModalTab('video')}
+                className={`px-4 py-2 text-xs font-extrabold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${exerciseModalTab === 'video' ? 'border-[#39FF14] text-[#39FF14]' : 'border-transparent text-neutral-400 hover:text-neutral-200'}`}
+              >
+                <Play size={11} className={exerciseModalTab === 'video' ? 'text-[#39FF14]' : ''} />
+                Vídeo de Execução Real
+              </button>
             </div>
 
-            <div className="space-y-1">
-              <h5 className="text-[10px] uppercase font-mono tracking-wider font-bold text-neutral-400">Guia Técnico Prático de Execução</h5>
-              <p className="text-xs text-neutral-300 leading-relaxed font-sans">{selectedExercise.description}</p>
-            </div>
+            {/* Tab Render: VIRTUAL AI PACER AND METRONOME */}
+            {exerciseModalTab === 'virtual' ? (
+              <div className="space-y-4">
+                {/* AI Animation Simulator screen */}
+                <ExerciseVisualizer 
+                  exerciseId={selectedExercise.id} 
+                  exerciseName={selectedExercise.name} 
+                  category={selectedExercise.category}
+                  weight={selectedExerciseWeight}
+                />
 
+                {/* Visualizer header metrics with Metronome trigger switch */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 text-slate-400">
+                    <Activity size={12} className="text-[#39FF14] animate-pulse" />
+                    <span className="text-[10px] font-mono tracking-wider uppercase font-bold text-neutral-400">Biometria e Ritmo Ativo</span>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setIsMetronomeActive(!isMetronomeActive)}
+                    className="flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 hover:text-white px-3 py-1 rounded-lg text-[9px] font-extrabold font-mono uppercase tracking-wider transition cursor-pointer border border-neutral-700/80 active:scale-95"
+                  >
+                    {isMetronomeActive ? <Pause size={10} className="fill-white" /> : <Play size={10} className="fill-white" />}
+                    Simulador {isMetronomeActive ? 'Ativo 🟢' : 'Pausado 🔴'}
+                  </button>
+                </div>
+
+                {/* Simulated rep-progress metrics panel */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-neutral-950 p-4 rounded-xl border border-neutral-800/80 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#39FF14]/5 via-transparent to-transparent pointer-events-none" />
+                  
+                  {/* Progress pacer cylinder */}
+                  <div className="md:col-span-3 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-neutral-800/80 pb-3 md:pb-0 md:pr-3">
+                    <span className="text-[8px] font-mono font-extrabold uppercase tracking-widest text-neutral-500 mb-2">Padrão Rep.</span>
+                    
+                    <div className="w-12 h-24 bg-neutral-900 rounded-full border border-neutral-800 p-1 flex flex-col justify-end relative shadow-inner overflow-hidden">
+                      <div 
+                        className="w-full rounded-full transition-all duration-75 relative"
+                        style={{ 
+                          height: `${metronomeProgress}%`,
+                          background: metronomePhase === 'concentric' 
+                            ? 'linear-gradient(180deg, #39FF14 0%, #1a9e04 100%)' 
+                            : metronomePhase === 'pause'
+                              ? 'linear-gradient(180deg, #22d3ee 0%, #0891b2 100%)'
+                              : metronomePhase === 'eccentric'
+                                ? 'linear-gradient(180deg, #f97316 0%, #c2410c 100%)'
+                                : 'linear-gradient(180deg, #a855f7 0%, #7e22ce 100%)',
+                          boxShadow: metronomePhase === 'concentric' 
+                            ? '0 0 10px rgba(57,255,20,0.4)' 
+                            : metronomePhase === 'pause'
+                              ? '0 0 10px rgba(34,211,238,0.4)'
+                              : metronomePhase === 'eccentric'
+                                ? '0 0 10px rgba(249,115,22,0.4)'
+                                : '0 0 10px rgba(168,85,247,0.4)'
+                        }}
+                      >
+                        <div className="absolute top-1 left-1 right-1 h-1.5 bg-white/40 rounded-full animate-pulse" />
+                      </div>
+
+                      {/* Scale ticks */}
+                      <div className="absolute inset-y-1.5 inset-x-0 flex flex-col justify-between pointer-events-none text-neutral-700 font-mono text-[8px] px-1 select-none font-bold">
+                        <span>PICO</span>
+                        <span className="border-t border-neutral-800/80 w-full" />
+                        <span className="border-t border-neutral-800/80 w-full" />
+                        <span>ESTRELA</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Breathing feedback panel and execution cadence instructions */}
+                  <div className="md:col-span-9 flex flex-col justify-between space-y-3.5">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] uppercase font-mono tracking-widest font-extrabold text-neutral-400">Diretriz da Cadência</span>
+                        {isMetronomeActive && (
+                          <div className="flex items-center gap-1 font-mono text-[8px] font-bold text-[#39FF14]">
+                            <span className="w-1 h-1 bg-[#39FF14] rounded-full animate-ping" />
+                            ACOMPANHE O CICLO
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Dynamic phase alert board */}
+                      <div className={`mt-1.5 p-3 rounded-xl border text-center transition-all ${
+                        metronomePhase === 'concentric' 
+                          ? 'bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]'
+                          : metronomePhase === 'pause'
+                            ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-450'
+                            : metronomePhase === 'eccentric'
+                              ? 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+                              : 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                      }`}>
+                        <p className="text-[10px] font-mono uppercase tracking-wider font-extrabold m-0">
+                          {metronomePhase === 'concentric' 
+                            ? '▲ ▲ ▲ Fase Concêntrica (Puxar/Empurrar)'
+                            : metronomePhase === 'pause'
+                              ? '◆ ◆ ◆ Transição Ativa / Isometria'
+                              : metronomePhase === 'eccentric'
+                                ? '▼ ▼ ▼ Fase Excêntrica (Suster a descida)'
+                                : '■ ■ ■ Pico Estático de Contração'}
+                        </p>
+                        <p className="text-[11px] text-neutral-200 mt-1 leading-normal font-sans">
+                          {metronomePhase === 'concentric' 
+                            ? 'Vença a inércia acelerando a carga de forma firme e explosiva.'
+                            : metronomePhase === 'pause'
+                              ? 'Evite o efeito mola. Mantenha estabilizado na parte inferior do movimento.'
+                              : metronomePhase === 'eccentric'
+                                ? 'Segure a resistência aplicando força contrária por 3 segundos.'
+                                : 'Aperte ao máximo e contraia a musculatura-chave de esforço.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Integrated dynamic breathing helper */}
+                    <div className="flex items-center gap-3 bg-neutral-900 border border-neutral-800 p-2.5 rounded-xl">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
+                        metronomePhase === 'concentric' 
+                          ? 'bg-[#39FF14]/20 text-[#39FF14] scale-105 shadow-md shadow-[#39FF14]/10' 
+                          : metronomePhase === 'eccentric' 
+                            ? 'bg-orange-500/20 text-orange-450 scale-95' 
+                            : 'bg-cyan-500/20 text-cyan-400 scale-100'
+                      }`}>
+                        <Activity className={`${isMetronomeActive && 'animate-pulse'}`} size={14} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[8px] uppercase font-mono tracking-wider text-neutral-450 font-bold leading-none">Respiração Sincronizada por IA</p>
+                        <p className="text-[11px] font-bold text-white mt-1 leading-normal">
+                          {metronomePhase === 'concentric' 
+                            ? 'Expiração ativa: Sopre o ar pela boca'
+                            : metronomePhase === 'eccentric'
+                              ? 'Inspiração lenta: Puxe o ar pelo nariz'
+                              : 'Mantenha o ar retido esmagando o core'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Biomechanics and muscle mapping */}
+                {(() => {
+                  const categoryKey = EXERCISE_DETAILS[selectedExercise.category] 
+                    ? selectedExercise.category 
+                    : 'Peito';
+                  const detail = EXERCISE_DETAILS[categoryKey];
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Sub-panels grids */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Target agonist muscle card */}
+                        <div className="bg-neutral-950/60 border border-neutral-800/80 p-3 rounded-xl space-y-1.5">
+                          <span className="text-[9px] text-[#39FF14] uppercase font-mono font-bold tracking-wider block">Músculos Principais alvos</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {detail.musclesPrimary.map((m, idx) => (
+                              <span key={idx} className="bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/20 px-2 py-0.5 rounded-lg text-[10px] font-semibold">
+                                {m}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Synergistic auxiliary muscles card */}
+                        <div className="bg-neutral-950/60 border border-neutral-800/80 p-3 rounded-xl space-y-1.5">
+                          <span className="text-[9px] text-neutral-450 uppercase font-mono font-bold tracking-wider block">Músculos Auxiliares (Sinergistas)</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {detail.musclesSecondary.map((m, idx) => (
+                              <span key={idx} className="bg-neutral-900 border border-neutral-800 text-neutral-300 px-2 py-0.5 rounded-lg text-[10px]">
+                                {m}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interactive guidance checklists */}
+                      <div className="bg-neutral-950/50 border border-neutral-800 p-3.5 rounded-xl space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] uppercase font-mono text-neutral-400 font-extrabold tracking-wider flex items-center gap-1.5">
+                            <CheckSquare size={12} className="text-[#39FF14]" />
+                            Checklist Biomecânico de Postura
+                          </span>
+                          <span className="text-[8px] text-neutral-500 font-mono">Confirme os alinhamentos</span>
+                        </div>
+                        <div className="space-y-2">
+                          {detail.setupSteps.map((step, idx) => {
+                            const stepIdKey = `${selectedExercise.id}_step_${idx}`;
+                            const isDone = !!checkedGuideSteps[stepIdKey];
+                            return (
+                              <label 
+                                key={idx}
+                                onClick={() => setCheckedGuideSteps(p => ({ ...p, [stepIdKey]: !isDone }))}
+                                className={`flex items-start gap-2.5 p-2 rounded-lg border transition duration-200 cursor-pointer text-[11px] ${
+                                  isDone 
+                                    ? 'bg-[#39FF14]/5 border-[#39FF14]/20 text-neutral-100' 
+                                    : 'bg-neutral-900/40 border-neutral-800/50 text-neutral-400 hover:border-neutral-800 hover:text-neutral-300'
+                                }`}
+                              >
+                                <input 
+                                  type="checkbox" 
+                                  checked={isDone}
+                                  onChange={() => {}} // Click handler of label is utilized instead
+                                  className="sr-only"
+                                />
+                                <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition ${
+                                  isDone 
+                                    ? 'bg-[#39FF14] border-[#39FF14] text-black' 
+                                    : 'border-neutral-700 bg-neutral-950'
+                                }`}>
+                                  {isDone && <Check size={10} strokeWidth={4} />}
+                                </span>
+                                <span className="leading-snug">{step}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Biomechanics Avoid Mistakes block */}
+                      <div className="bg-red-500/5 border border-red-500/15 p-3 rounded-xl space-y-1.5 text-[11px]">
+                        <span className="text-[9px] text-red-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
+                          <AlertCircle size={11} className="text-red-400" />
+                          Erros Mecânicos a Serem Evitados
+                        </span>
+                        <ul className="list-disc list-inside space-y-1 text-neutral-300 leading-relaxed font-normal">
+                          {detail.commonMistakes.map((mistake, idx) => (
+                            <li key={idx}>{mistake}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Brief description */}
+                <div className="space-y-1 bg-neutral-950/20 p-2 rounded-xl">
+                  <h5 className="text-[9px] uppercase font-mono tracking-wider font-bold text-neutral-400">Instruções Práticas Adicionais</h5>
+                  <p className="text-xs text-neutral-300 leading-relaxed font-sans">{selectedExercise.description}</p>
+                </div>
+              </div>
+            ) : (
+              /* Tab Render: OFFICIAL EMBEDDED VIDEO */
+              <div className="space-y-4">
+                {/* Embedded Video Box */}
+                <div className="aspect-video bg-neutral-950 rounded-xl overflow-hidden border border-neutral-800/85 relative shadow-2xl">
+                  <iframe 
+                    src={selectedExercise.videoUrl} 
+                    title={selectedExercise.name}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowFullScreen
+                    className="w-full h-full border-none absolute inset-0 z-10"
+                  ></iframe>
+                  {/* Loader proxy inside */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-950 text-neutral-400 text-[11px] p-5 text-center gap-2">
+                    <RefreshCw size={18} className="animate-spin text-neutral-500" />
+                    <span className="font-extrabold text-neutral-300">Carregando Reprodutor de Vídeo YouTube...</span>
+                    <span className="text-neutral-500">Se o iframe não exibir nada devido a bloqueios de cookies das diretrizes de sandbox, use o atalho abaixo.</span>
+                  </div>
+                </div>
+
+                {/* Fallback YouTube Launcher Option */}
+                <div className="bg-neutral-950 p-4.5 rounded-xl border border-neutral-800/80 space-y-3">
+                  <div className="space-y-1">
+                    <h5 className="text-[9px] uppercase font-mono tracking-wider font-extrabold text-[#39FF14] flex items-center gap-1.5">
+                      <Sparkles size={11} />
+                      Atalho Execução em Nova Guia de Alta Resolução
+                    </h5>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed font-sans font-normal">
+                      As diretrizes de isolamento de navegação de algumas versões do Chrome ou firewalls corporativos podem bloquear a reprodução direta de redes de mídia de terceiros dentro do iframe de testes do aplicativo. 
+                      Para garantir visualização perfeita de forma instantânea, use o lançador abaixo para carregar o vídeo na qualidade máxima oficial de tutoriais do YouTube 
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const watchUrl = selectedExercise.videoUrl.replace('/embed/', '/watch?v=');
+                      window.open(watchUrl, '_blank');
+                    }}
+                    className="w-full bg-[#39FF14] hover:bg-[#32dd12] text-black font-extrabold py-2.5 px-4 rounded-xl text-xs transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-md shadow-[#39FF14]/15 font-mono uppercase text-center"
+                  >
+                    <ExternalLink size={13} strokeWidth={3} />
+                    Abrir no YouTube (Nova Aba Segura)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom acknowledgement button */}
             <button 
-              onClick={() => setSelectedExercise(null)}
-              className="bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2 rounded-xl text-xs transition cursor-pointer w-full"
+              onClick={() => {
+                setSelectedExercise(null);
+                setIsMetronomeActive(false);
+              }}
+              className="bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold py-3 rounded-xl text-xs transition duration-150 cursor-pointer w-full text-center active:scale-98 shadow-md"
             >
-              Ciente, Fechar Vídeo instrutivo
+              Entendido, Retornar à Planilha de Treino
             </button>
           </div>
         </div>

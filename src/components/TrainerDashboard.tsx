@@ -3,9 +3,9 @@ import {
   Users, Dumbbell, Calendar, MessageSquare, Bell, CreditCard, 
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
-  MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award
+  MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut
 } from 'lucide-react';
-import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise } from '../types';
+import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog } from '../types';
 import { EXERCISE_BANK } from '../mockData';
 
 interface TrainerDashboardProps {
@@ -16,6 +16,7 @@ interface TrainerDashboardProps {
   chats: Record<string, ChatMessage[]>;
   notifications: AppNotification[];
   revenueLogs: RevenueLog[];
+  accessLogs: AccessLog[];
   onAddStudent: (student: Student) => void;
   onUpdateStudent: (id: string, data: Partial<Student>) => void;
   onDeleteStudent: (id: string) => void;
@@ -25,6 +26,7 @@ interface TrainerDashboardProps {
   onSendMessage: (studentId: string, text: string) => void;
   onSendNotification: (notification: AppNotification) => void;
   onTriggerAutoResponse: (studentId: string) => void;
+  onLogout?: () => void;
 }
 
 export default function TrainerDashboard({
@@ -35,6 +37,7 @@ export default function TrainerDashboard({
   chats,
   notifications,
   revenueLogs,
+  accessLogs,
   onAddStudent,
   onUpdateStudent,
   onDeleteStudent,
@@ -43,9 +46,13 @@ export default function TrainerDashboard({
   onDeleteAgendaEvent,
   onSendMessage,
   onSendNotification,
-  onTriggerAutoResponse
+  onTriggerAutoResponse,
+  onLogout
 }: TrainerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'alunos' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos'>('alunos');
+  const [activeTab, setActiveTab] = useState<'alunos' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs'>('alunos');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [studentSortBy, setStudentSortBy] = useState<'name' | 'joinDate'>('name');
   
   // States for forms and modal toggles
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -441,6 +448,27 @@ export default function TrainerDashboard({
             </div>
           </button>
 
+          <button 
+            onClick={() => setActiveTab('logs')}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition duration-200 text-left ${activeTab === 'logs' ? 'bg-[#18181b] border-l-4 border-[#39FF14] text-white font-semibold' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}`}
+          >
+            <div className="flex items-center gap-3">
+              <Clock size={18} className={activeTab === 'logs' ? 'text-[#39FF14]' : ''} />
+              <span>Histórico de Acessos</span>
+            </div>
+            <span className="text-xs bg-neutral-800 text-neutral-300 font-mono px-2 py-0.5 rounded-full select-none">{accessLogs.length}</span>
+          </button>
+
+          {onLogout && (
+            <button 
+              onClick={onLogout}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition duration-200 text-left mt-4 text-red-400 hover:bg-red-500/10 hover:text-red-300 border border-transparent hover:border-red-500/20 font-bold cursor-pointer"
+            >
+              <LogOut size={18} />
+              <span>Sair do Painel</span>
+            </button>
+          )}
+
           <div className="bg-neutral-900/60 rounded-2xl p-4.5 border border-neutral-800/80 mt-6 hidden lg:block">
             <h4 className="text-xs font-semibold text-white mb-1.5 flex items-center gap-2">
               <Award size={14} className="text-[#39FF14]" />
@@ -474,9 +502,79 @@ export default function TrainerDashboard({
                 </button>
               </div>
 
+              {/* Filtros de Busca e Ordenação */}
+              <div className="bg-[#121214] border border-neutral-800 p-4 rounded-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-neutral-500">
+                    <Search size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    value={studentSearchQuery}
+                    onChange={(e) => setStudentSearchQuery(e.target.value)}
+                    placeholder="Buscar aluno por nome, objetivo..."
+                    className="w-full bg-neutral-950 text-xs text-white pl-10 pr-4 py-2.5 rounded-lg border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-2 self-start md:self-auto">
+                  <span className="text-[11px] text-neutral-400 font-medium font-sans animate-pulse">Ordenar por:</span>
+                  <div className="bg-neutral-950 p-1 rounded-lg border border-neutral-800 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setStudentSortBy('name')}
+                      className={`text-[10px] font-bold px-3 py-1.5 rounded-md transition cursor-pointer ${
+                        studentSortBy === 'name'
+                          ? 'bg-[#39FF14] text-black font-extrabold'
+                          : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                      }`}
+                    >
+                      Ordem Alfabética
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudentSortBy('joinDate')}
+                      className={`text-[10px] font-bold px-3 py-1.5 rounded-md transition cursor-pointer ${
+                        studentSortBy === 'joinDate'
+                          ? 'bg-[#39FF14] text-black font-extrabold'
+                          : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                      }`}
+                    >
+                      Data de Adesão
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Grid of Student Cards with Search filter */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {students.map((student) => {
+                {[...students]
+                  .filter((student) => {
+                    if (!studentSearchQuery.trim()) return true;
+                    const q = studentSearchQuery.toLowerCase();
+                    return (
+                      student.name.toLowerCase().includes(q) ||
+                      student.objective.toLowerCase().includes(q) ||
+                      student.plan.toLowerCase().includes(q)
+                    );
+                  })
+                  .sort((a, b) => {
+                    if (studentSortBy === 'name') {
+                      return a.name.localeCompare(b.name);
+                    } else {
+                      // joinDate - newest first (descending)
+                      const parseJoinDate = (dStr: string) => {
+                        if (!dStr) return 0;
+                        const parts = dStr.split('/');
+                        if (parts.length === 3) {
+                          return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+                        }
+                        return new Date(dStr).getTime() || 0;
+                      };
+                      return parseJoinDate(b.joinedAt) - parseJoinDate(a.joinedAt);
+                    }
+                  })
+                  .map((student) => {
                   const isSelected = selectedStudentId === student.id;
                   const stdEvolution = evolution[student.id] || [];
                   const lastEv = stdEvolution[stdEvolution.length - 1];
@@ -563,6 +661,39 @@ export default function TrainerDashboard({
                         <span className="text-xs bg-[#39FF14]/0 text-neutral-300 border border-neutral-800 rounded-lg px-2.5 py-1.5 font-mono">
                           Matrícula: {selectedStudent.joinedAt}
                         </span>
+                      </div>
+
+                      {/* Student Invitation & Share Login Link */}
+                      <div className="bg-[#121214]/60 p-4 rounded-xl border border-[#39FF14]/20 space-y-3 mt-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-[#39FF14] rounded-full"></span>
+                            Link de Acesso do Aluno
+                          </p>
+                          <span className="text-[9px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/20 px-1.5 py-0.5 rounded font-mono font-bold">
+                            ENVIAR ALUNO
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-400 font-sans leading-relaxed">
+                          Compartilhe o link de acesso exclusivo para que o aluno acesse diretamente o portal dele:
+                        </p>
+                        <div className="flex items-center gap-2 bg-neutral-950 p-2 rounded-lg border border-neutral-800">
+                          <span className="text-[10px] font-mono text-[#39FF14] select-all truncate flex-1 leading-none py-1">
+                            {window.location.origin}?role=student&studentId={selectedStudent.id}
+                          </span>
+                          <button
+                            onClick={() => {
+                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
+                              navigator.clipboard.writeText(inviteUrl);
+                              setCopiedLink(true);
+                              setTimeout(() => setCopiedLink(false), 2000);
+                            }}
+                            className="bg-[#39FF14]/10 hover:bg-[#39FF14] hover:text-black text-[#39FF14] text-[10px] font-bold px-3 py-1.5 rounded-md border border-[#39FF14]/30 hover:border-transparent transition flex items-center gap-1 cursor-pointer shrink-0"
+                          >
+                            {copiedLink ? <Check size={11} /> : <Copy size={11} />}
+                            <span>{copiedLink ? 'Copiado' : 'Copiar'}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1318,6 +1449,57 @@ export default function TrainerDashboard({
                   </div>
                 </div>
 
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: HISTÓRICO DE ACESSOS */}
+          {activeTab === 'logs' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Clock size={20} className="text-[#39FF14]" />
+                  Log de Auditoria e Acessos (Sincronizado)
+                </h2>
+                <p className="text-xs text-neutral-400">Rastreie e audite os logins e acessos ao sistema por profissionais e alunos em tempo real na base de dados.</p>
+              </div>
+
+              <div className="bg-[#121214]/60 rounded-xl border border-neutral-800 overflow-hidden shadow-black/40 shadow-lg">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-neutral-300">
+                    <thead className="bg-[#18181b] text-[10px] uppercase font-mono tracking-wider text-neutral-400 border-b border-neutral-800">
+                      <tr>
+                        <th className="px-5 py-3.5">Data e Hora</th>
+                        <th className="px-5 py-3.5">Função</th>
+                        <th className="px-5 py-3.5">Usuário</th>
+                        <th className="px-5 py-3.5">Ações Registradas</th>
+                        <th className="px-5 py-3.5 text-right">Plataforma/Dispositivo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/40 font-sans">
+                      {accessLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-neutral-900/40 transition">
+                          <td className="px-5 py-3.5 font-mono text-[#39FF14] whitespace-nowrap">{log.timestamp}</td>
+                          <td className="px-5 py-3.5">
+                            <span className={`px-2.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest ${log.role === 'trainer' ? 'bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                              {log.role === 'trainer' ? 'Personal' : 'Aluno'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 font-semibold text-white truncate max-w-[150px]">{log.userName}</td>
+                          <td className="px-5 py-3.5 text-neutral-200">{log.action}</td>
+                          <td className="px-5 py-3.5 text-neutral-400 font-mono text-[10px] text-right whitespace-nowrap">{log.device}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {accessLogs.length === 0 && (
+                  <div className="p-12 text-center text-neutral-500 space-y-2">
+                    <AlertCircle size={28} className="mx-auto text-neutral-600" />
+                    <p className="text-xs">Nenhum log de acesso registrado na auditoria.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

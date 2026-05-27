@@ -111,3 +111,13 @@ export interface RevenueLog {
   total: number;
   payments: number;
 }
+
+export interface AccessLog {
+  id: string;
+  role: 'trainer' | 'student';
+  userId?: string;
+  userName: string;
+  timestamp: string;
+  action: string;
+  device: string;
+}
