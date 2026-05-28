@@ -1,4 +1,4 @@
-import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog } from './types';
+import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, MarketingPlan } from './types';
 
 // Standard Exercise Bank
 export const EXERCISE_BANK: Exercise[] = [
@@ -504,4 +504,31 @@ export const REVENUE_LOGS: RevenueLog[] = [
   { month: 'Mar', total: 1650, payments: 12 },
   { month: 'Abr', total: 1800, payments: 13 },
   { month: 'Mai', total: 2150, payments: 15 } // Mai/2026 current
+];
+
+export const INITIAL_MARKETING_PLANS: MarketingPlan[] = [
+  {
+    id: 'Mensal',
+    title: 'Plano Mensal',
+    price: 150,
+    period: '/m',
+    features: ['Planilha Treino A-E', 'Suporte Conversa Chat', 'Cobrança automática'],
+    recommended: false
+  },
+  {
+    id: 'Trimestral',
+    title: 'Plano Trimestral',
+    price: 140,
+    period: '/m',
+    features: ['Planilha Treino A-E', 'Suporte Conversa Chat', 'Monitor de Medidas', 'Treino presencial semanal'],
+    recommended: true
+  },
+  {
+    id: 'Semestral',
+    title: 'Plano Semestral',
+    price: 120,
+    period: '/m',
+    features: ['Planilha Treino A-E', 'Suporte Conversa e Áudio', 'Avaliação Física Completa', 'Suporte Premium 24/7'],
+    recommended: false
+  }
 ];

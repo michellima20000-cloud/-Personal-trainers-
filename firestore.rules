@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net catch-all-deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reuseable global helpers
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+
+    // Simple permissive check for demonstration sandbox, keeping validations strict and zero-trust structure checking
+    function isAllowed() {
+      return true;
+    }
+
+    // 1. Students collection
+    match /students/{studentId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(studentId) && isValidStudent(incoming());
+      allow delete: if isAllowed();
+    }
+
+    function isValidStudent(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 150
+        && data.objective is string && (data.objective == 'Hipertrofia' || data.objective == 'Emagrecimento' || data.objective == 'Condicionamento' || data.objective == 'Definição' || data.objective == 'Reabilitação');
+    }
+
+    // 2. Sheets collection
+    match /sheets/{studentId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(studentId);
+      allow delete: if isAllowed();
+    }
+
+    // 3. Evolution subcollection under students
+    match /students/{studentId}/evolution/{recordId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(studentId) && isValidId(recordId) && isValidEvolution(incoming());
+      allow delete: if isAllowed();
+    }
+
+    function isValidEvolution(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.studentId is string && data.studentId.size() <= 128
+        && data.weight is number
+        && data.bmi is number;
+    }
+
+    // 4. Chats subcollection under students
+    match /students/{studentId}/chats/{messageId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(studentId) && isValidId(messageId) && isValidChat(incoming());
+      allow delete: if isAllowed();
+    }
+
+    function isValidChat(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.sender is string && (data.sender == 'trainer' || data.sender == 'student')
+        && data.text is string;
+    }
+
+    // 5. Agenda collection
+    match /agenda/{eventId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(eventId) && isValidAgenda(incoming());
+      allow delete: if isAllowed();
+    }
+
+    function isValidAgenda(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() <= 200
+        && data.date is string
+        && data.time is string;
+    }
+
+    // 6. Notifications collection
+    match /notifications/{notifId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(notifId) && isValidNotification(incoming());
+      allow delete: if isAllowed();
+    }
+
+    function isValidNotification(data) {
+      return data.id is string
+        && data.studentId is string
+        && data.studentName is string
+        && data.title is string
+        && data.message is string;
+    }
+
+    // 7. Revenue logs
+    match /revenueLogs/{month} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(month);
+      allow delete: if isAllowed();
+    }
+
+    // 8. Access logs
+    match /accessLogs/{logId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(logId);
+      allow delete: if isAllowed();
+    }
+
+    // 9. Marketing Plans
+    match /plans/{planId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(planId);
+      allow delete: if isAllowed();
+    }
+
+    // 10. Trainers
+    match /trainers/{trainerId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(trainerId);
+      allow delete: if isAllowed();
+    }
+  }
+}

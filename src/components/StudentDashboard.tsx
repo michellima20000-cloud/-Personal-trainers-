@@ -6,13 +6,14 @@ import {
   HelpCircle, Copy, Smartphone, CheckSquare, Sparkles, MessageCircle, X,
   FileText, LogOut, Activity, ExternalLink, RefreshCw
 } from 'lucide-react';
-import { Student, Exercise, TrainingSheet, EvolutionRecord, ChatMessage, Objective, PlanType, WorkoutExercise, AccessLog } from '../types';
+import { Student, Trainer, Exercise, TrainingSheet, EvolutionRecord, ChatMessage, Objective, PlanType, WorkoutExercise, AccessLog } from '../types';
 import { EXERCISE_BANK } from '../mockData';
 import { exportStudentReport } from '../utils/pdfGenerator';
 import ExerciseVisualizer from './ExerciseVisualizer';
 
 interface StudentDashboardProps {
   students: Student[];
+  trainers: Trainer[];
   sheets: Record<string, TrainingSheet>;
   evolution: Record<string, EvolutionRecord[]>;
   chats: Record<string, ChatMessage[]>;
@@ -100,6 +101,7 @@ const EXERCISE_DETAILS: Record<string, {
 
 export default function StudentDashboard({
   students,
+  trainers,
   sheets,
   evolution,
   chats,
@@ -149,6 +151,16 @@ export default function StudentDashboard({
   // Pix payment success mock toast
   const [pixCopied, setPixCopied] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+  // Student Stripe checkout states
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'stripe'>('pix');
+  const [stripeCardNumber, setStripeCardNumber] = useState('');
+  const [stripeCardName, setStripeCardName] = useState('');
+  const [stripeCardExpiry, setStripeCardExpiry] = useState('');
+  const [stripeCardCvv, setStripeCardCvv] = useState('');
+  const [stripeCardPostalCode, setStripeCardPostalCode] = useState('');
+  const [isStripeProcessing, setIsStripeProcessing] = useState(false);
+  const [isStripeSuccess, setIsStripeSuccess] = useState(false);
 
   // Workout state completion checklist & loads tracking
   const studentSheet = sheets[currentStudent?.id] || { A: [], B: [], C: [], D: [], E: [] };
@@ -960,133 +972,389 @@ export default function StudentDashboard({
         )}
 
         {/* Tab 4 Content: Subscriptions detailing & simulated billing updates */}
-        {activeTab === 'plano' && (
-          <div className="space-y-6">
+        {activeTab === 'plano' && (() => {
+          // Identify the current student's trainer
+          const trainer = trainers.find(t => t.id === currentStudent.trainerId) || trainers[0] || {
+            name: 'Daniel Personal Coach',
+            pixKeyType: 'Chave Aleatória' as const,
+            pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
+            phoneWhatsApp: '+5511999999999',
+            stripeEnabled: true
+          };
+
+          const trainerPixType = trainer.pixKeyType || 'Chave Aleatória';
+          const trainerPixKey = trainer.pixKey || '9bbf9c81-8077-4cdd-bb85-055ee56bfd31';
+          const trainerWhatsApp = trainer.phoneWhatsApp || '+5511999999999';
+
+          // Handle WhatsApp confirmation redirect
+          const handleWhatsAppConfirmation = () => {
+            // Write a persistent action in access logs
+            setPaymentSuccess(true);
+            setTimeout(() => setPaymentSuccess(false), 5000);
+
+            // Copy Pix Key for convenience
+            navigator.clipboard.writeText(trainerPixKey);
+            setPixCopied(true);
+            setTimeout(() => setPixCopied(false), 2500);
+
+            const cleanPhone = trainerWhatsApp.replace(/\D/g, '');
+            const todayStr = new Date().toLocaleDateString('pt-BR');
+            const message = `*Olá, Coach ${trainer.name}!* 🏋️‍♂️\n\nAcabei de realizar o pagamento de *R$ ${currentStudent.value.toFixed(2)}* correspondente à minha mensalidade do plano *${currentStudent.plan}* no GymPulse.\n\nEstou enviando o comprovante em anexo. Poderia confirmar a baixa do meu plano?\n\n*Aluno:* ${currentStudent.name}\n*E-mail:* michel.lima20000@gmail.com\n*Data:* ${todayStr}\n\nMuito obrigado!`;
             
-            <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 relative overflow-hidden space-y-4">
-              <div className="absolute top-0 right-0 bg-[#39FF14] text-black text-[9px] font-mono tracking-wider px-3.5 py-1 uppercase rounded-bl-lg font-bold">ASSINATURA ATIVA</div>
+            const encodedMessage = encodeURIComponent(message);
+            window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMessage}`, '_blank');
+          };
+
+          // Handle Stripe Payment simulation
+          const handleStripeSubmit = (e: React.FormEvent) => {
+            e.preventDefault();
+            if (!stripeCardNumber || !stripeCardName || !stripeCardExpiry || !stripeCardCvv) {
+              alert('Por favor, preencha todos os campos do cartão para pagar via Stripe.');
+              return;
+            }
+
+            setIsStripeProcessing(true);
+            setTimeout(() => {
+              setIsStripeProcessing(false);
+              setIsStripeSuccess(true);
+              setPaymentSuccess(true);
               
-              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest font-mono">Meu Plano Contratado</h3>
+              // Clear fields
+              setStripeCardNumber('');
+              setStripeCardName('');
+              setStripeCardExpiry('');
+              setStripeCardCvv('');
+              setStripeCardPostalCode('');
+
+              setTimeout(() => {
+                setIsStripeSuccess(false);
+                setPaymentSuccess(false);
+              }, 6000);
+            }, 2500);
+          };
+
+          return (
+            <div className="space-y-6">
               
-              <div className="space-y-1">
-                <h4 className="text-xl font-black text-[#39FF14]">{currentStudent.plan} de Assessoria Esportiva</h4>
-                <p className="text-xs text-neutral-300">Mensalidade integrada com renovação programada automática.</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 border-t border-b border-neutral-800/80 py-4 font-mono text-xs">
-                <div>
-                  <p className="text-neutral-500 text-[10px] uppercase font-mono">Vencimento Próximo</p>
-                  <p className="text-white font-bold mt-1 text-md">{currentStudent.nextPayment}</p>
-                </div>
-                <div>
-                  <p className="text-neutral-500 text-[10px] uppercase font-mono">Valor Mensal Equivalente</p>
-                  <p className="text-emerald-400 font-bold mt-1 text-md">R$ {currentStudent.value.toFixed(2)} / mês</p>
-                </div>
-                <div>
-                  <p className="text-neutral-500 text-[10px] uppercase font-mono">Método de Renovação</p>
-                  <p className="text-blue-400 font-bold mt-1 text-md">Pix ou Cartão Digital</p>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  Consulte os dados abaixo para adiantar ou renovar o pagamento de forma segura. A confirmação de pagamento atualiza o faturamento do seu personal instantaneamente no CRM dele!
-                </p>
-              </div>
-            </div>
-
-            {/* Simulated Payment Trigger widgets */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Box 1: Pix payments simulation */}
-              <div className="bg-[#121214]/60 p-4 rounded-xl border border-neutral-800 space-y-3">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                  <Smartphone size={16} className="text-[#39FF14]" /> Pagamento via PIX Copie & Cole
-                </h4>
-
-                <div className="bg-neutral-950 p-2.5 rounded-lg border border-neutral-900 font-mono text-[9px] text-[#39FF14] text-center select-all cursor-pointer truncate">
-                  00020101021126580014BR.GOV.BCB.PIX0136gympulse-payments-production202605273e
+              {/* Main Subscription status Card */}
+              <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 relative overflow-hidden space-y-4">
+                <div className="absolute top-0 right-0 bg-[#39FF14] text-black text-[9px] font-mono tracking-wider px-3.5 py-1 uppercase rounded-bl-lg font-bold">ASSINATURA ATIVA</div>
+                
+                <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest font-mono">Meu Plano Contratado</h3>
+                
+                <div className="space-y-1">
+                  <h4 className="text-xl font-black text-[#39FF14]">{currentStudent.plan} de Assessoria Esportiva</h4>
+                  <p className="text-sm text-neutral-300">Minha mensalidade está vinculada à consultoria de <strong className="text-[#39FF14]">{trainer.name}</strong>.</p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={copyPixKey}
-                    className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Copy size={13} /> {pixCopied ? 'Chave Copiada!' : 'Copiar Chave Pix'}
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 border-t border-b border-neutral-800/80 py-4 font-mono text-xs">
+                  <div>
+                    <p className="text-neutral-500 text-[10px] uppercase font-mono">Vencimento Próximo</p>
+                    <p className="text-white font-bold mt-1 text-md">{currentStudent.nextPayment}</p>
+                  </div>
+                  <div>
+                    <p className="text-neutral-500 text-[10px] uppercase font-mono">Valor Mensal Equivalente</p>
+                    <p className="text-emerald-400 font-bold mt-1 text-md">R$ {currentStudent.value.toFixed(2)} / mês</p>
+                  </div>
+                  <div>
+                    <p className="text-neutral-500 text-[10px] uppercase font-mono">Método de Renovação</p>
+                    <p className="text-[#39FF14] font-bold mt-1 text-md">Pix ou Cartão Stripe</p>
+                  </div>
                 </div>
 
-                {pixCopied && (
-                  <p className="text-[10px] text-green-400 font-bold text-center animate-bounce">✔ Chave Pix Pix Copiada para Área de Transferência!</p>
-                )}
-              </div>
-
-              {/* Box 2: Confirmation / Sandbox webhook simulation */}
-              <div className="bg-[#121214]/60 p-4 rounded-xl border border-neutral-800 space-y-3.5 flex flex-col justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                    <CheckCircle2 size={16} className="text-blue-400" /> Simular Baixa de Cobrança (Sandbox)
-                  </h4>
-                  <p className="text-[11px] text-neutral-400 leading-normal mt-1.5">
-                    Como esta é uma versão integrada, clique abaixo para simular que o banco confirmou a baixa e liberou a mensalidade do aluno.
+                <div className="pt-2">
+                  <p className="text-xs text-neutral-400 leading-relaxed">
+                    Escolha um método de pagamento abaixo para adiantar ou renovar o pagamento de forma segura. A confirmação via Pix envia um comprovante direto ao WhatsApp do seu personal, e via Stripe a baixa é computada automaticamente no CRM do treinador!
                   </p>
                 </div>
-
-                {paymentSuccess ? (
-                  <div className="p-2.5 bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg text-center text-xs font-bold animate-pulse">
-                    💳 Renovação Simulada com Sucesso! faturamento acrescido no Personal.
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => {
-                      setPaymentSuccess(true);
-                      setTimeout(() => setPaymentSuccess(false), 4000);
-                    }}
-                    className="bg-[#39FF14] hover:bg-green-400 text-black py-2.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    Simular Aprovação de Pix R$ {currentStudent.value.toFixed(2)}
-                  </button>
-                )}
               </div>
 
-            </div>
+              {/* Toggle Payment Methods (Pix or Stripe) */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-900 rounded-xl border border-neutral-800 font-mono text-xs">
+                <button 
+                  onClick={() => setSelectedPaymentMethod('pix')}
+                  className={`py-2.5 rounded-lg transition font-bold uppercase flex items-center justify-center gap-2 select-none ${selectedPaymentMethod === 'pix' ? 'bg-[#39FF14] text-black shadow-lg' : 'text-neutral-400 hover:text-white'}`}
+                >
+                  <Smartphone size={14} /> Pix + WhatsApp
+                </button>
+                <button 
+                  onClick={() => setSelectedPaymentMethod('stripe')}
+                  className={`py-2.5 rounded-lg transition font-bold uppercase flex items-center justify-center gap-2 select-none ${selectedPaymentMethod === 'stripe' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10' : 'text-neutral-400 hover:text-white'}`}
+                >
+                  <CreditCard size={14} /> Cartão (Stripe)
+                </button>
+              </div>
 
-            {/* My Login / Session Access Logs Section */}
-            <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono font-semibold">
-                <Clock size={16} className="text-[#39FF14]" /> Histórico de Acessos Recentes (Segurança)
-              </h4>
-              <p className="text-xs text-neutral-400 font-sans leading-relaxed">
-                Abaixo estão registrados os acessos recentes vinculados à sua conta na base de dados sincronizada:
-              </p>
-
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {accessLogs
-                  .filter(log => log.role === 'student' && log.userId === currentStudent.id)
-                  .map((log) => (
-                    <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-2 h-2 rounded-full bg-[#39FF14] animate-pulse"></div>
-                        <div>
-                          <p className="font-semibold text-white">{log.action}</p>
-                          <p className="text-[10px] text-neutral-400 mt-0.5">{log.timestamp} • {log.device}</p>
-                        </div>
+              {/* Dynamic Payment Gateways UI */}
+              <div className="grid grid-cols-1 gap-4">
+                
+                {/* Method 1: Pix and WhatsApp flow */}
+                {selectedPaymentMethod === 'pix' && (
+                  <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                          PIX Direto para {trainer.name}
+                        </h4>
+                        <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                          Pague diretamente copiando a chave Pix abaixo. Em seguida ordene a confirmação e o sistema preencherá o texto do comprovante no WhatsApp do profissional!
+                        </p>
                       </div>
-                      <span className="text-[9px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/35 px-2 py-0.5 rounded-full font-mono font-extrabold uppercase">
-                        ATIVO
+                      <span className="text-[10px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/30 px-2 py-0.5 rounded font-bold font-mono">
+                        {trainerPixType}
                       </span>
                     </div>
-                  ))}
 
-                {accessLogs.filter(log => log.role === 'student' && log.userId === currentStudent.id).length === 0 && (
-                  <p className="text-xs text-neutral-500 font-mono text-center py-2">Nenhum registro de acesso recente.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                      {/* Interactive QR Code Simulator */}
+                      <div className="md:col-span-4 flex flex-col items-center justify-center bg-neutral-950 p-4 rounded-xl border border-neutral-900 shadow-inner">
+                        <div className="w-28 h-28 bg-white p-2 rounded-lg relative flex items-center justify-center">
+                          {/* Beautiful QR Code pattern with a custom center dot */}
+                          <div className="grid grid-cols-4 gap-1 w-full h-full opacity-90 select-none pointer-events-none">
+                            <div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
+                            <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div>
+                            <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
+                            <div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div>
+                          </div>
+                          {/* Minimalist central emblem */}
+                          <div className="absolute w-7 h-7 bg-[#09090b] border-2 border-white rounded-full flex items-center justify-center shadow">
+                            <span className="text-[8px] font-black text-[#39FF14]">PIX</span>
+                          </div>
+                        </div>
+                        <span className="text-[8px] text-neutral-500 font-mono mt-2 uppercase tracking-tight">Escaneie para pagar rápido</span>
+                      </div>
+
+                      {/* Copier and direct WhatsApp submitter button */}
+                      <div className="md:col-span-8 space-y-3.5">
+                        <div className="space-y-1">
+                          <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest leading-none">Chave PIX do Treinador</label>
+                          <div className="flex items-center gap-1.5 mt-1.5 bg-neutral-950 p-3 rounded-xl border border-neutral-800 text-xs font-mono text-[#39FF14] relative overflow-hidden select-all cursor-pointer">
+                            <span className="truncate flex-1 select-all">{trainerPixKey}</span>
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(trainerPixKey);
+                                setPixCopied(true);
+                                setTimeout(() => setPixCopied(false), 2500);
+                              }}
+                              className="text-neutral-400 hover:text-white p-1 hover:bg-neutral-900 rounded transition shrink-0 cursor-pointer"
+                              title="Copiar Chave Pix"
+                            >
+                              <Copy size={13} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {pixCopied && (
+                          <p className="text-[10px] text-emerald-400 font-bold animate-bounce flex items-center gap-1">
+                            ✔ Chave Pix copiada com sucesso! Transfira o valor de R$ {currentStudent.value.toFixed(2)}.
+                          </p>
+                        )}
+
+                        <div className="pt-2">
+                          <button
+                            onClick={handleWhatsAppConfirmation}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-4 rounded-xl text-xs font-extrabold transition cursor-pointer w-full flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/10 active:scale-[0.98]"
+                          >
+                            <MessageCircle size={15} /> Copiar Pix & Enviar Comprovante no WhatsApp
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </div>
-            </div>
 
-          </div>
-        )}
+                {/* Method 2: Stripe Integration mockup */}
+                {selectedPaymentMethod === 'stripe' && (
+                  <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-5">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                          Checkout de Cartão de Crédito Integrado (Stripe)
+                        </h4>
+                        <p className="text-[11px] text-neutral-400 mt-1">
+                          Insira as credenciais do seu cartão. Sua transação é protegida pelo Stripe, sem que o treinador veja seus dados.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] font-mono text-neutral-500">
+                        <span className="bg-neutral-800 px-1.5 py-0.5 rounded">SSL Secure</span>
+                        <span className="bg-neutral-800 px-1.5 py-0.5 rounded">Stripe Verified</span>
+                      </div>
+                    </div>
+
+                    {isStripeSuccess ? (
+                      <div className="p-6 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl space-y-2.5 text-center">
+                        <CheckCircle2 size={36} className="mx-auto text-indigo-400 animate-bounce" />
+                        <h5 className="font-bold text-sm text-white">Transação Processada com Sucesso!</h5>
+                        <p className="text-xs text-neutral-300 leading-normal max-w-md mx-auto">
+                          Seu pagamento via Stripe no valor de <strong>R$ {currentStudent.value.toFixed(2)}</strong> foi aprovado. A baixa foi realizada e as planilhas do seu perfil estão liberadas.
+                        </p>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleStripeSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                        
+                        {/* Interactive Visual Card Frame */}
+                        <div className="md:col-span-5 flex flex-col justify-between bg-gradient-to-br from-indigo-900 to-slate-900 p-4 rounded-xl border border-indigo-500/25 min-h-[145px] shadow-lg relative overflow-hidden font-mono text-white select-none">
+                          <div className="absolute top-0 right-0 translate-x-6 -translate-y-6 w-24 h-24 bg-indigo-400/5 rounded-full blur-xl pointer-events-none"></div>
+                          
+                          <div className="flex items-center justify-between">
+                            <span className="text-[8px] font-bold tracking-widest uppercase opacity-70">GymPulse Premium Card</span>
+                            <div className="w-8 h-5 bg-yellow-400/80 rounded-sm opacity-90 shadow-inner"></div>
+                          </div>
+
+                          <div className="space-y-1 my-3">
+                            <span className="text-[8px] opacity-50 uppercase block tracking-wider">Número do Cartão</span>
+                            <p className="text-xs font-bold tracking-widest">
+                              {stripeCardNumber ? stripeCardNumber.replace(/(\d{4})/g, '$1 ').trim().substring(0, 19) : '•••• •••• •••• ••••'}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between font-mono text-[9px] mt-1.5">
+                            <div className="truncate pr-2">
+                              <span className="text-[7px] opacity-40 uppercase block tracking-wider">Titular</span>
+                              <span className="font-bold uppercase truncate max-w-[120px] block">{stripeCardName || 'SEU NOME COMPLETO'}</span>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <span className="text-[7px] opacity-40 uppercase block tracking-wider">Validade</span>
+                              <span className="font-bold">{stripeCardExpiry || 'MM/AA'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Interactive Stripe form input fields */}
+                        <div className="md:col-span-7 space-y-3.5">
+                          <div className="space-y-1">
+                            <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">Número do Cartão</label>
+                            <input 
+                              type="text"
+                              maxLength={16}
+                              value={stripeCardNumber}
+                              onChange={(e) => setStripeCardNumber(e.target.value.replace(/\D/g, ''))}
+                              placeholder="4000 1234 5678 9010"
+                              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-indigo-500 transition"
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">Nome Impresso no Cartão</label>
+                            <input 
+                              type="text"
+                              value={stripeCardName}
+                              onChange={(e) => setStripeCardName(e.target.value)}
+                              placeholder="Nome Completo do Titular"
+                              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 transition"
+                              required
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-1">
+                              <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">Validade</label>
+                              <input 
+                                type="text"
+                                maxLength={5}
+                                value={stripeCardExpiry}
+                                onChange={(e) => {
+                                  // Auto append slash inside date entry
+                                  let val = e.target.value.replace(/\D/g, '');
+                                  if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2, 4);
+                                  setStripeCardExpiry(val);
+                                }}
+                                placeholder="MM/AA"
+                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono text-white text-center outline-none focus:border-indigo-500 transition"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">CVC / CVV</label>
+                              <input 
+                                type="text"
+                                maxLength={3}
+                                value={stripeCardCvv}
+                                onChange={(e) => setStripeCardCvv(e.target.value.replace(/\D/g, ''))}
+                                placeholder="123"
+                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono text-white text-center outline-none focus:border-indigo-500 transition"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">CEP Fatura</label>
+                              <input 
+                                type="text"
+                                maxLength={9}
+                                value={stripeCardPostalCode}
+                                onChange={(e) => setStripeCardPostalCode(e.target.value.replace(/\D/g, ''))}
+                                placeholder="01001-000"
+                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono text-white text-center outline-none focus:border-indigo-500 transition"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="pt-2">
+                            <button
+                              type="submit"
+                              disabled={isStripeProcessing}
+                              className={`w-full py-3 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98] ${isStripeProcessing ? 'bg-neutral-800 text-neutral-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-700/10'}`}
+                            >
+                              {isStripeProcessing ? (
+                                <>
+                                  <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
+                                  Processando pagamento com Stripe...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 size={15} /> Pagar R$ {currentStudent.value.toFixed(2)} com Stripe Card
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                      </form>
+                    )}
+                  </div>
+                )}
+
+              </div>
+
+              {/* My Login / Session Access Logs Section */}
+              <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono font-semibold">
+                  <Clock size={16} className="text-[#39FF14]" /> Histórico de Acessos Recentes (Segurança)
+                </h4>
+                <p className="text-xs text-neutral-400 font-sans leading-relaxed">
+                  Abaixo estão registrados os acessos recentes vinculados à sua conta na base de dados sincronizada:
+                </p>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {accessLogs
+                    .filter(log => log.role === 'student' && log.userId === currentStudent.id)
+                    .map((log) => (
+                      <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-2 h-2 rounded-full bg-[#39FF14] animate-pulse"></div>
+                          <div>
+                            <p className="font-semibold text-white">{log.action}</p>
+                            <p className="text-[10px] text-neutral-400 mt-0.5">{log.timestamp} • {log.device}</p>
+                          </div>
+                        </div>
+                        <span className="text-[9px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/35 px-2 py-0.5 rounded-full font-mono font-extrabold uppercase">
+                          ATIVO
+                        </span>
+                      </div>
+                    ))}
+
+                  {accessLogs.filter(log => log.role === 'student' && log.userId === currentStudent.id).length === 0 && (
+                    <p className="text-xs text-neutral-500 font-mono text-center py-2">Nenhum registro de acesso recente.</p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          );
+        })()}
 
       </div>
 

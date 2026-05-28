@@ -1,0 +1,169 @@
+{
+  "entities": {
+    "student": {
+      "title": "Student",
+      "description": "Student profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "avatar": { "type": "string" },
+        "age": { "type": "integer" },
+        "weight": { "type": "number" },
+        "height": { "type": "number" },
+        "objective": { "type": "string", "enum": ["Hipertrofia", "Emagrecimento", "Condicionamento", "Definição", "Reabilitação"] },
+        "restrictions": { "type": "string" },
+        "history": { "type": "string" },
+        "plan": { "type": "string", "enum": ["Mensal", "Trimestral", "Semestral"] },
+        "status": { "type": "string", "enum": ["Ativo", "Inativo"] },
+        "joinedAt": { "type": "string" },
+        "nextPayment": { "type": "string" },
+        "value": { "type": "number" }
+      },
+      "required": ["id", "name", "objective", "status"]
+    },
+    "sheet": {
+      "title": "TrainingSheet",
+      "description": "Training exercises categorized by splits A, B, C, D, E",
+      "type": "object",
+      "properties": {
+        "A": { "type": "array" },
+        "B": { "type": "array" },
+        "C": { "type": "array" },
+        "D": { "type": "array" },
+        "E": { "type": "array" }
+      }
+    },
+    "evolution": {
+      "title": "EvolutionRecord",
+      "description": "Student biometric changes record over time",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "date": { "type": "string" },
+        "weight": { "type": "number" },
+        "bmi": { "type": "number" },
+        "bodyFat": { "type": "number" },
+        "armRight": { "type": "number" },
+        "armLeft": { "type": "number" },
+        "waist": { "type": "number" },
+        "chest": { "type": "number" },
+        "legRight": { "type": "number" },
+        "legLeft": { "type": "number" },
+        "notes": { "type": "string" },
+        "photoUrl": { "type": "string" }
+      },
+      "required": ["id", "studentId", "date", "weight"]
+    },
+    "agenda": {
+      "title": "AgendaEvent",
+      "description": "Calendar check-in session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "type": { "type": "string", "enum": ["Presencial", "Online"] },
+        "durationMin": { "type": "integer" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "title", "date", "time", "type", "durationMin"]
+    },
+    "chat": {
+      "title": "ChatMessage",
+      "description": "Direct message interaction between trainer and student",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sender": { "type": "string", "enum": ["trainer", "student"] },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "fileType": { "type": "string", "enum": ["image", "audio", "video"] },
+        "fileUrl": { "type": "string" },
+        "audioDuration": { "type": "string" }
+      },
+      "required": ["id", "sender", "text", "timestamp"]
+    },
+    "notification": {
+      "title": "AppNotification",
+      "description": "Dispatched communication reminder, motivation or alert",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "channel": { "type": "string", "enum": ["push", "whatsapp", "email"] },
+        "type": { "type": "string", "enum": ["reminder", "motivation", "plan", "workout"] },
+        "sentAt": { "type": "string" }
+      },
+      "required": ["id", "studentId", "studentName", "title", "message", "channel", "type", "sentAt"]
+    },
+    "revenueLog": {
+      "title": "RevenueLog",
+      "description": "Financial billing history aggregation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "month": { "type": "string" },
+        "total": { "type": "number" },
+        "payments": { "type": "integer" }
+      },
+      "required": ["id", "month", "total", "payments"]
+    },
+    "accessLog": {
+      "title": "AccessLog",
+      "description": "Security tracking logs for auditing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string", "enum": ["trainer", "student"] },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "action": { "type": "string" },
+        "device": { "type": "string" }
+      },
+      "required": ["id", "role", "userName", "timestamp", "action"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "student",
+      "description": "Collections of students"
+    },
+    "/sheets/{studentId}": {
+      "schema": "sheet",
+      "description": "Training sheets indexed by student user ID"
+    },
+    "/students/{studentId}/evolution/{recordId}": {
+      "schema": "evolution",
+      "description": "Historical weights and measurements for a student"
+    },
+    "/students/{studentId}/chats/{messageId}": {
+      "schema": "chat",
+      "description": "Direct chat items between trainer and client student"
+    },
+    "/agenda/{eventId}": {
+      "schema": "agenda",
+      "description": "Training consult schedules"
+    },
+    "/notifications/{notifId}": {
+      "schema": "notification",
+      "description": "System-wide or push communications dispatched to students"
+    },
+    "/revenueLogs/{month}": {
+      "schema": "revenueLog",
+      "description": "Monthly billing statistics ledger records"
+    },
+    "/accessLogs/{logId}": {
+      "schema": "accessLog",
+      "description": "Trainer and student secure operation registers"
+    }
+  }
+}

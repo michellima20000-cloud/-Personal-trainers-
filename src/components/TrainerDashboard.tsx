@@ -3,9 +3,9 @@ import {
   Users, Dumbbell, Calendar, MessageSquare, Bell, CreditCard, 
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
-  MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut
+  MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock
 } from 'lucide-react';
-import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog } from '../types';
+import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
 
 interface TrainerDashboardProps {
@@ -17,6 +17,9 @@ interface TrainerDashboardProps {
   notifications: AppNotification[];
   revenueLogs: RevenueLog[];
   accessLogs: AccessLog[];
+  marketingPlans?: MarketingPlan[];
+  activeTrainer?: Trainer | null;
+  onUpdateTrainer?: (trainer: Trainer) => void;
   onAddStudent: (student: Student) => void;
   onUpdateStudent: (id: string, data: Partial<Student>) => void;
   onDeleteStudent: (id: string) => void;
@@ -27,6 +30,7 @@ interface TrainerDashboardProps {
   onSendNotification: (notification: AppNotification) => void;
   onTriggerAutoResponse: (studentId: string) => void;
   onLogout?: () => void;
+  onUpdateMarketingPlan?: (plan: MarketingPlan) => void;
 }
 
 export default function TrainerDashboard({
@@ -38,6 +42,9 @@ export default function TrainerDashboard({
   notifications,
   revenueLogs,
   accessLogs,
+  marketingPlans = [],
+  activeTrainer = null,
+  onUpdateTrainer,
   onAddStudent,
   onUpdateStudent,
   onDeleteStudent,
@@ -47,12 +54,53 @@ export default function TrainerDashboard({
   onSendMessage,
   onSendNotification,
   onTriggerAutoResponse,
-  onLogout
+  onLogout,
+  onUpdateMarketingPlan
 }: TrainerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'alunos' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs'>('alunos');
+  const [activeTab, setActiveTab] = useState<'alunos' | 'cadastrar_aluno' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs'>('alunos');
   const [copiedLink, setCopiedLink] = useState(false);
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSortBy, setStudentSortBy] = useState<'name' | 'joinDate'>('name');
+  
+  // Trainer SaaS & Recruitment Link States
+  const [copiedRecruitmentLink, setCopiedRecruitmentLink] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [copiedDashboardPix, setCopiedDashboardPix] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  
+  // SaaS payment states
+  const [licensePaymentMethod, setLicensePaymentMethod] = useState<'pix' | 'stripe'>('pix');
+  const [licenseCardNumber, setLicenseCardNumber] = useState('');
+  const [licenseCardName, setLicenseCardName] = useState('');
+  const [licenseCardExpiry, setLicenseCardExpiry] = useState('');
+  const [licenseCardCvv, setLicenseCardCvv] = useState('');
+  const [licensePaymentLoadingStep, setLicensePaymentLoadingStep] = useState(0); // 0 = none, 1 = connecting, 2 = authorizing, 3 = finalizing
+  const [licenseSelectedPlan, setLicenseSelectedPlan] = useState<PlanType>(activeTrainer?.selectedPlan || 'Trimestral');
+  
+  // Profile Configuration states
+  const [profileTrainerName, setProfileTrainerName] = useState(activeTrainer?.name || 'Daniel Personal Coach');
+  const [profileTrainerLink, setProfileTrainerLink] = useState(activeTrainer?.customIdLink || 'daniel-personal');
+  const [profileTrainerPlan, setProfileTrainerPlan] = useState<PlanType>(activeTrainer?.selectedPlan || 'Trimestral');
+  const [profilePixKeyType, setProfilePixKeyType] = useState<'CNPJ' | 'CPF' | 'Telefone' | 'E-mail' | 'Chave Aleatória'>(activeTrainer?.pixKeyType || 'Chave Aleatória');
+  const [profilePixKey, setProfilePixKey] = useState(activeTrainer?.pixKey || '9bbf9c81-8077-4cdd-bb85-055ee56bfd31');
+  const [profilePhoneWhatsApp, setProfilePhoneWhatsApp] = useState(activeTrainer?.phoneWhatsApp || '+5511999999999');
+  const [profileStripeEnabled, setProfileStripeEnabled] = useState(activeTrainer?.stripeEnabled ?? true);
+  const [profileStripePublishableKey, setProfileStripePublishableKey] = useState(activeTrainer?.stripePublishableKey || 'pk_test_sample_key');
+  const [savedReceivingFeedback, setSavedReceivingFeedback] = useState(false);
+
+  React.useEffect(() => {
+    if (activeTrainer) {
+      setProfileTrainerName(activeTrainer.name);
+      setProfileTrainerLink(activeTrainer.customIdLink);
+      setProfileTrainerPlan(activeTrainer.selectedPlan);
+      setProfilePixKeyType(activeTrainer.pixKeyType || 'Chave Aleatória');
+      setProfilePixKey(activeTrainer.pixKey || '');
+      setProfilePhoneWhatsApp(activeTrainer.phoneWhatsApp || '');
+      setProfileStripeEnabled(activeTrainer.stripeEnabled ?? true);
+      setProfileStripePublishableKey(activeTrainer.stripePublishableKey || '');
+      setLicenseSelectedPlan(activeTrainer.selectedPlan || 'Trimestral');
+    }
+  }, [activeTrainer]);
   
   // States for forms and modal toggles
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -101,6 +149,15 @@ export default function TrainerDashboard({
   const [notifMessage, setNotifMessage] = useState('');
   const [notifFeedback, setNotifFeedback] = useState<string | null>(null);
 
+  // Plan editing states
+  const [editingPlan, setEditingPlan] = useState<MarketingPlan | null>(null);
+  const [editingFeaturesText, setEditingFeaturesText] = useState<string>('');
+
+  // Personal/Individual student plan editing states
+  const [editingStudentPlan, setEditingStudentPlan] = useState<boolean>(false);
+  const [tempStudentPlan, setTempStudentPlan] = useState<PlanType>('Mensal');
+  const [tempStudentValue, setTempStudentValue] = useState<number>(0);
+
   // Computed Stats for Trainer Overview
   const totalStudents = students.length;
   const activeStudents = students.filter(s => s.status === 'Ativo').length;
@@ -141,7 +198,7 @@ export default function TrainerDashboard({
 
     onAddStudent(createdStudent);
     setSelectedStudentId(studentId);
-    setShowAddStudentModal(false);
+    setActiveTab('alunos');
     // reset form
     setNewStudent({
       name: '',
@@ -387,9 +444,19 @@ export default function TrainerDashboard({
           >
             <div className="flex items-center gap-3">
               <Users size={18} className={activeTab === 'alunos' ? 'text-[#39FF14]' : ''} />
-              <span>Alunos</span>
+              <span>Lista de Alunos</span>
             </div>
             <span className="text-xs bg-neutral-800 text-neutral-300 font-mono px-2 py-0.5 rounded-full">{students.length}</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('cadastrar_aluno')}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition duration-200 text-left ${activeTab === 'cadastrar_aluno' ? 'bg-[#18181b] border-l-4 border-[#39FF14] text-white font-semibold' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}`}
+          >
+            <div className="flex items-center gap-3">
+              <Plus size={18} className={activeTab === 'cadastrar_aluno' ? 'text-[#39FF14]' : ''} />
+              <span className="font-bold">Cadastrar Aluno</span>
+            </div>
           </button>
 
           <button 
@@ -468,16 +535,6 @@ export default function TrainerDashboard({
               <span>Sair do Painel</span>
             </button>
           )}
-
-          <div className="bg-neutral-900/60 rounded-2xl p-4.5 border border-neutral-800/80 mt-6 hidden lg:block">
-            <h4 className="text-xs font-semibold text-white mb-1.5 flex items-center gap-2">
-              <Award size={14} className="text-[#39FF14]" />
-              Dica de Desempenho SaaS
-            </h4>
-            <p className="text-[10px] text-neutral-400 leading-relaxed">
-              Mantenha as fichas atualizadas semanalmente. Alunos que recebem lembretes de hidratação e treino têm frequência 42% maior na academia!
-            </p>
-          </div>
         </div>
 
         {/* Tab content screens - dynamic renders */}
@@ -492,14 +549,104 @@ export default function TrainerDashboard({
                     <Users size={20} className="text-[#39FF14]" />
                     Gestão Geral de Alunos
                   </h2>
-                  <p className="text-xs text-neutral-400">Gerencie informações, objetivos físicos e monitore a evolução corporal.</p>
+                  <p className="text-xs text-neutral-400">Gerencie informações, objetivos físicos e monitore a evolução corporal de seus matriculados.</p>
                 </div>
-                <button 
-                  onClick={() => setShowAddStudentModal(true)}
-                  className="bg-[#39FF14] hover:bg-green-400 text-black py-2 px-4 rounded-xl font-semibold flex items-center gap-1.5 text-xs transition active:scale-95 cursor-pointer"
-                >
-                  <Plus size={16} /> Cadastrar Novo Aluno
-                </button>
+              </div>
+
+              {/* Twin Widget SaaS & Recruitment Link */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* 1. SEU LINK DE RECRUTAMENTO DE ALUNOS */}
+                <div className="bg-[#121214] border border-neutral-800 p-4 rounded-xl flex flex-col justify-between relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 h-20 w-20 bg-emerald-500/5 blur-xl rounded-full" />
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="p-1.5 rounded-lg bg-[#39FF14]/15 border border-[#39FF14]/30 text-[#39FF14]">
+                        <Copy size={16} />
+                      </span>
+                      <h3 className="text-xs font-black tracking-wider uppercase text-neutral-200 font-mono">Link de Onboarding de Alunos</h3>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed mb-3">
+                      Envie o link abaixo para seus alunos se cadastrarem direto. Eles serão automaticamente associados ao seu painel administrativo.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={window.location.origin + '/?trainerId=' + (activeTrainer?.customIdLink || 'daniel-personal')}
+                      className="flex-1 bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-300 px-3 py-2 rounded-lg font-mono focus:outline-none focus:border-[#39FF14]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const link = window.location.origin + '/?trainerId=' + (activeTrainer?.customIdLink || 'daniel-personal');
+                        navigator.clipboard.writeText(link);
+                        setCopiedRecruitmentLink(true);
+                        setTimeout(() => setCopiedRecruitmentLink(false), 2000);
+                      }}
+                      className="bg-[#39FF14] text-black font-extrabold text-[11px] px-4 py-2 rounded-lg transition duration-200 hover:shadow-[0_0_10px_rgba(57,255,20,0.3)] active:scale-95 cursor-pointer flex items-center gap-1.5"
+                    >
+                      {copiedRecruitmentLink ? <Check size={13} /> : <Copy size={13} />}
+                      <span>{copiedRecruitmentLink ? 'Copiado!' : 'Copiar'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. SUA ASSINATURA SAAS GYMPULSE */}
+                <div className="bg-[#121214] border border-neutral-800 p-4 rounded-xl flex flex-col justify-between relative overflow-hidden">
+                  <div className="absolute top-0 right-0 h-20 w-20 bg-indigo-500/5 blur-xl rounded-full" />
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[#39FF14]">
+                          <Award size={16} />
+                        </span>
+                        <h3 className="text-xs font-black tracking-wider uppercase text-neutral-200 font-mono">Status da sua Licença SaaS</h3>
+                      </div>
+                      
+                      {activeTrainer?.subscriptionStatus === 'trial' ? (
+                        <span className="text-[9px] font-mono font-bold uppercase bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-2 py-0.5 rounded-full animate-pulse">
+                          Período de Testes (7 dias)
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-mono font-black uppercase bg-emerald-500/10 border border-emerald-500/30 text-[#39FF14] px-2 py-0.5 rounded-full flex items-center gap-1">
+                          ★★ Plano Ativo
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1 mt-1 mb-3">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <p className="text-neutral-400">Assinatura Vinculada:</p>
+                        <strong className="text-white font-mono">{activeTrainer?.selectedPlan || 'Trimestral'}</strong>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px]">
+                        <p className="text-neutral-400">Vencimento faturado:</p>
+                        <strong className="text-neutral-300 font-mono">{activeTrainer?.trialExpiresAt || '05/06/2026'}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowProfileModal(true)}
+                      className="flex-1 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 hover:text-white font-bold text-[11px] py-2 rounded-lg transition cursor-pointer"
+                    >
+                      Configurar Perfil / Link
+                    </button>
+                    {activeTrainer?.subscriptionStatus === 'trial' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowUpgradeModal(true)}
+                        className="bg-emerald-500/15 border border-emerald-500/40 hover:bg-emerald-500 hover:text-black text-emerald-400 font-extrabold text-[11px] px-4 py-2 rounded-lg transition cursor-pointer flex items-center gap-1"
+                      >
+                        <DollarSign size={13} />
+                        <span>Regularizar Licença</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Filtros de Busca e Ordenação */}
@@ -651,17 +798,90 @@ export default function TrainerDashboard({
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        <span className="text-xs bg-[#39FF14]/5 text-neutral-300 border border-neutral-800 rounded-lg px-2.5 py-1.5 font-mono">
-                          Plano: <strong className="text-white">{selectedStudent.plan}</strong>
-                        </span>
-                        <span className="text-xs bg-[#39FF14]/5 text-neutral-300 border border-neutral-800 rounded-lg px-2.5 py-1.5 font-mono">
-                          Valor Mensal: <strong className="text-[#39FF14]">R$ {selectedStudent.value.toFixed(2)}</strong>
-                        </span>
-                        <span className="text-xs bg-[#39FF14]/0 text-neutral-300 border border-neutral-800 rounded-lg px-2.5 py-1.5 font-mono">
-                          Matrícula: {selectedStudent.joinedAt}
-                        </span>
-                      </div>
+                      {!editingStudentPlan ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2 bg-neutral-900/40 p-3 rounded-xl border border-neutral-800">
+                          <div className="flex flex-wrap gap-2">
+                            <span className="text-[11px] bg-neutral-900 text-neutral-300 border border-neutral-800 rounded-lg px-2.5 py-1.5 font-mono">
+                              Plano: <strong className="text-white">{selectedStudent.plan}</strong>
+                            </span>
+                            <span className="text-[11px] bg-neutral-900 text-neutral-300 border border-neutral-800 rounded-lg px-2.5 py-1.5 font-mono">
+                              Valor Mensal: <strong className="text-[#39FF14]">R$ {selectedStudent.value.toFixed(2)}</strong>
+                            </span>
+                            <span className="text-[11px] bg-neutral-900/20 text-neutral-400 border border-neutral-800/40 rounded-lg px-2.5 py-1.5 font-mono">
+                              Matrícula: {selectedStudent.joinedAt}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setTempStudentPlan(selectedStudent.plan);
+                              setTempStudentValue(selectedStudent.value);
+                              setEditingStudentPlan(true);
+                            }}
+                            className="flex items-center gap-1.5 py-1 px-3 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 hover:bg-neutral-800 text-[10px] font-medium text-[#39FF14] transition-all cursor-pointer font-mono"
+                          >
+                            <Edit3 size={11} />
+                            EDITAR PLANO
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="bg-neutral-900 p-3 rounded-xl border border-neutral-800 space-y-3">
+                          <p className="text-[10px] text-neutral-400 uppercase font-mono">Editar Plano Individual de {selectedStudent.name}</p>
+                          <div className="grid grid-cols-2 gap-3 font-sans">
+                            <div>
+                              <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Tipo de Plano</label>
+                              <select 
+                                value={tempStudentPlan}
+                                onChange={(e) => {
+                                  const selectType = e.target.value as PlanType;
+                                  setTempStudentPlan(selectType);
+                                  // Auto fill with the marketing standard price if the personal wishes so
+                                  const matchingMarketing = marketingPlans.find(p => p.id === selectType);
+                                  if (matchingMarketing) {
+                                    setTempStudentValue(matchingMarketing.price);
+                                  }
+                                }}
+                                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer font-mono"
+                              >
+                                <option value="Mensal">Mensal</option>
+                                <option value="Trimestral">Trimestral</option>
+                                <option value="Semestral">Semestral</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Valor do Plano (R$)</label>
+                              <input 
+                                type="number" 
+                                min="1"
+                                value={tempStudentValue}
+                                onChange={(e) => setTempStudentValue(Number(e.target.value))}
+                                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-end gap-2 pt-1 font-mono">
+                            <button 
+                              type="button"
+                              onClick={() => setEditingStudentPlan(false)}
+                              className="px-2.5 py-1 rounded bg-neutral-950 hover:bg-neutral-800 text-[10px] text-neutral-400 transition cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                onUpdateStudent(selectedStudent.id, {
+                                  plan: tempStudentPlan,
+                                  value: tempStudentValue
+                                });
+                                setEditingStudentPlan(false);
+                              }}
+                              className="px-3 py-1 bg-[#39FF14] text-black hover:bg-green-400 rounded text-[10px] font-bold transition cursor-pointer"
+                            >
+                              Salvar
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Student Invitation & Share Login Link */}
                       <div className="bg-[#121214]/60 p-4 rounded-xl border border-[#39FF14]/20 space-y-3 mt-3">
@@ -779,6 +999,143 @@ export default function TrainerDashboard({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 1.5: CADASTRAR ALUNO (SEPARATED REGISTRATION SHEET) */}
+          {activeTab === 'cadastrar_aluno' && (
+            <div className="space-y-6 animate-fade-in">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Plus size={20} className="text-[#39FF14]" />
+                  Cadastrar Novo Aluno no Sistema
+                </h2>
+                <p className="text-xs text-neutral-400">Abaixo, preencha a ficha esportiva administrativa e biotipo do aluno para gerar o convite de login imediato.</p>
+              </div>
+
+              <form onSubmit={handleCreateStudent} className="bg-[#121214]/60 border border-neutral-800 p-6 rounded-2xl space-y-5 animate-fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Nome Completo do Aluno</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newStudent.name}
+                      onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
+                      placeholder="Ex: Ana Silva" 
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Objetivo Físico</label>
+                    <select 
+                      value={newStudent.objective} 
+                      onChange={(e) => setNewStudent({...newStudent, objective: e.target.value as Objective})}
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
+                    >
+                      <option value="Hipertrofia">Ganho de Massa (Hipertrofia)</option>
+                      <option value="Emagrecimento">Perda de Peso (Emagrecimento)</option>
+                      <option value="Condicionamento">Resistência (Condicionamento)</option>
+                      <option value="Definição">Definição Muscular</option>
+                      <option value="Reabilitação">Tratamento Físico (Reabilitação)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Idade (Anos)</label>
+                    <input 
+                      type="number" 
+                      required 
+                      value={newStudent.age}
+                      onChange={(e) => setNewStudent({...newStudent, age: Number(e.target.value)})}
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Peso Inicial (kg)</label>
+                    <input 
+                      type="number" 
+                      step="0.1" 
+                      required 
+                      value={newStudent.weight}
+                      onChange={(e) => setNewStudent({...newStudent, weight: Number(e.target.value)})}
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Altura Inicial (m)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      required 
+                      value={newStudent.height}
+                      onChange={(e) => setNewStudent({...newStudent, height: Number(e.target.value)})}
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Plano Inicial de Cobrança</label>
+                    <select 
+                      value={newStudent.plan} 
+                      onChange={(e) => setNewStudent({...newStudent, plan: e.target.value as PlanType})}
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
+                    >
+                      <option value="Mensal">Mensal (R$ 150/mês)</option>
+                      <option value="Trimestral">Trimestral (R$ 140/mês)</option>
+                      <option value="Semestral">Semestral (R$ 120/mês)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Estado de Acesso Inicial</label>
+                    <select 
+                      value={newStudent.status} 
+                      onChange={(e) => setNewStudent({...newStudent, status: e.target.value as 'Ativo' | 'Inativo'})}
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
+                    >
+                      <option value="Ativo">Ativo (Acesso Liberado Fichas)</option>
+                      <option value="Inativo">Inativo (Acesso Suspenso)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Histórico de Atividade Física (Breve relato)</label>
+                  <textarea 
+                    rows={3}
+                    value={newStudent.history}
+                    onChange={(e) => setNewStudent({...newStudent, history: e.target.value})}
+                    placeholder="Ex: Pratica corrida 3x por semana, já treinou musculação antes..." 
+                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-red-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Limitações Ortopédicas / Restrições Médicas</label>
+                  <textarea 
+                    rows={3}
+                    value={newStudent.restrictions}
+                    onChange={(e) => setNewStudent({...newStudent, restrictions: e.target.value})}
+                    placeholder="Ex: Leve dor na lombar ao agachar, hérnia L4-L5, cirurgia prévia joelho..." 
+                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition resize-none"
+                  />
+                </div>
+
+                <div className="pt-4 border-t border-neutral-800/80 flex justify-end">
+                  <button 
+                    type="submit"
+                    className="bg-[#39FF14] text-black hover:bg-green-400 px-8 py-3.5 rounded-xl text-xs font-bold font-sans transition-all active:scale-95 cursor-pointer shadow-lg shadow-[#39FF14]/10"
+                  >
+                    Confirmar Cadastro e Gerar Acesso
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 
@@ -1402,43 +1759,55 @@ export default function TrainerDashboard({
 
                 {/* Interactive Plan configurator */}
                 <div className="space-y-4">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-400 font-mono">Planos Ativos Oferecidos</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-400 font-mono">Planos Ativos Oferecidos</h3>
+                    <p className="text-[10px] text-neutral-500 font-mono">Dê autonomia para editar os benefícios e valores de cada plano</p>
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="bg-neutral-900/60 p-4 rounded-xl border border-neutral-800 space-y-2 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 bg-[#39FF14]/10 text-[#39FF14] text-[8px] font-mono uppercase font-bold py-1 px-2 rounded-bl-lg">MENSAL</div>
-                      <h4 className="text-xs text-neutral-400 font-mono uppercase">Plano Mensal</h4>
-                      <p className="text-xl font-bold text-white font-mono">R$ 150<span className="text-xs text-neutral-400 font-sans">/m</span></p>
-                      <ul className="text-[10px] text-neutral-400 space-y-1 pt-2">
-                        <li>• Planilha Treino A-E</li>
-                        <li>• Suporte Conversa Chat</li>
-                        <li>• Cobrança automática</li>
-                      </ul>
-                    </div>
+                    {marketingPlans.map((plan) => (
+                      <div 
+                        key={plan.id}
+                        className={`p-4 rounded-xl relative overflow-hidden flex flex-col justify-between ${
+                          plan.recommended 
+                            ? 'bg-neutral-900 border-[#39FF14] border-2 shadow-lg shadow-[#39FF14]/5' 
+                            : 'bg-neutral-900/60 border border-neutral-800'
+                        }`}
+                      >
+                        <div>
+                          {plan.recommended ? (
+                            <div className="absolute top-0 right-0 bg-[#39FF14] text-black text-[8px] font-sans uppercase font-black py-1 px-2">RECOMENDADO</div>
+                          ) : (
+                            <div className="absolute top-0 right-0 bg-[#39FF14]/10 text-[#39FF14] text-[8px] font-mono uppercase font-bold py-1 px-2 rounded-bl-lg">
+                              {plan.id.toUpperCase()}
+                            </div>
+                          )}
+                          
+                          <h4 className="text-xs text-neutral-400 font-mono uppercase mt-1">{plan.title}</h4>
+                          <p className={`text-xl font-bold font-mono ${plan.recommended ? 'text-[#39FF14]' : 'text-white'}`}>
+                            R$ {plan.price}
+                            <span className="text-xs text-neutral-400 font-sans">{plan.period}</span>
+                          </p>
+                          
+                          <ul className="text-[10px] text-neutral-400 space-y-1 pt-2 pb-4">
+                            {plan.features.map((feature, idx) => (
+                              <li key={idx}>• {feature}</li>
+                            ))}
+                          </ul>
+                        </div>
 
-                    <div className="bg-neutral-900 border-[#39FF14] border-2 p-4 rounded-xl space-y-2 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 bg-[#39FF14] text-black text-[8px] font-sans uppercase font-black py-1 px-2">RECOMENDADO</div>
-                      <h4 className="text-xs text-neutral-400 font-mono uppercase">Plano Trimestral</h4>
-                      <p className="text-xl font-bold text-[#39FF14] font-mono">R$ 140<span className="text-xs text-neutral-300 font-sans">/m</span></p>
-                      <ul className="text-[10px] text-neutral-400 space-y-1 pt-2">
-                        <li>• Planilha Treino A-E</li>
-                        <li>• Suporte Conversa Chat</li>
-                        <li>• Monitor de Medidas</li>
-                        <li>• Treino presencial semanal</li>
-                      </ul>
-                    </div>
-
-                    <div className="bg-neutral-900/60 p-4 rounded-xl border border-neutral-800 space-y-2 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 bg-blue-500/10 text-blue-400 text-[8px] font-mono uppercase font-bold py-1 px-2 rounded-bl-lg">SEMESTRAL</div>
-                      <h4 className="text-xs text-neutral-400 font-mono uppercase">Plano Semestral</h4>
-                      <p className="text-xl font-bold text-white font-mono">R$ 120<span className="text-xs text-neutral-400 font-sans">/m</span></p>
-                      <ul className="text-[10px] text-neutral-400 space-y-1 pt-2">
-                        <li>• Planilha Treino A-E</li>
-                        <li>• Suporte Conversa e Áudio</li>
-                        <li>• Avaliação Física Completa</li>
-                        <li>• Suporte Premium 24/7</li>
-                      </ul>
-                    </div>
+                        <button
+                          onClick={() => {
+                            setEditingPlan(plan);
+                            setEditingFeaturesText(plan.features.join('\n'));
+                          }}
+                          className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/40 hover:bg-neutral-800/60 text-[10px] font-medium text-neutral-300 transition-colors"
+                        >
+                          <Edit3 size={11} className="text-[#39FF14]" />
+                          Editar Valores & Coisas
+                        </button>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="p-4 bg-neutral-900/30 rounded-xl border border-neutral-800 space-y-2">
@@ -1446,6 +1815,117 @@ export default function TrainerDashboard({
                     <p className="text-[11px] text-neutral-400 leading-relaxed">
                       Seus alunos recebem no próprio app deles as informações de renovação com Pix Copie e Cole integrado. O app GymPulse automatiza os alertas de cobrança sem constrangimentos e renova os acessos às fichas sem intervenção direta do personal.
                     </p>
+                  </div>
+
+                  <div className="p-5 bg-neutral-900/80 rounded-xl border border-neutral-800 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between border-b border-neutral-800 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <DollarSign size={16} className="text-[#39FF14]" />
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Meios de Recebimento de Alunos</h4>
+                      </div>
+                      <span className="text-[8px] font-mono font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/10">CONFIGURAÇÃO DE SAQUE</span>
+                    </div>
+
+                    <p className="text-[10px] text-neutral-400 font-sans leading-relaxed">
+                      Defina abaixo para qual conta PIX ou chave Stripe os seus alunos da consultoria irão transferir as mensalidades. Toda a transação é 100% direta entre você e o aluno.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest mb-1.5">Tipo de Chave Pix</label>
+                        <select
+                          value={profilePixKeyType}
+                          onChange={(e) => setProfilePixKeyType(e.target.value as any)}
+                          className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-2 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition font-sans"
+                        >
+                          <option value="Chave Aleatória">Chave Aleatória</option>
+                          <option value="CPF">CPF</option>
+                          <option value="CNPJ">CNPJ</option>
+                          <option value="Telefone">Telefone</option>
+                          <option value="E-mail">E-mail</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest mb-1.5">WhatsApp p/ Registro</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="+5511999999999"
+                          value={profilePhoneWhatsApp}
+                          onChange={(e) => setProfilePhoneWhatsApp(e.target.value)}
+                          className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition font-sans"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest mb-1.5">Chave Pix de Destino</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Cole ou digite sua chave..."
+                        value={profilePixKey}
+                        onChange={(e) => setProfilePixKey(e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 text-xs font-mono text-[#39FF14] px-3 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition"
+                      />
+                    </div>
+
+                    <div className="bg-neutral-950/40 p-3 rounded-xl border border-neutral-850 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-neutral-300 font-bold font-mono uppercase tracking-wider">Permitir Cartão (Stripe)</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={profileStripeEnabled}
+                            onChange={(e) => setProfileStripeEnabled(e.target.checked)}
+                            className="sr-only peer" 
+                          />
+                          <div className="w-10 h-5 bg-neutral-850 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 peer-checked:after:bg-black after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                        </label>
+                      </div>
+
+                      {profileStripeEnabled && (
+                        <div className="space-y-1">
+                          <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Stripe Publishable Key</label>
+                          <input
+                            type="text"
+                            placeholder="pk_test_..."
+                            value={profileStripePublishableKey}
+                            onChange={(e) => setProfileStripePublishableKey(e.target.value)}
+                            className="w-full bg-neutral-950 border border-neutral-800 text-[10px] font-mono text-white px-3 py-2 rounded-xl focus:outline-none focus:border-indigo-500 transition"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onUpdateTrainer && activeTrainer) {
+                            const updated: Trainer = {
+                              ...activeTrainer,
+                              pixKeyType: profilePixKeyType,
+                              pixKey: profilePixKey.trim(),
+                              phoneWhatsApp: profilePhoneWhatsApp.trim(),
+                              stripeEnabled: profileStripeEnabled,
+                              stripePublishableKey: profileStripePublishableKey.trim()
+                            };
+                            onUpdateTrainer(updated);
+                            setSavedReceivingFeedback(true);
+                            setTimeout(() => setSavedReceivingFeedback(false), 3000);
+                          }
+                        }}
+                        className="bg-[#39FF14] text-black px-4 py-2 bg-[#39FF14] hover:bg-green-400 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 font-mono uppercase w-full sm:w-auto"
+                      >
+                        <Check size={13} /> Gravar Dados de Recebimento
+                      </button>
+                    </div>
+
+                    {savedReceivingFeedback && (
+                      <p className="text-[#39FF14] text-[10px] text-right font-mono animate-pulse">✓ Meios de recebimento salvos com sucesso!</p>
+                    )}
                   </div>
                 </div>
 
@@ -1507,156 +1987,6 @@ export default function TrainerDashboard({
         </div>
 
       </div>
-
-      {/* MODAL 1: ADICIONAR ALUNO */}
-      {showAddStudentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in select-none">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg p-6 relative shadow-2xl">
-            <button 
-              onClick={() => setShowAddStudentModal(false)}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-white p-1 hover:bg-neutral-800 rounded-lg transition"
-            >
-              <X size={18} />
-            </button>
-
-            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-              <Plus size={20} className="text-[#39FF14]" /> Cadastrar Novo Aluno no GymPulse
-            </h3>
-            <p className="text-xs text-neutral-400 mb-6 font-sans">Adicione as informações de contato, biotipo, histórico e plano esportivo.</p>
-
-            <form onSubmit={handleCreateStudent} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Nome Completo</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={newStudent.name}
-                    onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
-                    placeholder="Ex: Ana Silva" 
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Objetivo Físico</label>
-                  <select 
-                    value={newStudent.objective} 
-                    onChange={(e) => setNewStudent({...newStudent, objective: e.target.value as Objective})}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-2.5 text-xs text-white outline-none"
-                  >
-                    <option value="Hipertrofia">Ganho de Massa (Hipertrofia)</option>
-                    <option value="Emagrecimento">Perda de Peso (Emagrecimento)</option>
-                    <option value="Condicionamento">Resistência (Condicionamento)</option>
-                    <option value="Definição">Definição Muscular</option>
-                    <option value="Reabilitação">Tratamento Físico (Reabilitação)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Idade (Anos)</label>
-                  <input 
-                    type="number" 
-                    required 
-                    value={newStudent.age}
-                    onChange={(e) => setNewStudent({...newStudent, age: Number(e.target.value)})}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Peso Inicial (kg)</label>
-                  <input 
-                    type="number" 
-                    step="0.1" 
-                    required 
-                    value={newStudent.weight}
-                    onChange={(e) => setNewStudent({...newStudent, weight: Number(e.target.value)})}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Altura Inicial (m)</label>
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    required 
-                    value={newStudent.height}
-                    onChange={(e) => setNewStudent({...newStudent, height: Number(e.target.value)})}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none" 
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Plano Inicial</label>
-                  <select 
-                    value={newStudent.plan} 
-                    onChange={(e) => setNewStudent({...newStudent, plan: e.target.value as PlanType})}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-2.5 text-xs text-white outline-none"
-                  >
-                    <option value="Mensal">Mensal (R$ 150/mês)</option>
-                    <option value="Trimestral">Trimestral (R$ 140/mês)</option>
-                    <option value="Semestral">Semestral (R$ 120/mês)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Estado de Acesso</label>
-                  <select 
-                    value={newStudent.status} 
-                    onChange={(e) => setNewStudent({...newStudent, status: e.target.value as 'Ativo' | 'Inativo'})}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-2.5 text-xs text-white outline-none"
-                  >
-                    <option value="Ativo">Ativo (Acesso Liberado Fichas)</option>
-                    <option value="Inativo">Inativo (Acesso Suspenso)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Histórico de Atividade Física</label>
-                <textarea 
-                  rows={2}
-                  value={newStudent.history}
-                  onChange={(e) => setNewStudent({...newStudent, history: e.target.value})}
-                  placeholder="Ex: Pratica corrida 3x por semana, já treinou musculação antes..." 
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white outline-none resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1 text-red-400">Limitações / Patologias Articulares / Contraindicações</label>
-                <textarea 
-                  rows={2}
-                  value={newStudent.restrictions}
-                  onChange={(e) => setNewStudent({...newStudent, restrictions: e.target.value})}
-                  placeholder="Ex: Leve dor na lombar ao agachar, hérnia L4-L5, cirurgia prévia joelho direito..." 
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white outline-none resize-none"
-                />
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-neutral-800">
-                <button 
-                  type="button" 
-                  onClick={() => setShowAddStudentModal(false)}
-                  className="text-neutral-400 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  className="bg-[#39FF14] text-black px-5 py-2.5 rounded-xl text-xs font-bold transition hover:bg-green-400"
-                >
-                  Criar Aluno
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MODAL 2: ADICIONAR COMPROMISSO NA AGENDA */}
       {showAddEventModal && (
@@ -1775,6 +2105,639 @@ export default function TrainerDashboard({
                   className="bg-[#39FF14] text-black px-5 py-2.5 rounded-xl text-xs font-bold transition hover:bg-green-400"
                 >
                   Confirmar Agendamento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: EDITAR VANTAGENS E VALOR DE PLANO */}
+      {editingPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in select-none">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg p-6 relative shadow-2xl">
+            <button 
+              onClick={() => setEditingPlan(null)}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white p-1 hover:bg-neutral-800 rounded-lg transition"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <CreditCard size={20} className="text-[#39FF14]" /> Editar Plano de Marketing: {editingPlan.id}
+            </h3>
+            <p className="text-xs text-neutral-400 mb-6 font-sans">Atualize o valor, a recomendação e a lista de benefícios e coisas inclusas neste plano.</p>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (onUpdateMarketingPlan) {
+                  const items = editingFeaturesText
+                    .split('\n')
+                    .map(item => item.trim())
+                    .filter(item => item.length > 0);
+                  
+                  onUpdateMarketingPlan({
+                    ...editingPlan,
+                    features: items
+                  });
+                }
+                setEditingPlan(null);
+              }} 
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Título de Exibição do Plano</label>
+                <input 
+                  type="text" 
+                  required
+                  value={editingPlan.title}
+                  onChange={(e) => setEditingPlan({...editingPlan, title: e.target.value})}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Valor Unitário Mensal (R$)</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="1"
+                    value={editingPlan.price}
+                    onChange={(e) => setEditingPlan({...editingPlan, price: Number(e.target.value)})}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Destaque Exclusivo</label>
+                  <div className="flex items-center h-10">
+                    <label className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer select-none">
+                      <input 
+                        type="checkbox"
+                        checked={!!editingPlan.recommended}
+                        onChange={(e) => setEditingPlan({...editingPlan, recommended: e.target.checked})}
+                        className="rounded border-neutral-800 bg-neutral-950 text-[#39FF14] focus:ring-[#39FF14] w-4 h-4"
+                      />
+                      Destacar como Recomendado
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1">Vantagens / Diferenciais do Plano (Uma por linha)</label>
+                <textarea 
+                  rows={4}
+                  required
+                  value={editingFeaturesText}
+                  onChange={(e) => setEditingFeaturesText(e.target.value)}
+                  placeholder="Ex: Planilha de Treino Semanal&#10;Suporte por Chat&#10;Consultoria Online"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none font-sans leading-relaxed"
+                />
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-neutral-800">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingPlan(null)}
+                  className="text-neutral-400 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="bg-[#39FF14] text-black px-5 py-2.5 rounded-xl text-xs font-bold transition hover:bg-green-400"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SaaS License Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0c0c0e] border border-neutral-800 rounded-2xl w-full max-w-lg p-6 relative my-8 animate-scale-up shadow-2xl">
+            <button
+              onClick={() => {
+                if (licensePaymentLoadingStep === 0) {
+                  setShowUpgradeModal(false);
+                }
+              }}
+              disabled={licensePaymentLoadingStep > 0 && licensePaymentLoadingStep < 4}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="text-center space-y-2 mb-6">
+              <div className="inline-flex p-3 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/25 text-[#39FF14]">
+                <CreditCard size={24} className="animate-pulse" />
+              </div>
+              <h3 className="text-lg font-black text-white uppercase tracking-tight font-mono">Regularizar Assinatura SaaS GymPulse</h3>
+              <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                Escolha o plano e o meio de pagamento ideal para reativar seu acesso total sem restrições.
+              </p>
+            </div>
+
+            {/* Plan Selector inside payment module */}
+            <div className="mb-5 space-y-2">
+              <label className="block text-[10px] text-neutral-400 font-mono font-black uppercase tracking-widest leading-none">
+                1. Escolha o seu Plano de Licença
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'Mensal', price: 'R$ 39,90', period: '/mês', desc: 'Ideal p/ testar' },
+                  { key: 'Trimestral', price: 'R$ 97,00', period: '/trimestre', desc: 'Melhor custo' },
+                  { key: 'Anual', price: 'R$ 297,00', period: '/ano', desc: 'Economia máxima' }
+                ].map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => {
+                      if (licensePaymentLoadingStep === 0) {
+                        setLicenseSelectedPlan(p.key as PlanType);
+                      }
+                    }}
+                    disabled={licensePaymentLoadingStep > 0}
+                    className={`p-3 rounded-xl border text-left transition relative cursor-pointer group ${
+                      licenseSelectedPlan === p.key
+                        ? 'bg-[#39FF14]/10 border-[#39FF14] text-white'
+                        : 'bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:border-neutral-700 hover:bg-neutral-900'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-mono uppercase font-black tracking-wider">{p.key}</span>
+                      {licenseSelectedPlan === p.key && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#39FF14]"></span>
+                      )}
+                    </div>
+                    <p className="text-xs font-black text-white font-mono mt-1">
+                      {p.price}
+                      <span className="text-[9px] font-normal text-neutral-400">{p.period}</span>
+                    </p>
+                    <p className="text-[8px] text-neutral-500 font-sans group-hover:text-neutral-400 mt-0.5">{p.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Method Tabs */}
+            <div className="space-y-2 mb-5">
+              <label className="block text-[10px] text-neutral-400 font-mono font-black uppercase tracking-widest leading-none">
+                2. Selecione o Meio de Pagamento
+              </label>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-950 rounded-xl border border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (licensePaymentLoadingStep === 0) {
+                      setLicensePaymentMethod('pix');
+                    }
+                  }}
+                  disabled={licensePaymentLoadingStep > 0}
+                  className={`py-2 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition cursor-pointer ${
+                    licensePaymentMethod === 'pix'
+                      ? 'bg-[#39FF14] text-black shadow-md'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  ⚡ Pix Instante
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (licensePaymentLoadingStep === 0) {
+                      setLicensePaymentMethod('stripe');
+                    }
+                  }}
+                  disabled={licensePaymentLoadingStep > 0}
+                  className={`py-2 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition cursor-pointer flex items-center justify-center gap-1 ${
+                    licensePaymentMethod === 'stripe'
+                      ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/10'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  <CreditCard size={12} /> Cartão (Stripe)
+                </button>
+              </div>
+            </div>
+
+            {/* Dynamic content depending on payment method */}
+            {licensePaymentLoadingStep > 0 ? (
+              /* Transaction Processing Loader */
+              <div className="bg-neutral-950 border border-neutral-850 rounded-xl p-6 text-center space-y-4">
+                {licensePaymentLoadingStep < 4 ? (
+                  <div className="flex flex-col items-center justify-center space-y-3 py-6">
+                    <div className="w-10 h-10 border-4 border-dashed border-[#39FF14] rounded-full animate-spin"></div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-white font-mono uppercase tracking-widest font-black animate-pulse">
+                        {licensePaymentLoadingStep === 1 && 'Contatando API Stripe...'}
+                        {licensePaymentLoadingStep === 2 && 'Autorizando Token de Cartão...'}
+                        {licensePaymentLoadingStep === 3 && 'Aguardando Webhook de Ativação...'}
+                      </p>
+                      <p className="text-[10px] text-neutral-500 font-sans">
+                        {licensePaymentLoadingStep === 1 && 'Preparando conexões criptografadas de ponta a ponta.'}
+                        {licensePaymentLoadingStep === 2 && 'Stripe está processando as credenciais de segurança.'}
+                        {licensePaymentLoadingStep === 3 && 'Recebendo confirmação de transação e liberando licença.'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center space-y-2 py-6 animate-scale-up">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-[#39FF14] flex items-center justify-center animate-bounce">
+                      <Check size={24} />
+                    </div>
+                    <p className="text-sm font-black text-white font-mono uppercase tracking-wider">Assinatura Ativada!</p>
+                    <p className="text-xs text-neutral-400 font-sans max-w-xs leading-relaxed">
+                      Seu plano <strong>{licenseSelectedPlan}</strong> foi efetivado no Stripe e reativado com sucesso. Boas vendas!
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : licensePaymentMethod === 'pix' ? (
+              /* Pix Checkout block */
+              <div className="space-y-3">
+                <div className="bg-neutral-950 p-4 border border-neutral-800 rounded-xl space-y-4 text-center">
+                  <div className="flex items-center justify-between text-[10px] font-mono uppercase text-neutral-400">
+                    <span>Validade de transação:</span>
+                    <span className="text-amber-400 font-bold tracking-tight">10:00 min</span>
+                  </div>
+
+                  <div className="bg-white p-2.5 text-center w-32 h-32 mx-auto flex items-center justify-center rounded-xl border border-neutral-200 shadow-lg relative">
+                    <div className="grid grid-cols-4 gap-1.5 w-full h-full opacity-90 select-none">
+                      {Array.from({ length: 16 }).map((_, i) => (
+                        <div key={i} className={`rounded-sm ${(i * 3 + 1) % 5 === 0 ? 'bg-black' : 'bg-neutral-100'}`} />
+                      ))}
+                    </div>
+                    <div className="absolute w-8 h-8 bg-neutral-900 rounded-full border-2 border-white flex items-center justify-center shadow">
+                      <span className="text-[9px] font-mono font-black text-[#39FF14]">PIX</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-left">
+                    <label className="block text-[9px] text-neutral-500 font-mono uppercase tracking-widest leading-none">Chave Copie e Cole GymPulse</label>
+                    <div className="bg-neutral-900 p-2.5 rounded-lg border border-neutral-800/60 flex items-center gap-2">
+                      <pre className="text-[10px] overflow-hidden truncate font-mono text-neutral-400 flex-1 select-all">
+                        0002012658001BR.GOV.BCB.PIX0136gympulse-license-saas-{licenseSelectedPlan.toLowerCase()}-active-39e
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`0002012658001BR.GOV.BCB.PIX0136gympulse-license-saas-${licenseSelectedPlan.toLowerCase()}-active-39e`);
+                          setCopiedDashboardPix(true);
+                          setTimeout(() => setCopiedDashboardPix(false), 2000);
+                        }}
+                        className="text-[#39FF14] hover:text-green-400 cursor-pointer p-1"
+                        title="Copiar PIX"
+                      >
+                        <Copy size={13} />
+                      </button>
+                    </div>
+                    {copiedDashboardPix && <p className="text-[10px] font-mono text-[#39FF14] animate-pulse">✓ Chave Copie e Cole do Pix copiada!</p>}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowUpgradeModal(false)}
+                    className="flex-1 bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-white font-bold text-xs py-3 rounded-xl transition cursor-pointer"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLicensePaymentLoadingStep(1);
+                      setTimeout(() => {
+                        setLicensePaymentLoadingStep(3);
+                        setTimeout(() => {
+                          if (onUpdateTrainer && activeTrainer) {
+                            onUpdateTrainer({
+                              ...activeTrainer,
+                              subscriptionStatus: 'paid',
+                              selectedPlan: licenseSelectedPlan
+                            });
+                          }
+                          setLicensePaymentLoadingStep(4);
+                          setTimeout(() => {
+                            setLicensePaymentLoadingStep(0);
+                            setShowUpgradeModal(false);
+                          }, 2000);
+                        }, 1200);
+                      }, 1200);
+                    }}
+                    className="flex-1 bg-[#39FF14] text-black font-extrabold text-xs py-3 rounded-xl transition shadow-lg shadow-[#39FF14]/15 hover:shadow-[#39FF14]/30 cursor-pointer text-center uppercase font-mono tracking-wider"
+                  >
+                    Confirmar via Pix
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Stripe Credit Card Form */
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!licenseCardNumber || !licenseCardName || !licenseCardExpiry || !licenseCardCvv) {
+                    alert('Por favor, preencha todos os dados fiscais e de pagamento do cartão!');
+                    return;
+                  }
+                  
+                  // Simulate 3 Step Stripe API Checkout flow
+                  setLicensePaymentLoadingStep(1);
+                  setTimeout(() => {
+                    setLicensePaymentLoadingStep(2);
+                    setTimeout(() => {
+                      setLicensePaymentLoadingStep(3);
+                      setTimeout(() => {
+                        if (onUpdateTrainer && activeTrainer) {
+                          onUpdateTrainer({
+                            ...activeTrainer,
+                            subscriptionStatus: 'paid',
+                            selectedPlan: licenseSelectedPlan
+                          });
+                        }
+                        setLicensePaymentLoadingStep(4);
+                        setTimeout(() => {
+                          setLicenseCardNumber('');
+                          setLicenseCardName('');
+                          setLicenseCardExpiry('');
+                          setLicenseCardCvv('');
+                          setLicensePaymentLoadingStep(0);
+                          setShowUpgradeModal(false);
+                        }, 2000);
+                      }, 1200);
+                    }, 1200);
+                  }, 1200);
+                }}
+                className="space-y-4"
+              >
+                {/* Visual Glassmorphism Metallic Credit Card Preview */}
+                <div className="bg-gradient-to-br from-neutral-850 via-neutral-900 to-indigo-950 p-4.5 rounded-2xl border border-neutral-850 relative overflow-hidden shadow-xl aspect-[1.58/1] flex flex-col justify-between max-w-sm mx-auto">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(57,255,20,0.06),transparent_60%)]" />
+                  
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="bg-neutral-850 rounded-lg p-1.5 border border-neutral-800">
+                      <span className="text-[10px] font-mono leading-none tracking-widest text-[#39FF14] font-black uppercase">GYMPULSE</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
+                      {licenseCardNumber.startsWith('4') ? 'Visa' : licenseCardNumber.startsWith('5') ? 'Mastercard' : 'Stripe Security'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 relative z-10">
+                    <p className="text-neutral-500 text-[8px] uppercase tracking-widest font-mono">Card Number</p>
+                    <p className="text-sm font-mono tracking-widest text-white font-extrabold">
+                      {licenseCardNumber ? licenseCardNumber : '•••• •••• •••• ••••'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-white relative z-10">
+                    <div className="space-y-0.5 max-w-[170px]">
+                      <p className="text-neutral-500 text-[8px] uppercase tracking-widest font-mono">Cardholder Name</p>
+                      <p className="text-[11px] font-mono uppercase font-black tracking-wider truncate">
+                        {licenseCardName ? licenseCardName : 'MICHEL LIMA'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-right">
+                      <div className="space-y-0.5">
+                        <p className="text-neutral-500 text-[8px] uppercase tracking-widest font-mono">Expires</p>
+                        <p className="text-[11px] font-mono font-bold leading-none">{licenseCardExpiry ? licenseCardExpiry : 'MM/AA'}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-neutral-500 text-[8px] uppercase tracking-widest font-mono">CVC</p>
+                        <p className="text-[11px] font-mono font-bold leading-none">{licenseCardCvv ? licenseCardCvv : '•••'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Card input fields */}
+                <div className="space-y-3.5">
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Nome Impresso no Cartão</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: MICHEL L LIMA"
+                      value={licenseCardName}
+                      onChange={(e) => setLicenseCardName(e.target.value.toUpperCase())}
+                      className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-indigo-500 transition font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Número do Cartão de Crédito</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        maxLength={19}
+                        placeholder="4444 5555 6666 7777"
+                        value={licenseCardNumber}
+                        onChange={(e) => {
+                          const formatted = e.target.value
+                            .replace(/\D/g, '')
+                            .slice(0, 16)
+                            .replace(/(\d{4})/g, '$1 ')
+                            .trim();
+                          setLicenseCardNumber(formatted);
+                        }}
+                        className="w-full bg-neutral-950 border border-[#2d2d30] text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-indigo-500 transition font-mono tracking-widest"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 font-mono">
+                        {licenseCardNumber.startsWith('4') ? 'VISA' : licenseCardNumber.startsWith('5') ? 'MC' : 'STRIPE'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Expiração (MM/AA)</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={5}
+                        placeholder="09/31"
+                        value={licenseCardExpiry}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                          if (val.length >= 2) {
+                            setLicenseCardExpiry(`${val.slice(0, 2)}/${val.slice(2)}`);
+                          } else {
+                            setLicenseCardExpiry(val);
+                          }
+                        }}
+                        className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl text-center focus:outline-none focus:border-indigo-500 transition font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Código CVC</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={4}
+                        placeholder="123"
+                        value={licenseCardCvv}
+                        onChange={(e) => setLicenseCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl text-center focus:outline-none focus:border-indigo-500 transition font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[9px] text-neutral-500 font-mono justify-center py-1 border-t border-neutral-900 mt-2">
+                  <Lock size={10} className="text-emerald-500" />
+                  <span>Stripe Secure Gateway • Certificação PCI-DSS Compliant</span>
+                </div>
+
+                <div className="flex gap-2 font-mono pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowUpgradeModal(false)}
+                    className="flex-1 bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-white font-bold text-xs py-3 rounded-xl transition cursor-pointer"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs py-3 rounded-xl transition shadow-lg shadow-indigo-600/15 hover:shadow-indigo-600/30 cursor-pointer text-center uppercase tracking-wider flex items-center justify-center gap-2"
+                  >
+                    <Lock size={12} className="text-indigo-200" /> Pagar com Stripe
+                  </button>
+                </div>
+              </form>
+            )}
+
+          </div>
+        </div>
+      )}
+
+
+      {/* Trainer Profile Configuration Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#121214] border border-neutral-800 rounded-2xl w-full max-w-md p-6 relative animate-scale-up">
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white transition cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="space-y-1 mb-4">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono">Configurações de Canal & Licença</h3>
+              <p className="text-xs text-neutral-400">Configure seu link de indicação de alunos e selecione sua proposta SaaS.</p>
+            </div>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (onUpdateTrainer && activeTrainer) {
+                  const updated: Trainer = {
+                    ...activeTrainer,
+                    name: profileTrainerName.trim(),
+                    customIdLink: profileTrainerLink.trim().toLowerCase().replace(/\s+/g, '-'),
+                    selectedPlan: profileTrainerPlan,
+                    pixKeyType: profilePixKeyType,
+                    pixKey: profilePixKey.trim(),
+                    phoneWhatsApp: profilePhoneWhatsApp.trim(),
+                    stripeEnabled: profileStripeEnabled,
+                    stripePublishableKey: profileStripePublishableKey.trim()
+                  };
+                  onUpdateTrainer(updated);
+                  setShowProfileModal(false);
+                }
+              }}
+              className="space-y-4 max-h-[80vh] overflow-y-auto pr-1"
+            >
+              <div>
+                <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                  Seu nome ou marca principal
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={profileTrainerName}
+                  onChange={(e) => setProfileTrainerName(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                  Prefixo personalizado do seu link único
+                </label>
+                <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5">
+                  <span className="text-[10px] font-mono text-neutral-500 select-none">/?trainerId=</span>
+                  <input
+                    type="text"
+                    required
+                    value={profileTrainerLink}
+                    onChange={(e) => setProfileTrainerLink(e.target.value)}
+                    className="flex-1 bg-transparent text-xs text-white ml-1 focus:outline-none"
+                  />
+                </div>
+                <p className="text-[9px] font-mono text-neutral-550 mt-1">
+                  Seu link definitivo será: <span className="text-[#39FF14]">{window.location.origin}/?trainerId={profileTrainerLink}</span>
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest">
+                    Plano Selecionado do SaaS GymPulse
+                  </label>
+                  <span className="text-[8px] font-mono font-bold bg-[#39FF14]/10 text-[#39FF14] px-1.5 py-0.5 rounded border border-[#39FF14]/20">TAXA DE USO</span>
+                </div>
+                
+                <p className="text-[10px] text-neutral-400 font-sans leading-normal mb-2 bg-[#121214] p-3 rounded-xl border border-neutral-850">
+                  ⚠️ <strong>Atenção Personal:</strong> Este plano é a licença de uso que você paga ao <strong>GymPulse</strong> para poder utilizar toda a plataforma (gerar seus links exclusivos, cadastrar alunos de forma ilimitada e usar o app). Os planos de treino que você cobra dos seus alunos são configurados na aba <strong>"Planos"</strong> da sua consultoria!
+                </p>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { key: 'Mensal', price: 'R$ 39,90/m', label: 'Mensal' },
+                    { key: 'Trimestral', price: 'R$ 97,00/t', label: 'Trimestral' },
+                    { key: 'Anual', price: 'R$ 297,00/a', label: 'Anual' }
+                  ].map((p) => (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => setProfileTrainerPlan(p.key as any)}
+                      className={`p-2 rounded-lg text-center border transition cursor-pointer ${
+                        profileTrainerPlan === p.key
+                          ? 'bg-[#39FF14]/15 border-[#39FF14] text-[#39FF14]'
+                          : 'bg-neutral-950/45 border-neutral-850 text-neutral-400'
+                      }`}
+                    >
+                      <p className="text-[10px] font-extrabold">{p.label}</p>
+                      <p className="text-[8px] font-mono mt-0.5">{p.price}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="text-neutral-400 hover:text-white px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-[#39FF14] text-black px-5 py-2.5 rounded-xl text-xs font-bold transition hover:bg-green-400 cursor-pointer"
+                >
+                  Salvar Alterações
                 </button>
               </div>
             </form>

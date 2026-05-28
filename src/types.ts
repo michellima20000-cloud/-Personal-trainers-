@@ -21,6 +21,7 @@ export interface Student {
   joinedAt: string;
   nextPayment: string;
   value: number;
+  trainerId?: string;
 }
 
 export interface Exercise {
@@ -121,3 +122,30 @@ export interface AccessLog {
   action: string;
   device: string;
 }
+
+export interface MarketingPlan {
+  id: string; // 'Mensal' | 'Trimestral' | 'Semestral'
+  title: string;
+  price: number;
+  period: string; // e.g. "/m"
+  features: string[];
+  recommended?: boolean;
+}
+
+export interface Trainer {
+  id: string;
+  name: string;
+  email: string;
+  password?: string;
+  selectedPlan: PlanType;
+  trialStartDate: string;
+  trialExpiresAt: string;
+  subscriptionStatus: 'trial' | 'paid' | 'expired';
+  customIdLink: string; // personalized link key, like 'daniel-personal'
+  pixKeyType?: 'CPF' | 'CNPJ' | 'E-mail' | 'Telefone' | 'Chave Aleatória';
+  pixKey?: string;
+  phoneWhatsApp?: string;
+  stripeEnabled?: boolean;
+  stripePublishableKey?: string;
+}
+
