@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Users, Dumbbell, Calendar, MessageSquare, Bell, CreditCard, 
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
@@ -62,6 +62,34 @@ export default function TrainerDashboard({
   const [copiedLink, setCopiedLink] = useState(false);
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSortBy, setStudentSortBy] = useState<'name' | 'joinDate'>('name');
+  
+  const filteredAndSortedStudents = useMemo(() => {
+    return [...students]
+      .filter((student) => {
+        if (!studentSearchQuery.trim()) return true;
+        const q = studentSearchQuery.toLowerCase();
+        return (
+          student.name.toLowerCase().includes(q) ||
+          student.objective.toLowerCase().includes(q) ||
+          student.plan.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        if (studentSortBy === 'name') {
+          return a.name.localeCompare(b.name);
+        } else {
+          const parseJoinDate = (dStr: string) => {
+            if (!dStr) return 0;
+            const parts = dStr.split('/');
+            if (parts.length === 3) {
+              return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+            }
+            return new Date(dStr).getTime() || 0;
+          };
+          return parseJoinDate(b.joinedAt) - parseJoinDate(a.joinedAt);
+        }
+      });
+  }, [students, studentSearchQuery, studentSortBy]);
   
   // Trainer SaaS & Recruitment Link States
   const [copiedRecruitmentLink, setCopiedRecruitmentLink] = useState(false);
@@ -843,33 +871,7 @@ export default function TrainerDashboard({
 
               {/* Grid of Student Cards with Search filter */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[...students]
-                  .filter((student) => {
-                    if (!studentSearchQuery.trim()) return true;
-                    const q = studentSearchQuery.toLowerCase();
-                    return (
-                      student.name.toLowerCase().includes(q) ||
-                      student.objective.toLowerCase().includes(q) ||
-                      student.plan.toLowerCase().includes(q)
-                    );
-                  })
-                  .sort((a, b) => {
-                    if (studentSortBy === 'name') {
-                      return a.name.localeCompare(b.name);
-                    } else {
-                      // joinDate - newest first (descending)
-                      const parseJoinDate = (dStr: string) => {
-                        if (!dStr) return 0;
-                        const parts = dStr.split('/');
-                        if (parts.length === 3) {
-                          return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
-                        }
-                        return new Date(dStr).getTime() || 0;
-                      };
-                      return parseJoinDate(b.joinedAt) - parseJoinDate(a.joinedAt);
-                    }
-                  })
-                  .map((student) => {
+                {filteredAndSortedStudents.map((student) => {
                   const isSelected = selectedStudentId === student.id;
                   const stdEvolution = evolution[student.id] || [];
                   const lastEv = stdEvolution[stdEvolution.length - 1];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Dumbbell, TrendingUp, MessageSquare, CreditCard, 
   Play, Pause, RotateCcw, Check, CheckCircle2, 
@@ -120,6 +120,11 @@ export default function StudentDashboard({
   onUpdateStudent
 }: StudentDashboardProps) {
   const currentStudent = students.find(s => s.id === activeStudentId) || students[0];
+  
+  const studentAccessLogs = useMemo(() => {
+    if (!currentStudent) return [];
+    return accessLogs.filter(log => log.role === 'student' && log.userId === currentStudent.id);
+  }, [accessLogs, currentStudent?.id]);
   
   // Tabs: workout, performance, chat, subscript
   const [activeTab, setActiveTab] = useState<'treino' | 'evolucao' | 'chat' | 'plano'>('treino');
@@ -1637,24 +1642,22 @@ export default function StudentDashboard({
                 </p>
 
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {accessLogs
-                    .filter(log => log.role === 'student' && log.userId === currentStudent.id)
-                    .map((log) => (
-                      <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-2 h-2 rounded-full bg-[#39FF14] animate-pulse"></div>
-                          <div>
-                            <p className="font-semibold text-white">{log.action}</p>
-                            <p className="text-[10px] text-neutral-400 mt-0.5">{log.timestamp} • {log.device}</p>
-                          </div>
+                  {studentAccessLogs.map((log) => (
+                    <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2 h-2 rounded-full bg-[#39FF14] animate-pulse"></div>
+                        <div>
+                          <p className="font-semibold text-white">{log.action}</p>
+                          <p className="text-[10px] text-neutral-400 mt-0.5">{log.timestamp} • {log.device}</p>
                         </div>
-                        <span className="text-[9px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/35 px-2 py-0.5 rounded-full font-mono font-extrabold uppercase">
-                          ATIVO
-                        </span>
                       </div>
-                    ))}
+                      <span className="text-[9px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/35 px-2 py-0.5 rounded-full font-mono font-extrabold uppercase">
+                        ATIVO
+                      </span>
+                    </div>
+                  ))}
 
-                  {accessLogs.filter(log => log.role === 'student' && log.userId === currentStudent.id).length === 0 && (
+                  {studentAccessLogs.length === 0 && (
                     <p className="text-xs text-neutral-500 font-mono text-center py-2">Nenhum registro de acesso recente.</p>
                   )}
                 </div>
