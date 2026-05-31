@@ -236,7 +236,15 @@ export default function StudentDashboard({
         })
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        const text = await response.text();
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.warn("Could not parse Student Stripe API response as JSON, falling back to simulation mode.", parseError);
+        data = { isSimulation: true };
+      }
+
       if (data.sessionUrl) {
         // Try to open in a new tab first to avoid iframe blocking
         const stripeWindow = window.open(data.sessionUrl, '_blank');
