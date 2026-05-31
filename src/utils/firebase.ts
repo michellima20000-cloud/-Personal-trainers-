@@ -15,10 +15,20 @@ const config = {
   storageBucket: ((import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET as string) || firebaseConfig.storageBucket,
   messagingSenderId: ((import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || firebaseConfig.messagingSenderId,
   appId: ((import.meta as any).env.VITE_FIREBASE_APP_ID as string) || firebaseConfig.appId,
+  measurementId: ((import.meta as any).env.VITE_FIREBASE_MEASUREMENT_ID as string) || (firebaseConfig as any).measurementId,
+  databaseURL: ((import.meta as any).env.VITE_FIREBASE_DATABASE_URL as string) || (firebaseConfig as any).databaseURL,
 };
 
 const app = initializeApp(config);
-export const db = getFirestore(app, ((import.meta as any).env.VITE_FIREBASE_FIRESTORE_DATABASE_ID as string) || firebaseConfig.firestoreDatabaseId);
+
+const envDbId = ((import.meta as any).env.VITE_FIREBASE_FIRESTORE_DATABASE_ID as string);
+const databaseId = envDbId || firebaseConfig.firestoreDatabaseId;
+
+console.log("[Firebase Initialization] Project ID:", config.projectId, "Database ID:", databaseId || "(default)");
+
+export const db = databaseId && databaseId !== "(default)"
+  ? getFirestore(app, databaseId)
+  : getFirestore(app);
 export const auth = getAuth(app);
 
 // Sign-in Anonymously on bootstrap
@@ -336,6 +346,15 @@ export async function saveMarketingPlan(plan: MarketingPlan): Promise<void> {
   const p = `plans/${plan.id}`;
   try {
     await setDoc(doc(db, 'plans', plan.id), cleanUndefined(plan));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, p);
+  }
+}
+
+export async function deleteMarketingPlan(planId: string): Promise<void> {
+  const p = `plans/${planId}`;
+  try {
+    await deleteDoc(doc(db, 'plans', planId));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, p);
   }

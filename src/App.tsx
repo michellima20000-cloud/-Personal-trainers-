@@ -31,7 +31,7 @@ import {
   fetchNotifications, saveNotification,
   fetchRevenueLogs, saveRevenueLog,
   fetchAccessLogs, saveAccessLog,
-  fetchMarketingPlans, saveMarketingPlan,
+  fetchMarketingPlans, saveMarketingPlan, deleteMarketingPlan,
   fetchTrainers, saveTrainer
 } from './utils/firebase';
 
@@ -96,90 +96,133 @@ export default function App() {
   // Initialize and Synchronize with Firebase
   useEffect(() => {
     async function initFirebaseSandbox() {
+      // 10 second safety boundary timeout for the entire database synchronization
+      let timeoutId: any;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("Timeout de conexão")), 10000);
+      });
+
       try {
         addSyncLog("Autenticando sessão anônima segura no Firebase...");
-        await initializeAnonymousAuth();
+        await Promise.race([initializeAnonymousAuth(), timeoutPromise]);
 
-        // 1. Fetch main student records list
-        addSyncLog("Verificando registros de alunos em nuvem...");
-        let remoteStudents = await fetchStudents();
-        
-        let remoteSheets: Record<string, TrainingSheet> = {};
+        // Fetching main collections in parallel to optimize boot speed and bypass sequential RTT delays
+        addSyncLog("Sincronizando tabelas com a nuvem em paralelo...");
+        const parallelFetchPromise = (async () => {
+          const [
+            fetchedStudents,
+            fetchedSheets,
+            fetchedAgenda,
+            fetchedNotifications,
+            fetchedRevenueLogs,
+            fetchedAccessLogs,
+            fetchedMarketingPlans,
+            fetchedTrainers
+          ] = await Promise.all([
+            fetchStudents(),
+            fetchSheets(),
+            fetchAgendaEvents(),
+            fetchNotifications(),
+            fetchRevenueLogs(),
+            fetchAccessLogs(),
+            fetchMarketingPlans(),
+            fetchTrainers()
+          ]);
+          return {
+            students: fetchedStudents || [],
+            sheets: fetchedSheets || {},
+            agenda: fetchedAgenda || [],
+            notifications: fetchedNotifications || [],
+            revenueLogs: fetchedRevenueLogs || [],
+            accessLogs: fetchedAccessLogs || [],
+            marketingPlans: fetchedMarketingPlans || [],
+            trainers: fetchedTrainers || []
+          };
+        })();
+
+        const dbData = await Promise.race([parallelFetchPromise, timeoutPromise]);
+        clearTimeout(timeoutId);
+
+        let remoteStudents = dbData.students;
+        let remoteSheets = dbData.sheets;
+        let remoteAgenda = dbData.agenda;
+        let remoteNotifications = dbData.notifications;
+        let remoteRevenueLogs = dbData.revenueLogs;
+        let remoteAccessLogs = dbData.accessLogs;
+        let remoteMarketingPlans = dbData.marketingPlans;
+        let remoteTrainers = dbData.trainers;
         let remoteEvolution: Record<string, EvolutionRecord[]> = {};
         let remoteChats: Record<string, ChatMessage[]> = {};
-        let remoteAgenda: AgendaEvent[] = [];
-        let remoteNotifications: AppNotification[] = [];
-        let remoteRevenueLogs: RevenueLog[] = [];
-        let remoteAccessLogs: AccessLog[] = [];
-        let remoteMarketingPlans: MarketingPlan[] = [];
-        let remoteTrainers: Trainer[] = [];
 
         // If completely empty database, bootstrap standard seeding dynamically!
-        if (!remoteStudents || remoteStudents.length === 0) {
+        if (remoteStudents.length === 0) {
           addSyncLog("Banco Firebase vazio detectado! Realizando seeding de demonstração...");
           
-          // Seed Students
-          for (const s of INITIAL_STUDENTS) {
-            await saveStudent(s);
-          }
-          // Seed Sheets
-          for (const [sid, sheet] of Object.entries(INITIAL_SHEETS)) {
-            await saveSheet(sid, sheet);
-          }
-          // Seed Evolution
-          for (const [sid, records] of Object.entries(INITIAL_EVOLUTION_RECORDS)) {
-            for (const r of records) {
-              await saveEvolutionRecord(sid, r);
+          const seedPromise = (async () => {
+            // Seed Students
+            for (const s of INITIAL_STUDENTS) {
+              await saveStudent(s);
             }
-          }
-          // Seed Chat Logs
-          for (const [sid, msgs] of Object.entries(INITIAL_CHATS)) {
-            for (const m of msgs) {
-              await saveChatMessage(sid, m);
+            // Seed Sheets
+            for (const [sid, sheet] of Object.entries(INITIAL_SHEETS)) {
+              await saveSheet(sid, sheet);
             }
-          }
-          // Seed Agenda Schedules
-          for (const event of INITIAL_AGENDA) {
-            await saveAgendaEvent(event);
-          }
-          // Seed App Notifications logs
-          for (const notif of INITIAL_NOTIFICATIONS) {
-            await saveNotification(notif);
-          }
-          // Seed Revenues metrics
-          for (const r of REVENUE_LOGS) {
-            await saveRevenueLog(r);
-          }
-          // Seed AccessLogs auditing
-          for (const log of INITIAL_ACCESS_LOGS) {
-            await saveAccessLog(log);
-          }
-          // Seed Marketing Plans
-          for (const plan of INITIAL_MARKETING_PLANS) {
-            await saveMarketingPlan(plan);
-          }
+            // Seed Evolution
+            for (const [sid, records] of Object.entries(INITIAL_EVOLUTION_RECORDS)) {
+              for (const r of records) {
+                await saveEvolutionRecord(sid, r);
+              }
+            }
+            // Seed Chat Logs
+            for (const [sid, msgs] of Object.entries(INITIAL_CHATS)) {
+              for (const m of msgs) {
+                await saveChatMessage(sid, m);
+              }
+            }
+            // Seed Agenda Schedules
+            for (const event of INITIAL_AGENDA) {
+              await saveAgendaEvent(event);
+            }
+            // Seed App Notifications logs
+            for (const notif of INITIAL_NOTIFICATIONS) {
+              await saveNotification(notif);
+            }
+            // Seed Revenues metrics
+            for (const r of REVENUE_LOGS) {
+              await saveRevenueLog(r);
+            }
+            // Seed AccessLogs auditing
+            for (const log of INITIAL_ACCESS_LOGS) {
+              await saveAccessLog(log);
+            }
+            // Seed Marketing Plans
+            for (const plan of INITIAL_MARKETING_PLANS) {
+              await saveMarketingPlan(plan);
+            }
 
-          const defaultTrainer: Trainer = {
-            id: 't_default',
-            name: 'Daniel Personal Coach',
-            email: 'personal@gympulse.com.br',
-            password: 'personal123',
-            selectedPlan: 'Trimestral',
-            trialStartDate: new Date().toLocaleDateString('pt-BR'),
-            trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-            subscriptionStatus: 'paid',
-            customIdLink: 'daniel-personal',
-            pixKeyType: 'Chave Aleatória',
-            pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-            phoneWhatsApp: '+5511999999999',
-            stripeEnabled: true,
-            stripePublishableKey: 'pk_test_sample_key'
-          };
-          await saveTrainer(defaultTrainer);
+            const defaultTrainer: Trainer = {
+              id: 't_default',
+              name: 'Daniel Personal Coach',
+              email: 'personal@gympulse.com.br',
+              password: 'personal123',
+              selectedPlan: 'Trimestral',
+              trialStartDate: new Date().toLocaleDateString('pt-BR'),
+              trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+              subscriptionStatus: 'paid',
+              customIdLink: 'daniel-personal',
+              pixKeyType: 'Chave Aleatória',
+              pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
+              phoneWhatsApp: '+5511999999999',
+              stripeEnabled: true,
+              stripePublishableKey: 'pk_test_sample_key'
+            };
+            await saveTrainer(defaultTrainer);
+            return defaultTrainer;
+          })();
+
+          const defaultTrainer = await Promise.race([seedPromise, timeoutPromise]);
 
           addSyncLog("Seeding concluído! Todos os dados integrados em nuvem.");
-          
-          // Use loaded values
           remoteStudents = INITIAL_STUDENTS;
           remoteSheets = INITIAL_SHEETS;
           remoteEvolution = INITIAL_EVOLUTION_RECORDS;
@@ -191,26 +234,47 @@ export default function App() {
           remoteMarketingPlans = INITIAL_MARKETING_PLANS;
           remoteTrainers = [defaultTrainer];
         } else {
-          // Firebase already populated, fetch remaining entities
-          addSyncLog("Carregando planilhas e agendamento da nuvem...");
-          remoteSheets = await fetchSheets();
-          remoteAgenda = await fetchAgendaEvents();
-          remoteNotifications = await fetchNotifications();
-          remoteRevenueLogs = await fetchRevenueLogs();
-          remoteAccessLogs = await fetchAccessLogs();
+          // Firebase already populated, verify subcollection data in parallel
+          addSyncLog("Sincronizando biometria e chats de cada aluno...");
+          const evPromises: Promise<EvolutionRecord[]>[] = [];
+          const chatPromises: Promise<ChatMessage[]>[] = [];
+          const sIds: string[] = [];
 
-          addSyncLog("Carregando planos de marketing...");
-          remoteMarketingPlans = await fetchMarketingPlans();
-          if (!remoteMarketingPlans || remoteMarketingPlans.length === 0) {
-            for (const plan of INITIAL_MARKETING_PLANS) {
-              await saveMarketingPlan(plan);
-            }
-            remoteMarketingPlans = INITIAL_MARKETING_PLANS;
+          for (const s of remoteStudents) {
+            sIds.push(s.id);
+            evPromises.push(fetchAllEvolutionRecords(s.id));
+            chatPromises.push(fetchAllChatMessages(s.id));
           }
 
-          addSyncLog("Sincronizando profissionais...");
-          remoteTrainers = await fetchTrainers();
-          if (!remoteTrainers || remoteTrainers.length === 0) {
+          const [evs, chatsData] = await Promise.all([
+            Promise.all(evPromises),
+            Promise.all(chatPromises)
+          ]);
+
+          sIds.forEach((sid, idx) => {
+            remoteEvolution[sid] = evs[idx] || [];
+            remoteChats[sid] = chatsData[idx] || [];
+          });
+
+          // Ensure Semestral is removed and Anual is added
+          remoteMarketingPlans = (remoteMarketingPlans || []).filter(p => p.id !== 'Semestral');
+          const hasAnual = remoteMarketingPlans.some(p => p.id === 'Anual');
+          if (!hasAnual) {
+            const anualDefault = {
+              id: 'Anual',
+              title: 'Plano Anual',
+              price: 90,
+              period: '/m',
+              features: ['Planilha Treino A-E', 'Suporte Conversa e Áudio', 'Avaliação Física Completa', 'Acompanhamento de Metas & Peso', 'Acesso 12 Meses Premium'],
+              recommended: false
+            };
+            remoteMarketingPlans = [...remoteMarketingPlans, anualDefault];
+            saveMarketingPlan(anualDefault).catch(err => console.error("Error saving Anual fallback:", err));
+          }
+          // Guarantee 'Semestral' doc is deleted from Firebase to keep database pristine
+          deleteMarketingPlan('Semestral').catch(() => {});
+          
+          if (remoteTrainers.length === 0) {
             const defaultTrainer: Trainer = {
               id: 't_default',
               name: 'Daniel Personal Coach',
@@ -230,15 +294,6 @@ export default function App() {
             await saveTrainer(defaultTrainer);
             remoteTrainers = [defaultTrainer];
           }
-
-          addSyncLog("Carregando biometria e chats de cada aluno...");
-          for (const s of remoteStudents) {
-            const ev = await fetchAllEvolutionRecords(s.id);
-            remoteEvolution[s.id] = ev;
-
-            const ch = await fetchAllChatMessages(s.id);
-            remoteChats[s.id] = ch;
-          }
         }
 
         // Apply state updates to React
@@ -253,12 +308,17 @@ export default function App() {
         setMarketingPlans(remoteMarketingPlans);
         setTrainers(remoteTrainers);
 
+        // Ensure default active trainer is set in success path!
+        const defaultMatch = remoteTrainers.find(t => t.email === 'personal@gympulse.com.br') || remoteTrainers[0];
+        if (defaultMatch) {
+          setActiveTrainer(defaultMatch);
+        }
+
         // Parse URL parameters for invitation links
         const params = new URLSearchParams(window.location.search);
         const urlRole = params.get('role');
         const urlStudentId = params.get('studentId');
         const urlTrainerIdLink = params.get('trainerId'); // custom unique link identifier e.g. daniel-personal
-
 
         const firstId = urlStudentId || remoteStudents?.[0]?.id || 's1';
         setActiveStudentId(firstId);
@@ -279,8 +339,11 @@ export default function App() {
               const parsed = JSON.parse(cached);
               setIsLoggedIn(parsed.isLoggedIn || false);
               setRole(parsed.role || 'trainer');
+              if (parsed.activeTrainer) {
+                setActiveTrainer(parsed.activeTrainer);
+              }
               if (parsed.marketingPlans) {
-                setMarketingPlans(parsed.marketingPlans);
+                setMarketingPlans((parsed.marketingPlans || []).filter((p: any) => p.id !== 'Semestral'));
               }
             } catch (e) {}
           }
@@ -289,7 +352,8 @@ export default function App() {
         addSyncLog("Ambiente real do Firebase totalmente sincronizado.");
         setLoadingFirebase(false);
       } catch (err) {
-        console.error("Firebase startup error:", err);
+        clearTimeout(timeoutId);
+        console.log("Firebase sync system warning:", err);
         addSyncLog("Erro de conexão ao Firebase. Ativando fallback...");
         loadDefaults();
         setLoadingFirebase(false);
@@ -300,6 +364,23 @@ export default function App() {
   }, []);
 
   const loadDefaults = () => {
+    const defaultTrainer: Trainer = {
+      id: 't_default',
+      name: 'Daniel Personal Coach',
+      email: 'personal@gympulse.com.br',
+      password: 'personal123',
+      selectedPlan: 'Trimestral',
+      trialStartDate: new Date().toLocaleDateString('pt-BR'),
+      trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+      subscriptionStatus: 'paid',
+      customIdLink: 'daniel-personal',
+      pixKeyType: 'Chave Aleatória',
+      pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
+      phoneWhatsApp: '+5511999999999',
+      stripeEnabled: true,
+      stripePublishableKey: 'pk_test_sample_key'
+    };
+
     setStudents(INITIAL_STUDENTS);
     setSheets(INITIAL_SHEETS);
     setEvolution(INITIAL_EVOLUTION_RECORDS);
@@ -309,7 +390,23 @@ export default function App() {
     setRevenueLogs(REVENUE_LOGS);
     setAccessLogs(INITIAL_ACCESS_LOGS);
     setMarketingPlans(INITIAL_MARKETING_PLANS);
+    setTrainers([defaultTrainer]);
+    setActiveTrainer(defaultTrainer);
     setActiveStudentId(INITIAL_STUDENTS[0]?.id || 's1');
+
+    // Restore cached session status even during fallback so login persists
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setIsLoggedIn(parsed.isLoggedIn || false);
+        setRole(parsed.role || 'trainer');
+        if (parsed.activeTrainer) {
+          setActiveTrainer(parsed.activeTrainer);
+        }
+      } catch (e) {}
+    }
+
     addSyncLog('Dados de demonstração local carregados em cache de fallback.');
   };
 
@@ -389,6 +486,76 @@ export default function App() {
       return updated;
     });
   }, [role, activeStudentId, students.length, isLoggedIn, loadingFirebase]);
+
+  // Handle real or simulated Stripe Redirect Return parameters
+  useEffect(() => {
+    if (loadingFirebase) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const hasLicenseSuccess = params.get('license_payment') === 'success';
+    const hasStudentSuccess = params.get('student_payment') === 'success';
+
+    if (hasLicenseSuccess) {
+      const plan = params.get('plan') || 'Trimestral';
+      const pendingTrainerStr = localStorage.getItem('gympulse_pending_trainer');
+      if (pendingTrainerStr) {
+        try {
+          const pendingTrainer = JSON.parse(pendingTrainerStr) as Trainer;
+          pendingTrainer.subscriptionStatus = 'paid';
+          pendingTrainer.selectedPlan = plan as any;
+          
+          addSyncLog(`[Stripe Checkout] Novo personal cadastrado e ativado via retorno do Stripe: ${pendingTrainer.name}`);
+          
+          handleAddTrainer(pendingTrainer).then(() => {
+            setIsLoggedIn(true);
+            setRole('trainer');
+            setActiveTrainer(pendingTrainer);
+            localStorage.removeItem('gympulse_pending_trainer');
+            
+            const newUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+            setTimeout(() => {
+              alert(`🏋️ Sucesso! Seu plano de licença GymPulse (${plan}) foi ativado e sua conta foi criada!`);
+            }, 300);
+          });
+        } catch (err) {
+          console.error("Error processing pending trainer from Stripe checkout redirect:", err);
+        }
+      } else {
+        const targetTrainer = activeTrainer || trainers[0];
+        if (targetTrainer) {
+          addSyncLog(`[Stripe Checkout] Processando retorno de ativação de plano.`);
+          handleUpdateTrainer({
+            ...targetTrainer,
+            subscriptionStatus: 'paid',
+            selectedPlan: plan as any
+          }).then(() => {
+            const newUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+            setTimeout(() => {
+              alert(`🏋️ Sucesso! Seu plano de licença GymPulse (${plan}) foi ativado e sincronizado com o Stripe!`);
+            }, 300);
+          });
+        }
+      }
+    } else if (hasStudentSuccess) {
+      const studentId = params.get('studentId') || activeStudentId;
+      const plan = params.get('plan') || 'Mensal';
+      if (studentId) {
+        addSyncLog(`[Stripe Checkout] Confirmando pagamento de mensalidade.`);
+        handleUpdateStudent(studentId, {
+          status: 'Ativo',
+          nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')
+        }).then(() => {
+          const newUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+          setTimeout(() => {
+            alert(`🎉 Pagamento Stripe confirmado! Seu plano está 100% ativo.`);
+          }, 300);
+        });
+      }
+    }
+  }, [loadingFirebase, trainers, students, activeTrainer]);
 
   const addSyncLog = (message: string) => {
     const timestampStr = new Date().toLocaleTimeString('pt-BR');
@@ -1015,6 +1182,8 @@ export default function App() {
                   onSendMessage={(id, text) => handleSendMessage(id, text, 'student')}
                   onCompleteWorkout={handleCompleteWorkout}
                   onLogout={handleLogout}
+                  onUpdateTrainer={handleUpdateTrainer}
+                  onUpdateStudent={handleUpdateStudent}
                 />
               )
             )

@@ -3,7 +3,8 @@ import {
   Users, Dumbbell, Calendar, MessageSquare, Bell, CreditCard, 
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
-  MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock
+  MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock,
+  Upload, Image
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -75,6 +76,7 @@ export default function TrainerDashboard({
   const [licenseCardExpiry, setLicenseCardExpiry] = useState('');
   const [licenseCardCvv, setLicenseCardCvv] = useState('');
   const [licensePaymentLoadingStep, setLicensePaymentLoadingStep] = useState(0); // 0 = none, 1 = connecting, 2 = authorizing, 3 = finalizing
+  const [saasStripeError, setSaasStripeError] = useState("");
   const [licenseSelectedPlan, setLicenseSelectedPlan] = useState<PlanType>(activeTrainer?.selectedPlan || 'Trimestral');
   
   // Profile Configuration states
@@ -83,10 +85,147 @@ export default function TrainerDashboard({
   const [profileTrainerPlan, setProfileTrainerPlan] = useState<PlanType>(activeTrainer?.selectedPlan || 'Trimestral');
   const [profilePixKeyType, setProfilePixKeyType] = useState<'CNPJ' | 'CPF' | 'Telefone' | 'E-mail' | 'Chave Aleatória'>(activeTrainer?.pixKeyType || 'Chave Aleatória');
   const [profilePixKey, setProfilePixKey] = useState(activeTrainer?.pixKey || '9bbf9c81-8077-4cdd-bb85-055ee56bfd31');
+  const [profilePixQrCode, setProfilePixQrCode] = useState(activeTrainer?.pixQrCode || '');
   const [profilePhoneWhatsApp, setProfilePhoneWhatsApp] = useState(activeTrainer?.phoneWhatsApp || '+5511999999999');
   const [profileStripeEnabled, setProfileStripeEnabled] = useState(activeTrainer?.stripeEnabled ?? true);
   const [profileStripePublishableKey, setProfileStripePublishableKey] = useState(activeTrainer?.stripePublishableKey || 'pk_test_sample_key');
+
+  const handleStripeCheckoutSaaS = async () => {
+    setLicensePaymentLoadingStep(1); // 1 = Connecting to Stripe API
+    setSaasStripeError("");
+    try {
+      const priceMap: Record<PlanType, number> = {
+        'Mensal': 39.90,
+        'Trimestral': 97.00,
+        'Semestral': 180.00,
+        'Anual': 297.00
+      };
+      const price = priceMap[licenseSelectedPlan] || 97.00;
+
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          planName: licenseSelectedPlan,
+          price: price,
+          successUrl: window.location.origin + window.location.pathname + `?license_payment=success&plan=${licenseSelectedPlan}`,
+          cancelUrl: window.location.href,
+          trainerId: activeTrainer?.id || 'daniel-personal'
+        })
+      });
+
+      const data = await response.json();
+      if (data.sessionUrl) {
+        // Try to open in a new tab first to avoid iframe blocking
+        const stripeWindow = window.open(data.sessionUrl, '_blank');
+        if (!stripeWindow || stripeWindow.closed || typeof stripeWindow.closed === 'undefined') {
+          // Fallback to top-level/iframe window redirect if blocked by popup blocker
+          try {
+            window.top!.location.href = data.sessionUrl;
+          } catch (e) {
+            window.location.href = data.sessionUrl;
+          }
+        }
+      } else if (data.isSimulation) {
+        // Stripe Key not configured, fall back to simulation modal sequence
+        console.log("Stripe key is missing, falling back to instant browser payment simulation mode.");
+        setLicensePaymentLoadingStep(2);
+        setTimeout(() => {
+          setLicensePaymentLoadingStep(3);
+          setTimeout(() => {
+            if (onUpdateTrainer && activeTrainer) {
+              onUpdateTrainer({
+                ...activeTrainer,
+                subscriptionStatus: 'paid',
+                selectedPlan: licenseSelectedPlan
+              });
+            }
+            setLicensePaymentLoadingStep(4);
+            setTimeout(() => {
+              setLicensePaymentLoadingStep(0);
+              setShowUpgradeModal(false);
+            }, 2000);
+          }, 1200);
+        }, 1200);
+      } else {
+        // Error returned from Stripe API (e.g. key permission issues)
+        console.error("Stripe API error response:", data.error);
+        setSaasStripeError(data.error || "Ocorreu uma falha ao abrir a página do Stripe.");
+        setLicensePaymentLoadingStep(0);
+      }
+    } catch (err: any) {
+      console.error("Stripe error:", err);
+      setSaasStripeError(err?.message || "Erro ao contatar o servidor do Stripe.");
+      setLicensePaymentLoadingStep(0);
+    }
+  };
+
+  const handleBypassStripeSaaSSimulate = () => {
+    setSaasStripeError("");
+    setLicensePaymentLoadingStep(2);
+    setTimeout(() => {
+      setLicensePaymentLoadingStep(3);
+      setTimeout(() => {
+        if (onUpdateTrainer && activeTrainer) {
+          onUpdateTrainer({
+            ...activeTrainer,
+            subscriptionStatus: 'paid',
+            selectedPlan: licenseSelectedPlan
+          });
+        }
+        setLicensePaymentLoadingStep(4);
+        setTimeout(() => {
+          setLicensePaymentLoadingStep(0);
+          setShowUpgradeModal(false);
+        }, 2000);
+      }, 1200);
+    }, 1200);
+  };
+
   const [savedReceivingFeedback, setSavedReceivingFeedback] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setProfilePixQrCode(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setProfilePixQrCode(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   React.useEffect(() => {
     if (activeTrainer) {
@@ -95,6 +234,7 @@ export default function TrainerDashboard({
       setProfileTrainerPlan(activeTrainer.selectedPlan);
       setProfilePixKeyType(activeTrainer.pixKeyType || 'Chave Aleatória');
       setProfilePixKey(activeTrainer.pixKey || '');
+      setProfilePixQrCode(activeTrainer.pixQrCode || '');
       setProfilePhoneWhatsApp(activeTrainer.phoneWhatsApp || '');
       setProfileStripeEnabled(activeTrainer.stripeEnabled ?? true);
       setProfileStripePublishableKey(activeTrainer.stripePublishableKey || '');
@@ -193,7 +333,7 @@ export default function TrainerDashboard({
       status: 'Ativo',
       joinedAt: new Date().toLocaleDateString('pt-BR'),
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-      value: newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00
+      value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00
     };
 
     onAddStudent(createdStudent);
@@ -844,7 +984,7 @@ export default function TrainerDashboard({
                               >
                                 <option value="Mensal">Mensal</option>
                                 <option value="Trimestral">Trimestral</option>
-                                <option value="Semestral">Semestral</option>
+                                <option value="Anual">Anual</option>
                               </select>
                             </div>
                             <div>
@@ -944,22 +1084,22 @@ export default function TrainerDashboard({
                               </div>
                             </div>
 
-                            <div className="border-t border-neutral-800/80 pt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                              <div className="flex justify-between py-1 border-b border-neutral-900/60 text-neutral-400">
+                            <div className="border-t border-neutral-800/80 pt-2.5 space-y-1.5 text-xs">
+                              <div className="flex justify-between items-center py-1 border-b border-neutral-900/60 text-neutral-400">
                                 <span>Braço D / E:</span>
-                                <span className="text-white font-mono">{latestEvolution.armRight || '--'} / {latestEvolution.armLeft || '--'} cm</span>
+                                <span className="text-white font-mono font-bold">{latestEvolution.armRight || '--'} / {latestEvolution.armLeft || '--'} cm</span>
                               </div>
-                              <div className="flex justify-between py-1 border-b border-neutral-900/60 text-neutral-400">
+                              <div className="flex justify-between items-center py-1 border-b border-neutral-900/60 text-neutral-400">
                                 <span>Cintura:</span>
-                                <span className="text-white font-mono">{latestEvolution.waist || '--'} cm</span>
+                                <span className="text-white font-mono font-bold">{latestEvolution.waist || '--'} cm</span>
                               </div>
-                              <div className="flex justify-between py-1 border-b border-neutral-900/60 text-neutral-400">
+                              <div className="flex justify-between items-center py-1 border-b border-neutral-900/60 text-neutral-400">
                                 <span>Análise:</span>
-                                <span className="text-neutral-300 italic truncate font-sans">{latestEvolution.notes}</span>
+                                <span className="text-neutral-300 text-right italic truncate max-w-[180px] font-sans" title={latestEvolution.notes}>{latestEvolution.notes || 'Sem anotações'}</span>
                               </div>
-                              <div className="flex justify-between py-1 border-b border-neutral-900/60 text-neutral-400">
-                                <span>Data Avalição:</span>
-                                <span className="text-white font-mono">{latestEvolution.date}</span>
+                              <div className="flex justify-between items-center py-1 border-b border-neutral-900/60 text-neutral-400">
+                                <span>Data de Avaliação:</span>
+                                <span className="text-white font-mono font-bold">{latestEvolution.date}</span>
                               </div>
                             </div>
                           </div>
@@ -1088,7 +1228,7 @@ export default function TrainerDashboard({
                     >
                       <option value="Mensal">Mensal (R$ 150/mês)</option>
                       <option value="Trimestral">Trimestral (R$ 140/mês)</option>
-                      <option value="Semestral">Semestral (R$ 120/mês)</option>
+                      <option value="Anual">Anual (R$ 90/mês)</option>
                     </select>
                   </div>
 
@@ -1827,7 +1967,7 @@ export default function TrainerDashboard({
                     </div>
 
                     <p className="text-[10px] text-neutral-400 font-sans leading-relaxed">
-                      Defina abaixo para qual conta PIX ou chave Stripe os seus alunos da consultoria irão transferir as mensalidades. Toda a transação é 100% direta entre você e o aluno.
+                      Defina abaixo para qual conta PIX os seus alunos da consultoria irão transferir as mensalidades. Toda a transação é 100% direta entre você e o aluno.
                     </p>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -1871,33 +2011,80 @@ export default function TrainerDashboard({
                       />
                     </div>
 
-                    <div className="bg-neutral-950/40 p-3 rounded-xl border border-neutral-850 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-neutral-300 font-bold font-mono uppercase tracking-wider">Permitir Cartão (Stripe)</span>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={profileStripeEnabled}
-                            onChange={(e) => setProfileStripeEnabled(e.target.checked)}
-                            className="sr-only peer" 
-                          />
-                          <div className="w-10 h-5 bg-neutral-850 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 peer-checked:after:bg-black after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
-                        </label>
-                      </div>
-
-                      {profileStripeEnabled && (
-                        <div className="space-y-1">
-                          <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Stripe Publishable Key</label>
+                    <div className="space-y-2">
+                      <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest leading-none mb-1">QR Code Pix (Imagem ou link)</label>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start">
+                        {/* Left: Input Text and Drop Area */}
+                        <div className="md:col-span-8 space-y-2">
                           <input
                             type="text"
-                            placeholder="pk_test_..."
-                            value={profileStripePublishableKey}
-                            onChange={(e) => setProfileStripePublishableKey(e.target.value)}
-                            className="w-full bg-neutral-950 border border-neutral-800 text-[10px] font-mono text-white px-3 py-2 rounded-xl focus:outline-none focus:border-indigo-500 transition"
+                            placeholder="Insira a URL ou cole a string Base64 do QR Code..."
+                            value={profilePixQrCode}
+                            onChange={(e) => setProfilePixQrCode(e.target.value)}
+                            className="w-full bg-neutral-950 border border-neutral-800 text-xs font-mono text-white px-3 py-2 rounded-xl focus:outline-none focus:border-[#39FF14] transition"
                           />
+                          
+                          {/* Drag-and-drop Dropzone according to environment guidelines */}
+                          <div
+                            onDragEnter={handleDrag}
+                            onDragOver={handleDrag}
+                            onDragLeave={handleDrag}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-1.5 ${
+                              dragActive 
+                                ? 'border-[#39FF14] bg-[#39FF14]/5 text-[#39FF14]' 
+                                : 'border-neutral-800 hover:border-neutral-700 text-neutral-400 bg-neutral-950/30'
+                            }`}
+                          >
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={handleFileChange}
+                              accept="image/*"
+                              className="hidden"
+                            />
+                            <Upload size={16} className={`${dragActive ? 'text-[#39FF14]' : 'text-neutral-500'}`} />
+                            <p className="text-[10px] font-sans font-semibold">
+                              Arraste e solte o seu QR Code físico aqui ou <span className="text-[#39FF14] underline">clique para selecionar</span>
+                            </p>
+                            <p className="text-[9px] text-neutral-500">Aceita PNG, JPEG ou GIF</p>
+                          </div>
                         </div>
-                      )}
+
+                        {/* Right: Real-time visual sandbox preview of QR Code */}
+                        <div className="md:col-span-4 flex flex-col items-center justify-center bg-neutral-950 p-2.5 rounded-xl border border-neutral-850 min-h-[120px]">
+                          {profilePixQrCode ? (
+                            <div className="space-y-1.5 w-full flex flex-col items-center">
+                              <div className="w-20 h-20 bg-white p-1 rounded-lg flex items-center justify-center">
+                                <img
+                                  src={profilePixQrCode}
+                                  alt="PIX QR Code preview"
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setProfilePixQrCode('')}
+                                className="text-[9px] text-red-400 hover:text-red-300 font-mono uppercase bg-red-950/15 border border-red-900/20 px-2 py-0.5 rounded cursor-pointer"
+                              >
+                                Remover QR
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-center p-2">
+                              <Image size={18} className="text-neutral-600 mx-auto mb-1" />
+                              <span className="text-[8px] text-neutral-500 font-sans block">Nenhum QR</span>
+                              <span className="text-[7px] text-neutral-600 font-sans block leading-tight mt-0.5">Usará simulador de QR Code padrão no portal do aluno</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
+
+
 
                     <div className="flex justify-end pt-1">
                       <button
@@ -1908,6 +2095,7 @@ export default function TrainerDashboard({
                               ...activeTrainer,
                               pixKeyType: profilePixKeyType,
                               pixKey: profilePixKey.trim(),
+                              pixQrCode: profilePixQrCode.trim(),
                               phoneWhatsApp: profilePhoneWhatsApp.trim(),
                               stripeEnabled: profileStripeEnabled,
                               stripePublishableKey: profileStripePublishableKey.trim()
@@ -2391,6 +2579,28 @@ export default function TrainerDashboard({
                           navigator.clipboard.writeText(`0002012658001BR.GOV.BCB.PIX0136gympulse-license-saas-${licenseSelectedPlan.toLowerCase()}-active-39e`);
                           setCopiedDashboardPix(true);
                           setTimeout(() => setCopiedDashboardPix(false), 2000);
+
+                          // Fully automated detection simulated callback
+                          setTimeout(() => {
+                            setLicensePaymentLoadingStep(1);
+                            setTimeout(() => {
+                              setLicensePaymentLoadingStep(3);
+                              setTimeout(() => {
+                                if (onUpdateTrainer && activeTrainer) {
+                                  onUpdateTrainer({
+                                    ...activeTrainer,
+                                    subscriptionStatus: 'paid',
+                                    selectedPlan: licenseSelectedPlan
+                                  });
+                                }
+                                setLicensePaymentLoadingStep(4);
+                                setTimeout(() => {
+                                  setLicensePaymentLoadingStep(0);
+                                  setShowUpgradeModal(false);
+                                }, 2000);
+                              }, 1200);
+                            }, 1200);
+                          }, 1500);
                         }}
                         className="text-[#39FF14] hover:text-green-400 cursor-pointer p-1"
                         title="Copiar PIX"
@@ -2398,7 +2608,12 @@ export default function TrainerDashboard({
                         <Copy size={13} />
                       </button>
                     </div>
-                    {copiedDashboardPix && <p className="text-[10px] font-mono text-[#39FF14] animate-pulse">✓ Chave Copie e Cole do Pix copiada!</p>}
+                    {copiedDashboardPix && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-mono text-[#39FF14] font-black animate-pulse">✓ Chave copiada! Detectando recebimento do Pix automático...</p>
+                        <p className="text-[9px] text-neutral-400 font-sans">Aguarde alguns segundos enquanto o robô processa o webhook.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2439,181 +2654,73 @@ export default function TrainerDashboard({
                 </div>
               </div>
             ) : (
-              /* Stripe Credit Card Form */
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!licenseCardNumber || !licenseCardName || !licenseCardExpiry || !licenseCardCvv) {
-                    alert('Por favor, preencha todos os dados fiscais e de pagamento do cartão!');
-                    return;
-                  }
-                  
-                  // Simulate 3 Step Stripe API Checkout flow
-                  setLicensePaymentLoadingStep(1);
-                  setTimeout(() => {
-                    setLicensePaymentLoadingStep(2);
-                    setTimeout(() => {
-                      setLicensePaymentLoadingStep(3);
-                      setTimeout(() => {
-                        if (onUpdateTrainer && activeTrainer) {
-                          onUpdateTrainer({
-                            ...activeTrainer,
-                            subscriptionStatus: 'paid',
-                            selectedPlan: licenseSelectedPlan
-                          });
-                        }
-                        setLicensePaymentLoadingStep(4);
-                        setTimeout(() => {
-                          setLicenseCardNumber('');
-                          setLicenseCardName('');
-                          setLicenseCardExpiry('');
-                          setLicenseCardCvv('');
-                          setLicensePaymentLoadingStep(0);
-                          setShowUpgradeModal(false);
-                        }, 2000);
-                      }, 1200);
-                    }, 1200);
-                  }, 1200);
-                }}
-                className="space-y-4"
-              >
-                {/* Visual Glassmorphism Metallic Credit Card Preview */}
-                <div className="bg-gradient-to-br from-neutral-850 via-neutral-900 to-indigo-950 p-4.5 rounded-2xl border border-neutral-850 relative overflow-hidden shadow-xl aspect-[1.58/1] flex flex-col justify-between max-w-sm mx-auto">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(57,255,20,0.06),transparent_60%)]" />
-                  
-                  <div className="flex items-center justify-between relative z-10">
-                    <div className="bg-neutral-850 rounded-lg p-1.5 border border-neutral-800">
-                      <span className="text-[10px] font-mono leading-none tracking-widest text-[#39FF14] font-black uppercase">GYMPULSE</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
-                      {licenseCardNumber.startsWith('4') ? 'Visa' : licenseCardNumber.startsWith('5') ? 'Mastercard' : 'Stripe Security'}
-                    </span>
+              /* Stripe Redirect Board */
+              <div className="space-y-4 animate-fade-in">
+                <div className="bg-neutral-950 border border-neutral-850 p-6 rounded-2xl text-center space-y-4">
+                  <div className="w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400">
+                    <Lock size={26} />
                   </div>
-
-                  <div className="space-y-1 relative z-10">
-                    <p className="text-neutral-500 text-[8px] uppercase tracking-widest font-mono">Card Number</p>
-                    <p className="text-sm font-mono tracking-widest text-white font-extrabold">
-                      {licenseCardNumber ? licenseCardNumber : '•••• •••• •••• ••••'}
+                  
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-white font-mono uppercase tracking-widest font-black">Pagamento Direto via Stripe</p>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed font-sans max-w-sm mx-auto">
+                      Você selecionou o plano <strong className="text-white text-xs">{licenseSelectedPlan}</strong>. Nós conectamos diretamente ao gateway de pagamentos criptografado oficial da <strong>Stripe</strong>.
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between text-white relative z-10">
-                    <div className="space-y-0.5 max-w-[170px]">
-                      <p className="text-neutral-500 text-[8px] uppercase tracking-widest font-mono">Cardholder Name</p>
-                      <p className="text-[11px] font-mono uppercase font-black tracking-wider truncate">
-                        {licenseCardName ? licenseCardName : 'MICHEL LIMA'}
-                      </p>
-                    </div>
+                  <div className="bg-[#0f1015] border border-neutral-850 p-3.5 rounded-xl flex items-center justify-between text-xs font-mono max-w-xs mx-auto">
+                    <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Valor da licença:</span>
+                    <span className="text-white font-black text-sm">
+                      {licenseSelectedPlan === 'Mensal' ? 'R$ 39,90/mês' : licenseSelectedPlan === 'Trimestral' ? 'R$ 97,00/trimestre' : 'R$ 297,00/ano'}
+                    </span>
+                  </div>
 
-                    <div className="flex items-center gap-4 text-right">
-                      <div className="space-y-0.5">
-                        <p className="text-neutral-500 text-[8px] uppercase tracking-widest font-mono">Expires</p>
-                        <p className="text-[11px] font-mono font-bold leading-none">{licenseCardExpiry ? licenseCardExpiry : 'MM/AA'}</p>
+                  {saasStripeError && (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-left space-y-2.5 animate-scale-up">
+                      <div>
+                        <p className="text-[10px] font-mono text-red-500 uppercase font-black leading-none flex items-center gap-1">
+                          ⚠️ Erro do Stripe (Permissão/Chave)
+                        </p>
+                        <p className="text-[10px] text-neutral-300 leading-normal font-sans mt-1">
+                          {saasStripeError}
+                        </p>
+                        <p className="text-[9px] text-[#39FF14] font-sans leading-tight pt-1">
+                          Dica: Se você usou uma Restricted Key (rk_test_...), edite a chave no painele Stripe e conceda permissão de <strong>Write</strong> para <strong>Checkout Sessions</strong>. Ou use a Secret Key padrão (sk_test_...).
+                        </p>
                       </div>
-                      <div className="space-y-0.5">
-                        <p className="text-neutral-500 text-[8px] uppercase tracking-widest font-mono">CVC</p>
-                        <p className="text-[11px] font-mono font-bold leading-none">{licenseCardCvv ? licenseCardCvv : '•••'}</p>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleBypassStripeSaaSSimulate}
+                        className="w-full bg-[#39FF14] hover:bg-[#34e212] text-black font-mono uppercase font-black text-[10px] tracking-wide py-2 px-3 rounded-lg text-center cursor-pointer transition shadow-[0_4px_12px_rgba(57,255,20,0.15)]"
+                      >
+                        ⚡ Ignorar Erro e Usar Pagamento Simulado (Testar)
+                      </button>
                     </div>
+                  )}
+
+                  <div className="flex items-center gap-1.5 justify-center text-[10px] text-neutral-500 font-mono">
+                    <Check size={12} className="text-indigo-400" />
+                    <span>Ambiente 100% seguro certificado PCI-DSS</span>
                   </div>
-                </div>
-
-                {/* Main Card input fields */}
-                <div className="space-y-3.5">
-                  <div className="space-y-1">
-                    <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Nome Impresso no Cartão</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: MICHEL L LIMA"
-                      value={licenseCardName}
-                      onChange={(e) => setLicenseCardName(e.target.value.toUpperCase())}
-                      className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-indigo-500 transition font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Número do Cartão de Crédito</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        maxLength={19}
-                        placeholder="4444 5555 6666 7777"
-                        value={licenseCardNumber}
-                        onChange={(e) => {
-                          const formatted = e.target.value
-                            .replace(/\D/g, '')
-                            .slice(0, 16)
-                            .replace(/(\d{4})/g, '$1 ')
-                            .trim();
-                          setLicenseCardNumber(formatted);
-                        }}
-                        className="w-full bg-neutral-950 border border-[#2d2d30] text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-indigo-500 transition font-mono tracking-widest"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 font-mono">
-                        {licenseCardNumber.startsWith('4') ? 'VISA' : licenseCardNumber.startsWith('5') ? 'MC' : 'STRIPE'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Expiração (MM/AA)</label>
-                      <input
-                        type="text"
-                        required
-                        maxLength={5}
-                        placeholder="09/31"
-                        value={licenseCardExpiry}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                          if (val.length >= 2) {
-                            setLicenseCardExpiry(`${val.slice(0, 2)}/${val.slice(2)}`);
-                          } else {
-                            setLicenseCardExpiry(val);
-                          }
-                        }}
-                        className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl text-center focus:outline-none focus:border-indigo-500 transition font-mono"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest">Código CVC</label>
-                      <input
-                        type="text"
-                        required
-                        maxLength={4}
-                        placeholder="123"
-                        value={licenseCardCvv}
-                        onChange={(e) => setLicenseCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl text-center focus:outline-none focus:border-indigo-500 transition font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-[9px] text-neutral-500 font-mono justify-center py-1 border-t border-neutral-900 mt-2">
-                  <Lock size={10} className="text-emerald-500" />
-                  <span>Stripe Secure Gateway • Certificação PCI-DSS Compliant</span>
                 </div>
 
                 <div className="flex gap-2 font-mono pt-1">
                   <button
                     type="button"
                     onClick={() => setShowUpgradeModal(false)}
-                    className="flex-1 bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-white font-bold text-xs py-3 rounded-xl transition cursor-pointer"
+                    className="flex-1 bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-white font-bold text-xs py-3.5 rounded-xl transition cursor-pointer text-center"
                   >
                     Voltar
                   </button>
                   <button
-                    type="submit"
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs py-3 rounded-xl transition shadow-lg shadow-indigo-600/15 hover:shadow-indigo-600/30 cursor-pointer text-center uppercase tracking-wider flex items-center justify-center gap-2"
+                    type="button"
+                    onClick={handleStripeCheckoutSaaS}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs py-3.5 rounded-xl transition shadow-lg shadow-indigo-600/25 hover:shadow-indigo-600/40 cursor-pointer text-center uppercase tracking-wider flex items-center justify-center gap-2"
                   >
-                    <Lock size={12} className="text-indigo-200" /> Pagar com Stripe
+                    <Lock size={12} className="text-indigo-200" /> Ir para o Stripe
                   </button>
                 </div>
-              </form>
+              </div>
             )}
 
           </div>

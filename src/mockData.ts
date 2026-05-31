@@ -524,11 +524,11 @@ export const INITIAL_MARKETING_PLANS: MarketingPlan[] = [
     recommended: true
   },
   {
-    id: 'Semestral',
-    title: 'Plano Semestral',
-    price: 120,
+    id: 'Anual',
+    title: 'Plano Anual',
+    price: 90,
     period: '/m',
-    features: ['Planilha Treino A-E', 'Suporte Conversa e Áudio', 'Avaliação Física Completa', 'Suporte Premium 24/7'],
+    features: ['Planilha Treino A-E', 'Suporte Conversa e Áudio', 'Avaliação Física Completa', 'Acompanhamento de Metas & Peso', 'Acesso 12 Meses Premium'],
     recommended: false
   }
 ];

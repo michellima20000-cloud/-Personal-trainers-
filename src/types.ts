@@ -4,7 +4,7 @@
 
 export type Objective = 'Hipertrofia' | 'Emagrecimento' | 'Condicionamento' | 'Definição' | 'Reabilitação';
 
-export type PlanType = 'Mensal' | 'Trimestral' | 'Semestral';
+export type PlanType = 'Mensal' | 'Trimestral' | 'Semestral' | 'Anual';
 
 export interface Student {
   id: string;
@@ -144,6 +144,7 @@ export interface Trainer {
   customIdLink: string; // personalized link key, like 'daniel-personal'
   pixKeyType?: 'CPF' | 'CNPJ' | 'E-mail' | 'Telefone' | 'Chave Aleatória';
   pixKey?: string;
+  pixQrCode?: string;
   phoneWhatsApp?: string;
   stripeEnabled?: boolean;
   stripePublishableKey?: string;

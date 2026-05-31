@@ -4,12 +4,13 @@ import {
   Play, Pause, RotateCcw, Check, CheckCircle2, 
   Award, Clock, Eye, AlertCircle, Plus, Send, ChevronRight, 
   HelpCircle, Copy, Smartphone, CheckSquare, Sparkles, MessageCircle, X,
-  FileText, LogOut, Activity, ExternalLink, RefreshCw
+  FileText, LogOut, Activity, ExternalLink, RefreshCw, Upload, Image
 } from 'lucide-react';
 import { Student, Trainer, Exercise, TrainingSheet, EvolutionRecord, ChatMessage, Objective, PlanType, WorkoutExercise, AccessLog } from '../types';
 import { EXERCISE_BANK } from '../mockData';
 import { exportStudentReport } from '../utils/pdfGenerator';
 import ExerciseVisualizer from './ExerciseVisualizer';
+import { motion } from 'motion/react';
 
 interface StudentDashboardProps {
   students: Student[];
@@ -25,6 +26,8 @@ interface StudentDashboardProps {
   onSendMessage: (studentId: string, text: string) => void;
   onCompleteWorkout: (studentId: string, workoutLetter: 'A' | 'B' | 'C' | 'D' | 'E') => void;
   onLogout?: () => void;
+  onUpdateTrainer?: (trainer: Trainer) => void;
+  onUpdateStudent?: (id: string, data: Partial<Student>) => void;
 }
 
 const EXERCISE_DETAILS: Record<string, {
@@ -112,7 +115,9 @@ export default function StudentDashboard({
   onAddEvolutionRecord,
   onSendMessage,
   onCompleteWorkout,
-  onLogout
+  onLogout,
+  onUpdateTrainer,
+  onUpdateStudent
 }: StudentDashboardProps) {
   const currentStudent = students.find(s => s.id === activeStudentId) || students[0];
   
@@ -148,6 +153,55 @@ export default function StudentDashboard({
   // Student chat input
   const [chatDraft, setChatDraft] = useState('');
 
+  // Editing Pix details state on student side
+  const [isEditingPix, setIsEditingPix] = useState(false);
+  const [editPixKeyType, setEditPixKeyType] = useState<'CNPJ' | 'CPF' | 'Telefone' | 'E-mail' | 'Chave Aleatória'>('Chave Aleatória');
+  const [editPixKey, setEditPixKey] = useState('');
+  const [editPixQrCode, setEditPixQrCode] = useState('');
+  const [editWhatsApp, setEditWhatsApp] = useState('');
+  const [dragActivePix, setDragActivePix] = useState(false);
+  const [savedPixFeedback, setSavedPixFeedback] = useState(false);
+  const fileInputRefPix = React.useRef<HTMLInputElement>(null);
+
+  const handleDragPix = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActivePix(true);
+    } else if (e.type === "dragleave") {
+      setDragActivePix(false);
+    }
+  };
+
+  const handleDropPix = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActivePix(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setEditPixQrCode(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFileChangePix = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setEditPixQrCode(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Pix payment success mock toast
   const [pixCopied, setPixCopied] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
@@ -161,6 +215,71 @@ export default function StudentDashboard({
   const [stripeCardPostalCode, setStripeCardPostalCode] = useState('');
   const [isStripeProcessing, setIsStripeProcessing] = useState(false);
   const [isStripeSuccess, setIsStripeSuccess] = useState(false);
+  const [stripeError, setStripeError] = useState('');
+
+  const handleStripeCheckoutStudent = async () => {
+    setIsStripeProcessing(true);
+    setStripeError('');
+    try {
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          planName: currentStudent.plan || 'Mensal',
+          price: currentStudent.value || 150.00,
+          successUrl: window.location.origin + window.location.pathname + `?student_payment=success&studentId=${currentStudent.id}&plan=${currentStudent.plan || 'Mensal'}`,
+          cancelUrl: window.location.href,
+          trainerId: currentStudent.trainerId || '',
+          studentId: currentStudent.id
+        })
+      });
+
+      const data = await response.json();
+      if (data.sessionUrl) {
+        // Try to open in a new tab first to avoid iframe blocking
+        const stripeWindow = window.open(data.sessionUrl, '_blank');
+        if (!stripeWindow || stripeWindow.closed || typeof stripeWindow.closed === 'undefined') {
+          // Fallback to top-level/iframe window redirect if blocked by popup blocker
+          try {
+            window.top!.location.href = data.sessionUrl;
+          } catch (e) {
+            window.location.href = data.sessionUrl;
+          }
+        }
+      } else if (data.isSimulation) {
+        // Fallback simulation mode
+        console.log("Stripe integration sandbox simulation mode activated (Missing server secret API key).");
+        setTimeout(() => {
+          setIsStripeProcessing(false);
+          setIsStripeSuccess(true);
+          setPaymentSuccess(true);
+          
+          if (onUpdateStudent) {
+            onUpdateStudent(currentStudent.id, {
+              status: 'Ativo',
+              nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')
+            });
+          }
+
+          setTimeout(() => {
+            setIsStripeSuccess(false);
+            setPaymentSuccess(false);
+          }, 5000);
+        }, 2000);
+      } else {
+        // Real Stripe API error, abort simulation and display it clearly
+        console.error("Student Stripe checkout session creation failed:", data.error);
+        setStripeError(data.error || "Ocorreu um erro ao conectar ao gateway de pagamentos da Stripe.");
+        setIsStripeProcessing(false);
+      }
+    } catch (err: any) {
+      console.error("Student stripe payment checkout session creation failed:", err);
+      setStripeError(err?.message || "Erro de rede ao conectar à API do Stripe.");
+      setIsStripeProcessing(false);
+    }
+  };
 
   // Workout state completion checklist & loads tracking
   const studentSheet = sheets[currentStudent?.id] || { A: [], B: [], C: [], D: [], E: [] };
@@ -227,6 +346,16 @@ export default function StudentDashboard({
 
     return () => clearInterval(interval);
   }, [selectedExercise, isMetronomeActive]);
+
+  if (!currentStudent) {
+    return (
+      <div className="min-h-screen bg-[#070708] lg:bg-neutral-950 flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="w-10 h-10 border-4 border-dashed border-[#39FF14] rounded-full animate-spin mx-auto"></div>
+        <p className="text-sm font-mono text-neutral-400">Nenhum aluno ativo encontrado na base sincronizada.</p>
+        <button onClick={onLogout} className="bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase transition">Voltar</button>
+      </div>
+    );
+  }
 
   const handleToggleTimer = () => {
     setTimerIsActive(!timerIsActive);
@@ -602,19 +731,78 @@ export default function StudentDashboard({
                       {/* Series checklist controller */}
                       <div className="mt-4 pt-4 border-t border-neutral-900/60 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                         
-                        {/* Checked indices buttons */}
-                        <div className="space-y-1.5 w-full md:w-auto">
-                          <p className="text-[9px] uppercase font-mono tracking-wider font-bold text-neutral-500">Marcar Séries Concluídas</p>
+                        {/* Checked indices buttons with progress track */}
+                        <div className="space-y-2.5 w-full md:w-auto min-w-[200px]">
+                          <div className="flex items-center justify-between text-[9px] uppercase font-mono tracking-wider font-bold text-neutral-500">
+                            <span>Marcar Séries Concluídas</span>
+                            {isExerciseFullyCompleted ? (
+                              <motion.span 
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="text-[#39FF14] font-black text-[10px] flex items-center gap-1 bg-[#39FF14]/10 px-1.5 py-0.5 rounded"
+                              >
+                                COMPLETE ✨
+                              </motion.span>
+                            ) : (
+                              <span className="text-[#39FF14] transition-colors duration-200">
+                                {setsFinishedCount}/{exercise.sets} ({Math.round((setsFinishedCount / exercise.sets) * 100)}%)
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Mini dynamic progress bar */}
+                          <div className="h-1.5 w-full bg-neutral-900 rounded-full overflow-hidden relative border border-neutral-850/20">
+                            <motion.div 
+                              className="h-full bg-gradient-to-r from-emerald-500 to-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.5)] rounded-full"
+                              initial={false}
+                              animate={{ width: `${(setsFinishedCount / exercise.sets) * 100}%` }}
+                              transition={{ type: "spring", stiffness: 120, damping: 14 }}
+                            />
+                          </div>
+
                           <div className="flex items-center gap-2.5">
                             {setsCheckArray.map((isDone, setIndex) => (
-                              <button
+                              <motion.button
                                 key={setIndex}
+                                whileHover={{ scale: 1.12 }}
+                                whileTap={{ scale: 0.85 }}
+                                animate={{ 
+                                  scale: isDone ? [1, 1.25, 1] : 1,
+                                  backgroundColor: isDone ? '#39FF14' : '#171717',
+                                  color: isDone ? '#000000' : '#a3a3a3',
+                                  borderColor: isDone ? '#39FF14' : '#262626',
+                                  boxShadow: isDone ? '0 0 12px rgba(57, 255, 20, 0.35)' : 'none'
+                                }}
+                                transition={{ 
+                                  scale: { type: "spring", stiffness: 400, damping: 10 },
+                                  backgroundColor: { duration: 0.15 },
+                                  color: { duration: 0.15 },
+                                  borderColor: { duration: 0.15 }
+                                }}
                                 onClick={() => toggleSetComplete(exercise.id, setIndex)}
-                                className={`w-8 h-8 rounded-lg font-mono text-[11px] font-extrabold border transition cursor-pointer flex items-center justify-center ${isDone ? 'bg-[#39FF14] text-black border-[#39FF14]' : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'}`}
+                                className="w-8 h-8 rounded-lg font-mono text-[11px] font-extrabold border cursor-pointer flex items-center justify-center relative select-none"
                               >
                                 {setIndex + 1}
-                                {isDone && <Check size={10} className="absolute mt-5 bg-neutral-900 text-[#39FF14] p-0.5 rounded-full border border-neutral-800" />}
-                              </button>
+                                {isDone && (
+                                  <>
+                                    {/* Expanding feedback ripple ring */}
+                                    <motion.div
+                                      initial={{ scale: 1, opacity: 0.7 }}
+                                      animate={{ scale: 2, opacity: 0 }}
+                                      transition={{ duration: 0.5, ease: "easeOut" }}
+                                      className="absolute inset-0 rounded-lg border border-[#39FF14] pointer-events-none"
+                                    />
+                                    <motion.div
+                                      initial={{ scale: 0, opacity: 0 }}
+                                      animate={{ scale: 1, opacity: 1 }}
+                                      transition={{ type: "spring", stiffness: 450, damping: 12 }}
+                                      className="absolute -bottom-1 -right-1 bg-neutral-900 text-[#39FF14] p-0.5 rounded-full border border-neutral-850 flex items-center justify-center shadow-lg pointer-events-none"
+                                    >
+                                      <Check size={8} strokeWidth={4} />
+                                    </motion.div>
+                                  </>
+                                )}
+                              </motion.button>
                             ))}
                           </div>
                         </div>
@@ -973,14 +1161,22 @@ export default function StudentDashboard({
 
         {/* Tab 4 Content: Subscriptions detailing & simulated billing updates */}
         {activeTab === 'plano' && (() => {
-          // Identify the current student's trainer
-          const trainer = trainers.find(t => t.id === currentStudent.trainerId) || trainers[0] || {
+          // Identify the current student's trainer safely
+          const trainerList = trainers || [];
+          const trainer = (trainerList.find(t => t.id === currentStudent.trainerId) || trainerList[0] || {
+            id: 'default-trainer',
             name: 'Daniel Personal Coach',
+            email: 'trainer@gympulse.com',
+            selectedPlan: 'Mensal',
+            trialStartDate: '',
+            trialExpiresAt: '',
+            subscriptionStatus: 'trial' as const,
+            customIdLink: 'daniel-personal',
             pixKeyType: 'Chave Aleatória' as const,
             pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
             phoneWhatsApp: '+5511999999999',
             stripeEnabled: true
-          };
+          }) as Trainer;
 
           const trainerPixType = trainer.pixKeyType || 'Chave Aleatória';
           const trainerPixKey = trainer.pixKey || '9bbf9c81-8077-4cdd-bb85-055ee56bfd31';
@@ -1042,9 +1238,26 @@ export default function StudentDashboard({
                 
                 <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest font-mono">Meu Plano Contratado</h3>
                 
-                <div className="space-y-1">
-                  <h4 className="text-xl font-black text-[#39FF14]">{currentStudent.plan} de Assessoria Esportiva</h4>
-                  <p className="text-sm text-neutral-300">Minha mensalidade está vinculada à consultoria de <strong className="text-[#39FF14]">{trainer.name}</strong>.</p>
+                <div className="space-y-1 pr-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <h4 className="text-xl font-black text-[#39FF14]">{currentStudent.plan} de Assessoria Esportiva</h4>
+                      <p className="text-sm text-neutral-300">Minha mensalidade está vinculada à consultoria de <strong className="text-[#39FF14]">{trainer.name}</strong>.</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditPixKeyType(trainer.pixKeyType || 'Chave Aleatória');
+                        setEditPixKey(trainer.pixKey || '');
+                        setEditPixQrCode((trainer as any).pixQrCode || '');
+                        setEditWhatsApp(trainer.phoneWhatsApp || '');
+                        setIsEditingPix(!isEditingPix);
+                      }}
+                      className="text-[9px] text-[#39FF14] hover:bg-[#39FF14]/15 bg-[#39FF14]/5 border border-[#39FF14]/20 px-3 py-1.5 rounded-xl cursor-pointer font-sans font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0 self-start sm:self-center transition"
+                    >
+                      <RefreshCw size={11} className={isEditingPix ? 'animate-spin' : ''} />
+                      {isEditingPix ? 'Voltar para Pagamento' : 'Configurar Chave Pix / QR Code'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 border-t border-b border-neutral-800/80 py-4 font-mono text-xs">
@@ -1058,265 +1271,352 @@ export default function StudentDashboard({
                   </div>
                   <div>
                     <p className="text-neutral-500 text-[10px] uppercase font-mono">Método de Renovação</p>
-                    <p className="text-[#39FF14] font-bold mt-1 text-md">Pix ou Cartão Stripe</p>
+                    <p className="text-white font-bold mt-1 text-md">Pix</p>
                   </div>
                 </div>
 
                 <div className="pt-2">
                   <p className="text-xs text-neutral-400 leading-relaxed">
-                    Escolha um método de pagamento abaixo para adiantar ou renovar o pagamento de forma segura. A confirmação via Pix envia um comprovante direto ao WhatsApp do seu personal, e via Stripe a baixa é computada automaticamente no CRM do treinador!
+                    Realize o pagamento de forma simples e rápida via Pix abaixo para adiantar ou renovar o seu plano. A confirmação via Pix envia um comprovante direto ao WhatsApp do seu personal!
                   </p>
                 </div>
               </div>
 
-              {/* Toggle Payment Methods (Pix or Stripe) */}
-              <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-900 rounded-xl border border-neutral-800 font-mono text-xs">
-                <button 
-                  onClick={() => setSelectedPaymentMethod('pix')}
-                  className={`py-2.5 rounded-lg transition font-bold uppercase flex items-center justify-center gap-2 select-none ${selectedPaymentMethod === 'pix' ? 'bg-[#39FF14] text-black shadow-lg' : 'text-neutral-400 hover:text-white'}`}
-                >
-                  <Smartphone size={14} /> Pix + WhatsApp
-                </button>
-                <button 
-                  onClick={() => setSelectedPaymentMethod('stripe')}
-                  className={`py-2.5 rounded-lg transition font-bold uppercase flex items-center justify-center gap-2 select-none ${selectedPaymentMethod === 'stripe' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10' : 'text-neutral-400 hover:text-white'}`}
-                >
-                  <CreditCard size={14} /> Cartão (Stripe)
-                </button>
-              </div>
+              {/* Gateway UI */}
+              <div className="grid grid-cols-1 gap-4 font-sans justify-items-stretch">
+                {isEditingPix ? (
+                  <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4 font-sans max-w-full w-full">
+                    <div className="flex items-center gap-2 border-b border-neutral-850 pb-2.5">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">Editar Chave Pix & QR Code do Treinador</span>
+                    </div>
 
-              {/* Dynamic Payment Gateways UI */}
-              <div className="grid grid-cols-1 gap-4">
-                
-                {/* Method 1: Pix and WhatsApp flow */}
-                {selectedPaymentMethod === 'pix' && (
-                  <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                          PIX Direto para {trainer.name}
-                        </h4>
-                        <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
-                          Pague diretamente copiando a chave Pix abaixo. Em seguida ordene a confirmação e o sistema preencherá o texto do comprovante no WhatsApp do profissional!
-                        </p>
-                      </div>
-                      <span className="text-[10px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/30 px-2 py-0.5 rounded font-bold font-mono">
-                        {trainerPixType}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-                      {/* Interactive QR Code Simulator */}
-                      <div className="md:col-span-4 flex flex-col items-center justify-center bg-neutral-950 p-4 rounded-xl border border-neutral-900 shadow-inner">
-                        <div className="w-28 h-28 bg-white p-2 rounded-lg relative flex items-center justify-center">
-                          {/* Beautiful QR Code pattern with a custom center dot */}
-                          <div className="grid grid-cols-4 gap-1 w-full h-full opacity-90 select-none pointer-events-none">
-                            <div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
-                            <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div>
-                            <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
-                            <div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div>
-                          </div>
-                          {/* Minimalist central emblem */}
-                          <div className="absolute w-7 h-7 bg-[#09090b] border-2 border-white rounded-full flex items-center justify-center shadow">
-                            <span className="text-[8px] font-black text-[#39FF14]">PIX</span>
-                          </div>
-                        </div>
-                        <span className="text-[8px] text-neutral-500 font-mono mt-2 uppercase tracking-tight">Escaneie para pagar rápido</span>
+                        <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest mb-1.5">Tipo de Chave Pix</label>
+                        <select
+                          value={editPixKeyType}
+                          onChange={(e) => setEditPixKeyType(e.target.value as any)}
+                          className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-2 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition font-sans"
+                        >
+                          <option value="Chave Aleatória">Chave Aleatória</option>
+                          <option value="CPF">CPF</option>
+                          <option value="CNPJ">CNPJ</option>
+                          <option value="Telefone">Telefone</option>
+                          <option value="E-mail">E-mail</option>
+                        </select>
                       </div>
 
-                      {/* Copier and direct WhatsApp submitter button */}
-                      <div className="md:col-span-8 space-y-3.5">
-                        <div className="space-y-1">
-                          <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest leading-none">Chave PIX do Treinador</label>
-                          <div className="flex items-center gap-1.5 mt-1.5 bg-neutral-950 p-3 rounded-xl border border-neutral-800 text-xs font-mono text-[#39FF14] relative overflow-hidden select-all cursor-pointer">
-                            <span className="truncate flex-1 select-all">{trainerPixKey}</span>
-                            <button 
-                              onClick={() => {
-                                navigator.clipboard.writeText(trainerPixKey);
-                                setPixCopied(true);
-                                setTimeout(() => setPixCopied(false), 2500);
-                              }}
-                              className="text-neutral-400 hover:text-white p-1 hover:bg-neutral-900 rounded transition shrink-0 cursor-pointer"
-                              title="Copiar Chave Pix"
-                            >
-                              <Copy size={13} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {pixCopied && (
-                          <p className="text-[10px] text-emerald-400 font-bold animate-bounce flex items-center gap-1">
-                            ✔ Chave Pix copiada com sucesso! Transfira o valor de R$ {currentStudent.value.toFixed(2)}.
-                          </p>
-                        )}
-
-                        <div className="pt-2">
-                          <button
-                            onClick={handleWhatsAppConfirmation}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-4 rounded-xl text-xs font-extrabold transition cursor-pointer w-full flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/10 active:scale-[0.98]"
-                          >
-                            <MessageCircle size={15} /> Copiar Pix & Enviar Comprovante no WhatsApp
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Method 2: Stripe Integration mockup */}
-                {selectedPaymentMethod === 'stripe' && (
-                  <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-5">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
                       <div>
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                          Checkout de Cartão de Crédito Integrado (Stripe)
-                        </h4>
-                        <p className="text-[11px] text-neutral-400 mt-1">
-                          Insira as credenciais do seu cartão. Sua transação é protegida pelo Stripe, sem que o treinador veja seus dados.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 text-[9px] font-mono text-neutral-500">
-                        <span className="bg-neutral-800 px-1.5 py-0.5 rounded">SSL Secure</span>
-                        <span className="bg-neutral-800 px-1.5 py-0.5 rounded">Stripe Verified</span>
+                        <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest mb-1.5">Chave Pix de Destino</label>
+                        <input
+                          type="text"
+                          placeholder="Cole ou digite sua chave..."
+                          value={editPixKey}
+                          onChange={(e) => setEditPixKey(e.target.value)}
+                          className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition font-mono"
+                        />
                       </div>
                     </div>
 
-                    {isStripeSuccess ? (
-                      <div className="p-6 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl space-y-2.5 text-center">
-                        <CheckCircle2 size={36} className="mx-auto text-indigo-400 animate-bounce" />
-                        <h5 className="font-bold text-sm text-white">Transação Processada com Sucesso!</h5>
-                        <p className="text-xs text-neutral-300 leading-normal max-w-md mx-auto">
-                          Seu pagamento via Stripe no valor de <strong>R$ {currentStudent.value.toFixed(2)}</strong> foi aprovado. A baixa foi realizada e as planilhas do seu perfil estão liberadas.
-                        </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest mb-1.5">WhatsApp do Treinador</label>
+                        <input
+                          type="text"
+                          placeholder="+5511999999999"
+                          value={editWhatsApp}
+                          onChange={(e) => setEditWhatsApp(e.target.value)}
+                          className="w-full bg-neutral-950 border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition font-sans"
+                        />
                       </div>
-                    ) : (
-                      <form onSubmit={handleStripeSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-5">
-                        
-                        {/* Interactive Visual Card Frame */}
-                        <div className="md:col-span-5 flex flex-col justify-between bg-gradient-to-br from-indigo-900 to-slate-900 p-4 rounded-xl border border-indigo-500/25 min-h-[145px] shadow-lg relative overflow-hidden font-mono text-white select-none">
-                          <div className="absolute top-0 right-0 translate-x-6 -translate-y-6 w-24 h-24 bg-indigo-400/5 rounded-full blur-xl pointer-events-none"></div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest leading-none mb-1">QR Code Pix (Imagem ou link)</label>
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start">
+                        {/* Drop / input region */}
+                        <div className="md:col-span-8 space-y-2">
+                          <input
+                            type="text"
+                            placeholder="Insira a URL ou cole a string Base64 do QR Code..."
+                            value={editPixQrCode}
+                            onChange={(e) => setEditPixQrCode(e.target.value)}
+                            className="w-full bg-[#0d0d0f] border border-neutral-800 text-[10px] font-mono text-white px-3 py-2 rounded-xl focus:outline-none focus:border-[#39FF14] transition"
+                          />
                           
-                          <div className="flex items-center justify-between">
-                            <span className="text-[8px] font-bold tracking-widest uppercase opacity-70">GymPulse Premium Card</span>
-                            <div className="w-8 h-5 bg-yellow-400/80 rounded-sm opacity-90 shadow-inner"></div>
-                          </div>
-
-                          <div className="space-y-1 my-3">
-                            <span className="text-[8px] opacity-50 uppercase block tracking-wider">Número do Cartão</span>
-                            <p className="text-xs font-bold tracking-widest">
-                              {stripeCardNumber ? stripeCardNumber.replace(/(\d{4})/g, '$1 ').trim().substring(0, 19) : '•••• •••• •••• ••••'}
+                          <div
+                            onDragEnter={handleDragPix}
+                            onDragOver={handleDragPix}
+                            onDragLeave={handleDragPix}
+                            onDrop={handleDropPix}
+                            onClick={() => fileInputRefPix.current?.click()}
+                            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-1.5 ${
+                              dragActivePix 
+                                ? 'border-[#39FF14] bg-[#39FF14]/5 text-[#39FF14]' 
+                                : 'border-neutral-800 hover:border-neutral-700 text-neutral-400 bg-neutral-950/30'
+                            }`}
+                          >
+                            <input
+                              type="file"
+                              ref={fileInputRefPix}
+                              onChange={handleFileChangePix}
+                              accept="image/*"
+                              className="hidden"
+                            />
+                            <Upload size={16} className={`${dragActivePix ? 'text-[#39FF14]' : 'text-neutral-500'}`} />
+                            <p className="text-[10px] font-sans font-semibold">
+                              Arraste e solte o seu QR Code físico aqui ou <span className="text-[#39FF14] underline">clique para selecionar</span>
                             </p>
                           </div>
-
-                          <div className="flex items-center justify-between font-mono text-[9px] mt-1.5">
-                            <div className="truncate pr-2">
-                              <span className="text-[7px] opacity-40 uppercase block tracking-wider">Titular</span>
-                              <span className="font-bold uppercase truncate max-w-[120px] block">{stripeCardName || 'SEU NOME COMPLETO'}</span>
-                            </div>
-                            <div className="shrink-0 text-right">
-                              <span className="text-[7px] opacity-40 uppercase block tracking-wider">Validade</span>
-                              <span className="font-bold">{stripeCardExpiry || 'MM/AA'}</span>
-                            </div>
-                          </div>
                         </div>
 
-                        {/* Interactive Stripe form input fields */}
-                        <div className="md:col-span-7 space-y-3.5">
-                          <div className="space-y-1">
-                            <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">Número do Cartão</label>
-                            <input 
-                              type="text"
-                              maxLength={16}
-                              value={stripeCardNumber}
-                              onChange={(e) => setStripeCardNumber(e.target.value.replace(/\D/g, ''))}
-                              placeholder="4000 1234 5678 9010"
-                              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono text-white outline-none focus:border-indigo-500 transition"
-                              required
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">Nome Impresso no Cartão</label>
-                            <input 
-                              type="text"
-                              value={stripeCardName}
-                              onChange={(e) => setStripeCardName(e.target.value)}
-                              placeholder="Nome Completo do Titular"
-                              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 transition"
-                              required
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="space-y-1">
-                              <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">Validade</label>
-                              <input 
-                                type="text"
-                                maxLength={5}
-                                value={stripeCardExpiry}
-                                onChange={(e) => {
-                                  // Auto append slash inside date entry
-                                  let val = e.target.value.replace(/\D/g, '');
-                                  if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2, 4);
-                                  setStripeCardExpiry(val);
-                                }}
-                                placeholder="MM/AA"
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono text-white text-center outline-none focus:border-indigo-500 transition"
-                                required
-                              />
+                        {/* Preview */}
+                        <div className="md:col-span-4 flex flex-col items-center justify-center bg-neutral-950 p-2.5 rounded-xl border border-neutral-850 min-h-[120px]">
+                          {editPixQrCode ? (
+                            <div className="space-y-1.5 w-full flex flex-col items-center">
+                              <div className="w-16 h-16 bg-white p-1 rounded-lg flex items-center justify-center">
+                                <img
+                                  src={editPixQrCode}
+                                  alt="Preview QR Code"
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setEditPixQrCode('')}
+                                className="text-[8px] text-red-400 hover:text-red-300 font-mono uppercase bg-red-950/20 px-2 py-0.5 rounded cursor-pointer"
+                              >
+                                Limpar QR
+                              </button>
                             </div>
-                            <div className="space-y-1">
-                              <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">CVC / CVV</label>
-                              <input 
-                                type="text"
-                                maxLength={3}
-                                value={stripeCardCvv}
-                                onChange={(e) => setStripeCardCvv(e.target.value.replace(/\D/g, ''))}
-                                placeholder="123"
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono text-white text-center outline-none focus:border-indigo-500 transition"
-                                required
-                              />
+                          ) : (
+                            <div className="text-center p-1.5">
+                              <Image size={16} className="text-neutral-600 mx-auto mb-1" />
+                              <span className="text-[8px] text-neutral-500 font-sans block">Sem QR personalizado</span>
                             </div>
-                            <div className="space-y-1">
-                              <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest">CEP Fatura</label>
-                              <input 
-                                type="text"
-                                maxLength={9}
-                                value={stripeCardPostalCode}
-                                onChange={(e) => setStripeCardPostalCode(e.target.value.replace(/\D/g, ''))}
-                                placeholder="01001-000"
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono text-white text-center outline-none focus:border-indigo-500 transition"
-                              />
-                            </div>
-                          </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-                          <div className="pt-2">
-                            <button
-                              type="submit"
-                              disabled={isStripeProcessing}
-                              className={`w-full py-3 px-4 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98] ${isStripeProcessing ? 'bg-neutral-800 text-neutral-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-700/10'}`}
-                            >
-                              {isStripeProcessing ? (
-                                <>
-                                  <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
-                                  Processando pagamento com Stripe...
-                                </>
+                    <div className="flex gap-2 justify-end pt-2 border-t border-neutral-850">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingPix(false)}
+                        className="px-4 py-2 border border-neutral-850 hover:bg-neutral-900 rounded-xl text-neutral-300 text-xs font-mono uppercase"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onUpdateTrainer && trainer) {
+                            const updated: Trainer = {
+                              ...trainer,
+                              pixKeyType: editPixKeyType,
+                              pixKey: editPixKey.trim(),
+                              pixQrCode: editPixQrCode.trim(),
+                              phoneWhatsApp: editWhatsApp.trim()
+                            };
+                            onUpdateTrainer(updated);
+                            setSavedPixFeedback(true);
+                            setTimeout(() => {
+                              setSavedPixFeedback(false);
+                              setIsEditingPix(false);
+                            }, 1500);
+                          }
+                        }}
+                        className="bg-[#39FF14] text-black px-4 py-2 hover:bg-green-400 rounded-xl text-xs font-black font-mono uppercase transition flex items-center gap-1.5"
+                      >
+                        <Check size={13} /> Gravar Dados Pix
+                      </button>
+                    </div>
+
+                    {savedPixFeedback && (
+                      <p className="text-[#39FF14] text-[10px] text-right font-mono animate-pulse mt-1">✓ Chave Pix e QR Code atualizados com sucesso!</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4 w-full">
+                    {/* Interactive Payment Switcher */}
+                    <div className="flex items-center gap-1.5 bg-neutral-950 p-1.5 rounded-2xl border border-neutral-850/80 max-w-xs">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPaymentMethod('pix')}
+                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono uppercase font-black tracking-wider transition duration-150 cursor-pointer text-center ${
+                          selectedPaymentMethod === 'pix'
+                            ? 'bg-[#39FF14] text-black font-extrabold shadow-md shadow-[#39FF14]/10'
+                            : 'text-neutral-400 hover:text-white hover:bg-neutral-900/50'
+                        }`}
+                      >
+                        💸 Pix Direto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPaymentMethod('stripe')}
+                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono uppercase font-black tracking-wider transition duration-150 cursor-pointer text-center ${
+                          selectedPaymentMethod === 'stripe'
+                            ? 'bg-[#6366f1] text-white font-extrabold shadow-md shadow-indigo-600/10'
+                            : 'text-neutral-400 hover:text-white hover:bg-neutral-900/50'
+                        }`}
+                      >
+                        💳 Cartão Stripe
+                      </button>
+                    </div>
+
+                    {selectedPaymentMethod === 'pix' ? (
+                      <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4 font-sans w-full animate-fade-in">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                              PIX Direto para {trainer.name}
+                            </h4>
+                            <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                              Pague diretamente copiando a chave Pix abaixo. Em seguida ordene a confirmação e o sistema preencherá o texto do comprovante no WhatsApp do profissional!
+                            </p>
+                          </div>
+                          <span className="text-[10px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/30 px-2 py-0.5 rounded font-bold font-mono">
+                            {trainerPixType}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                          {/* Interactive QR Code Simulator */}
+                          <div className="md:col-span-4 flex flex-col items-center justify-center bg-neutral-950 p-4 rounded-xl border border-neutral-900 shadow-inner">
+                            <div className="w-28 h-28 bg-white p-2 rounded-lg relative flex items-center justify-center overflow-hidden">
+                              {trainer && (trainer as any).pixQrCode ? (
+                                <img 
+                                  src={(trainer as any).pixQrCode} 
+                                  alt="Pix QR Code" 
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
                               ) : (
                                 <>
-                                  <CheckCircle2 size={15} /> Pagar R$ {currentStudent.value.toFixed(2)} com Stripe Card
+                                  {/* Beautiful QR Code pattern with a custom center dot */}
+                                  <div className="grid grid-cols-4 gap-1 w-full h-full opacity-90 select-none pointer-events-none">
+                                    <div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
+                                    <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div>
+                                    <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
+                                    <div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div>
+                                  </div>
+                                  {/* Minimalist central emblem */}
+                                  <div className="absolute w-7 h-7 bg-[#09090b] border-2 border-white rounded-full flex items-center justify-center shadow">
+                                    <span className="text-[8px] font-black text-[#39FF14]">PIX</span>
+                                  </div>
                                 </>
                               )}
-                            </button>
+                            </div>
+                            <span className="text-[8px] text-neutral-500 font-mono mt-2 uppercase tracking-tight">Escaneie para pagar rápido</span>
+                          </div>
+
+                          {/* Copier and direct WhatsApp submitter button */}
+                          <div className="md:col-span-8 space-y-3.5">
+                            <div className="space-y-1">
+                              <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest leading-none">Chave PIX do Treinador</label>
+                              <div className="flex items-center gap-1.5 mt-1.5 bg-neutral-950 p-3 rounded-xl border border-neutral-800 text-xs font-mono text-[#39FF14] relative overflow-hidden select-all cursor-pointer">
+                                <span className="truncate flex-1 select-all">{trainerPixKey}</span>
+                                <button 
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(trainerPixKey);
+                                    setPixCopied(true);
+                                    setTimeout(() => setPixCopied(false), 2500);
+                                  }}
+                                  className="text-neutral-400 hover:text-white p-1 hover:bg-neutral-900 rounded transition shrink-0 cursor-pointer"
+                                  title="Copiar Chave Pix"
+                                >
+                                  <Copy size={13} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {pixCopied && (
+                              <p className="text-[10px] text-emerald-400 font-bold animate-bounce flex items-center gap-1">
+                                ✔ Chave Pix copiada com sucesso! Transfira o valor de R$ {currentStudent.value.toFixed(2)}.
+                              </p>
+                            )}
+
+                            <div className="pt-2">
+                              <button
+                                onClick={handleWhatsAppConfirmation}
+                                className="bg-emerald-650 lg:bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-4 rounded-xl text-xs font-extrabold transition cursor-pointer w-full flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/10 active:scale-[0.98]"
+                              >
+                                <MessageCircle size={15} /> Copiar Pix & Enviar Comprovante no WhatsApp
+                              </button>
+                            </div>
                           </div>
                         </div>
+                      </div>
+                    ) : (
+                      /* Direct Stripe integration card with absolute lock-security */
+                      <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4 font-sans w-full animate-fade-in">
+                        <div className="flex items-center gap-2 border-b border-neutral-850 pb-2.5">
+                          <div className="w-2.5 h-2.5 rounded-full bg-[#6366f1] animate-pulse"></div>
+                          <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">Cartão de Crédito via Stripe Checkout</span>
+                        </div>
 
-                      </form>
+                        <div className="space-y-4">
+                          <div className="bg-[#0f1015] border border-neutral-850 p-3.5 rounded-xl flex items-center justify-between text-xs font-mono max-w-md">
+                            <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Plano a renovar:</span>
+                            <span className="text-white font-black text-sm">{currentStudent.plan}</span>
+                          </div>
+
+                          <div className="bg-[#0f1015] border border-neutral-850 p-3.5 rounded-xl flex items-center justify-between text-xs font-mono max-w-md">
+                            <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Valor da renovação:</span>
+                            <span className="text-[#39FF14] font-black text-sm">R$ {currentStudent.value.toFixed(2)}</span>
+                          </div>
+
+                          {stripeError && (
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 max-w-md space-y-2 text-left animate-scale-up">
+                              <p className="text-[10px] font-mono text-red-500 uppercase font-black leading-none flex items-center gap-1">
+                                ⚠️ Erro do Stripe
+                              </p>
+                              <p className="text-[11px] text-neutral-300 leading-normal font-sans">
+                                {stripeError}
+                              </p>
+                            </div>
+                          )}
+
+                          {isStripeSuccess && (
+                            <div className="bg-[#39FF14]/10 border border-[#39FF14]/30 rounded-xl p-3 max-w-md space-y-1 text-left animate-scale-up">
+                              <p className="text-[10px] font-mono text-[#39FF14] uppercase font-black leading-none flex items-center gap-1 animate-bounce">
+                                ✔ Pagamento aprovado!
+                              </p>
+                              <p className="text-[11px] text-neutral-300 leading-normal font-sans">
+                                Seu acesso foi renovado gratuitamente na base de dados integrada. Obrigado!
+                              </p>
+                            </div>
+                          )}
+
+                          {isStripeProcessing && (
+                            <div className="flex items-center gap-2 py-2 text-neutral-400 font-mono text-xs">
+                              <div className="w-4 h-4 border-2 border-dashed border-[#6366f1] rounded-full animate-spin"></div>
+                              <span>Conectando ao gateway Stripe seguro...</span>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2 max-w-md">
+                            <button
+                              type="button"
+                              disabled={isStripeProcessing}
+                              onClick={handleStripeCheckoutStudent}
+                              className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-black text-xs py-3.5 rounded-xl transition shadow-lg shadow-indigo-600/15 hover:shadow-indigo-600/30 cursor-pointer text-center uppercase tracking-wider font-mono flex items-center justify-center gap-2"
+                            >
+                              <Lock size={12} className="text-indigo-200" /> Ir para o Stripe e Pagar
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-[10px] text-neutral-500 font-mono">
+                            <Check size={12} className="text-emerald-400" />
+                            <span>Ambiente seguro certificado SSL e PCI-DSS oficial</span>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
-
               </div>
 
               {/* My Login / Session Access Logs Section */}
