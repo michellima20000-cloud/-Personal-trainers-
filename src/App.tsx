@@ -80,7 +80,8 @@ const DEFAULT_TRAINER: Trainer = {
   pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
   phoneWhatsApp: '+5511999999999',
   stripeEnabled: true,
-  stripePublishableKey: 'pk_test_sample_key'
+  stripePublishableKey: 'pk_test_sample_key',
+  stripeSecretKey: ''
 };
 
 const loadCachedOrSeed = () => {
@@ -303,7 +304,8 @@ export default function App() {
               pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
               phoneWhatsApp: '+5511999999999',
               stripeEnabled: true,
-              stripePublishableKey: 'pk_test_sample_key'
+              stripePublishableKey: 'pk_test_sample_key',
+              stripeSecretKey: ''
             };
             await saveTrainer(defaultTrainer);
             return defaultTrainer;
@@ -378,7 +380,8 @@ export default function App() {
               pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
               phoneWhatsApp: '+5511999999999',
               stripeEnabled: true,
-              stripePublishableKey: 'pk_test_sample_key'
+              stripePublishableKey: 'pk_test_sample_key',
+              stripeSecretKey: ''
             };
             await saveTrainer(defaultTrainer);
             remoteTrainers = [defaultTrainer];
@@ -474,7 +477,8 @@ export default function App() {
       pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
       phoneWhatsApp: '+5511999999999',
       stripeEnabled: true,
-      stripePublishableKey: 'pk_test_sample_key'
+      stripePublishableKey: 'pk_test_sample_key',
+      stripeSecretKey: ''
     };
 
     setStudents(INITIAL_STUDENTS);

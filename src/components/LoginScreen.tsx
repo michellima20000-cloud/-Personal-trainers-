@@ -172,9 +172,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       return;
     }
 
-    // Set step to checkout so loader displays and then directly execute the Stripe checkout logic
-    setTrainerCheckoutStep('checkout');
-    handleStripeCheckoutRegistration();
+    if (regTrainerPlan === 'Mensal') {
+      // Inicia o contrato de adesão digital do Teste Grátis de 7 dias imediatamente!
+      setTrainerCheckoutStep('checkout');
+      setCheckoutMethod('trial');
+    } else {
+      // Planos pagos vão direto para o Checkout do Stripe
+      setTrainerCheckoutStep('checkout');
+      handleStripeCheckoutRegistration();
+    }
   };
 
   const handleConfirmTrainerSubscription = (isPaid: boolean) => {
@@ -207,7 +213,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
         phoneWhatsApp: '+5511999999999',
         stripeEnabled: true,
-        stripePublishableKey: 'pk_test_sample_key'
+        stripePublishableKey: 'pk_test_sample_key',
+        stripeSecretKey: ''
       };
 
       onAddTrainer(newTrainer);
@@ -251,7 +258,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
       phoneWhatsApp: '+5511999999999',
       stripeEnabled: true,
-      stripePublishableKey: 'pk_sample_publishable'
+      stripePublishableKey: 'pk_sample_publishable',
+      stripeSecretKey: ''
     };
 
     try {
@@ -919,7 +927,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                       disabled={loading}
                       className="w-full mt-2 bg-[#39FF14] text-black font-extrabold text-xs py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-[#39FF14]/10 hover:shadow-[#39FF14]/25 cursor-pointer active:scale-95"
                     >
-                      <span>{loading ? 'Redirecionando ao Stripe...' : 'Assinar com Stripe (Checkout Seguro)'}</span>
+                      <span>
+                        {regTrainerPlan === 'Mensal' 
+                          ? (loading ? 'Iniciando Teste...' : 'Iniciar Teste Grátis (7 Dias)')
+                          : (loading ? 'Redirecionando ao Stripe...' : 'Assinar com Stripe (Checkout Seguro)')}
+                      </span>
                       <ArrowRight size={14} className="shrink-0" />
                     </button>
                   </form>
@@ -950,20 +962,22 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                 {!checkoutMethod ? (
                   <div className="space-y-3 pt-1">
                     {/* Trial option */}
-                    <button
-                      type="button"
-                      onClick={() => setCheckoutMethod('trial')}
-                      className="w-full bg-neutral-950 border border-neutral-800 hover:border-neutral-700 p-3.5 rounded-xl flex items-center gap-3 cursor-pointer text-left transition select-none hover:bg-neutral-900/40 group"
-                    >
-                      <div className="bg-[#39FF14]/10 p-2 border border-[#39FF14]/30 rounded-lg text-[#39FF14] group-hover:scale-105 transition-transform">
-                        <Sparkles size={16} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-extrabold text-white">Ativar com Teste Grátis (7 Dias)</p>
-                        <p className="text-[9px] text-neutral-400 mt-0.5">Use por uma semana grátis. Cancele quando desejar.</p>
-                      </div>
-                      <ArrowRight size={14} className="text-neutral-500 shrink-0 group-hover:translate-x-1 transition-transform" />
-                    </button>
+                    {regTrainerPlan === 'Mensal' && (
+                      <button
+                        type="button"
+                        onClick={() => setCheckoutMethod('trial')}
+                        className="w-full bg-neutral-950 border border-neutral-800 hover:border-neutral-700 p-3.5 rounded-xl flex items-center gap-3 cursor-pointer text-left transition select-none hover:bg-neutral-900/40 group"
+                      >
+                        <div className="bg-[#39FF14]/10 p-2 border border-[#39FF14]/30 rounded-lg text-[#39FF14] group-hover:scale-105 transition-transform">
+                          <Sparkles size={16} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs font-extrabold text-white">Ativar com Teste Grátis (7 Dias)</p>
+                          <p className="text-[9px] text-neutral-400 mt-0.5">Use por uma semana grátis. Cancele quando desejar.</p>
+                        </div>
+                        <ArrowRight size={14} className="text-neutral-500 shrink-0 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                    )}
 
                     {/* Stripe option */}
                     <button

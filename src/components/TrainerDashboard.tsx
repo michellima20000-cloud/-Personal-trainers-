@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
   MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock,
-  Upload, Image
+  Upload, Image, Eye, EyeOff
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -119,6 +119,8 @@ export default function TrainerDashboard({
   const [profilePhoneWhatsApp, setProfilePhoneWhatsApp] = useState(activeTrainer?.phoneWhatsApp || '+5511999999999');
   const [profileStripeEnabled, setProfileStripeEnabled] = useState(activeTrainer?.stripeEnabled ?? true);
   const [profileStripePublishableKey, setProfileStripePublishableKey] = useState(activeTrainer?.stripePublishableKey || 'pk_test_sample_key');
+  const [profileStripeSecretKey, setProfileStripeSecretKey] = useState(activeTrainer?.stripeSecretKey || '');
+  const [showSecretKeyField, setShowSecretKeyField] = useState(false);
 
   const handleStripeCheckoutSaaS = async () => {
     setLicensePaymentLoadingStep(1); // 1 = Connecting to Stripe API
@@ -260,6 +262,7 @@ export default function TrainerDashboard({
       setProfilePhoneWhatsApp(activeTrainer.phoneWhatsApp || '');
       setProfileStripeEnabled(activeTrainer.stripeEnabled ?? true);
       setProfileStripePublishableKey(activeTrainer.stripePublishableKey || '');
+      setProfileStripeSecretKey(activeTrainer.stripeSecretKey || '');
       setLicenseSelectedPlan(activeTrainer.selectedPlan || 'Trimestral');
     }
   }, [activeTrainer]);
@@ -543,6 +546,274 @@ export default function TrainerDashboard({
     }
   };
 
+  if (activeTrainer?.subscriptionStatus === 'expired') {
+    return (
+      <div className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col font-sans pb-16 justify-center items-center px-4 animate-fade-in relative overflow-hidden">
+        {/* Glow Effects */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-red-600/5 blur-3xl rounded-full pointer-events-none" />
+        <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-emerald-500/5 blur-3xl rounded-full pointer-events-none" />
+        
+        <div className="w-full max-w-2xl bg-[#0c0c0e] border border-neutral-800 rounded-3xl p-6 md:p-8 relative shadow-2xl space-y-6">
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/25 text-red-500 animate-pulse">
+              <Lock size={28} />
+            </div>
+            <h1 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight font-mono">
+              Acesso Suspenso - Assinatura Expirada / Cancelada
+            </h1>
+            <p className="text-xs text-neutral-400 max-w-lg leading-relaxed font-sans">
+              Seu período de teste grátis ou assinatura do seu painel GymPulse terminou. Para restabelecer o acesso aos dados dos seus alunos, prescrição de treinos e agenda, regularize sua conta escolhendo um dos planos abaixo.
+            </p>
+          </div>
+
+          {/* Core Plan Selection Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { key: 'Mensal', price: 'R$ 39,90', period: '/mês', desc: 'Acesso mensal completo' },
+              { key: 'Trimestral', price: 'R$ 97,00', period: '/trimestre', desc: 'Combo ideal para crescer' },
+              { key: 'Anual', price: 'R$ 297,00', period: '/ano', desc: 'Melhor custo-benefício' }
+            ].map((p) => {
+              const isSelected = licenseSelectedPlan === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setLicenseSelectedPlan(p.key as PlanType)}
+                  className={`p-4 rounded-2xl border text-left transition relative cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-[#39FF14]/5 border-[#39FF14] text-white shadow-[0_0_15px_rgba(57,255,20,0.08)]'
+                      : 'bg-neutral-900/40 border-neutral-850 hover:border-neutral-800 hover:bg-neutral-900/80 text-neutral-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-mono uppercase font-black tracking-wider text-neutral-400">{p.key}</span>
+                      {isSelected && <span className="w-2 h-2 rounded-full bg-[#39FF14]"></span>}
+                    </div>
+                    <p className="text-sm font-black text-white font-mono mt-2">
+                      {p.price}
+                      <span className="text-[10px] font-normal text-neutral-500">{p.period}</span>
+                    </p>
+                  </div>
+                  <p className="text-[9px] text-neutral-500 font-sans mt-3">{p.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Payment Method Selector */}
+          <div className="bg-neutral-950 p-1.5 rounded-xl border border-neutral-850/60 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setLicensePaymentMethod('pix')}
+              className={`py-2 text-xs font-black uppercase font-mono tracking-wider text-center transition rounded-lg cursor-pointer ${
+                licensePaymentMethod === 'pix'
+                  ? 'bg-[#39FF14] text-black shadow-lg'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-900/40'
+              }`}
+            >
+              ⚡ Pagar via Pix Instante
+            </button>
+            <button
+              type="button"
+              onClick={() => setLicensePaymentMethod('stripe')}
+              className={`py-2 text-xs font-black uppercase font-mono tracking-wider text-center transition rounded-lg flex items-center justify-center gap-1.5 cursor-pointer ${
+                licensePaymentMethod === 'stripe'
+                  ? 'bg-indigo-600 text-white shadow-lg'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-900/40'
+              }`}
+            >
+              <CreditCard size={14} /> Cartão (Stripe)
+            </button>
+          </div>
+
+          {/* Dynamic Payment Details inside Block */}
+          {licensePaymentLoadingStep > 0 ? (
+            <div className="bg-neutral-950 border border-neutral-850 rounded-2xl p-6 text-center space-y-4 animate-scale-up">
+              {licensePaymentLoadingStep < 4 ? (
+                <div className="flex flex-col items-center justify-center py-4 space-y-3">
+                  <div className="w-8 h-8 border-3 border-dashed border-[#39FF14] rounded-full animate-spin"></div>
+                  <p className="text-xs text-white font-mono uppercase tracking-widest font-black animate-pulse">
+                    {licensePaymentLoadingStep === 1 && 'Contatando API Stripe (v3)...'}
+                    {licensePaymentLoadingStep === 2 && 'Autorizando Gateway...'}
+                    {licensePaymentLoadingStep === 3 && 'Processando Webhook e Liberando Acesso...'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-4 space-y-2 animate-scale-up">
+                  <div className="w-10 h-10 rounded-full bg-[#39FF14]/15 border border-[#39FF14]/40 text-[#39FF14] flex items-center justify-center animate-bounce">
+                    <Check size={20} />
+                  </div>
+                  <p className="text-xs font-black text-white font-mono uppercase tracking-wider">Acesso Total Liberado!</p>
+                  <p className="text-[11px] text-neutral-400 leading-relaxed">
+                    Seu pagamento foi confirmado. Redirecionando para o seu dashboard...
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : licensePaymentMethod === 'pix' ? (
+            <div className="bg-neutral-950 p-4 border border-neutral-850 rounded-2xl text-center space-y-4 animate-fade-in">
+              <p className="text-[10px] text-neutral-450 font-mono uppercase tracking-wider">QR Code Copie e Cole para ativação imediata:</p>
+              
+              <div className="bg-white p-2 w-28 h-28 mx-auto flex items-center justify-center rounded-xl border border-neutral-200 shadow-md relative">
+                <div className="grid grid-cols-4 gap-1 w-full h-full opacity-80">
+                  {Array.from({ length: 16 }).map((_, i) => (
+                    <div key={i} className={`rounded-sm ${(i * 3 + 1) % 5 === 0 ? 'bg-black' : 'bg-neutral-100'}`} />
+                  ))}
+                </div>
+                <div className="absolute w-7 h-7 bg-black rounded-full border-2 border-white flex items-center justify-center shadow">
+                  <span className="text-[8px] font-mono font-black text-[#39FF14]">PIX</span>
+                </div>
+              </div>
+
+              <div className="bg-neutral-900 p-2.5 rounded-xl border border-neutral-800 flex items-center gap-2 max-w-sm mx-auto">
+                <pre className="text-[9px] overflow-hidden truncate font-mono text-neutral-400 flex-1">
+                  0002012658001BR.GOV.BCB.PIX0136gympulse-license-saas-{licenseSelectedPlan.toLowerCase()}-active-39e
+                </pre>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`0002012658001BR.GOV.BCB.PIX0136gympulse-license-saas-${licenseSelectedPlan.toLowerCase()}-active-39e`);
+                    setCopiedDashboardPix(true);
+                    setTimeout(() => setCopiedDashboardPix(false), 2000);
+                  }}
+                  className="bg-[#39FF14] text-black text-[9px] font-black uppercase font-mono px-3 py-1.5 rounded-lg shrink-0 hover:bg-[#39FF14]/80 active:scale-95 transition cursor-pointer"
+                >
+                  {copiedDashboardPix ? 'Copiado!' : 'Copiar Chave'}
+                </button>
+              </div>
+
+              {copiedDashboardPix && (
+                <p className="text-[9px] text-[#39FF14] font-mono animate-pulse">✓ Chave copiada para a área de transferência!</p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setLicensePaymentLoadingStep(1);
+                  setTimeout(() => {
+                    setLicensePaymentLoadingStep(3);
+                    setTimeout(() => {
+                      if (onUpdateTrainer && activeTrainer) {
+                        onUpdateTrainer({
+                          ...activeTrainer,
+                          subscriptionStatus: 'paid',
+                          selectedPlan: licenseSelectedPlan
+                        });
+                      }
+                      setLicensePaymentLoadingStep(4);
+                      setTimeout(() => {
+                        setLicensePaymentLoadingStep(0);
+                      }, 2000);
+                    }, 1200);
+                  }, 1200);
+                }}
+                className="w-full max-w-sm mx-auto bg-[#39FF14] text-black font-extrabold uppercase font-mono tracking-wider py-3 rounded-xl text-xs transition cursor-pointer mt-2"
+              >
+                Confirmar Pagamento via Pix
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4 animate-fade-in">
+              <div className="bg-neutral-950 border border-neutral-850 p-6 rounded-2xl text-center space-y-4">
+                <div className="w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400">
+                  <Lock size={26} />
+                </div>
+                
+                <div className="space-y-1.5 text-center">
+                  <p className="text-xs text-white font-mono uppercase tracking-widest font-black">Pagamento Direto via Stripe</p>
+                  <p className="text-[11px] text-neutral-400 leading-relaxed font-sans max-w-sm mx-auto">
+                    Você selecionou o plano <strong className="text-white text-xs">{licenseSelectedPlan}</strong>. Nós conectamos diretamente ao gateway de pagamentos criptografado oficial da <strong>Stripe</strong>.
+                  </p>
+                </div>
+
+                <div className="bg-[#0f1015] border border-[#1b1c24] p-3.5 rounded-xl flex items-center justify-between text-xs font-mono max-w-xs mx-auto">
+                  <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Valor da licença:</span>
+                  <span className="text-white font-black text-sm">
+                    {licenseSelectedPlan === 'Mensal' ? 'R$ 39,90/mês' : licenseSelectedPlan === 'Trimestral' ? 'R$ 97,00/trimestre' : 'R$ 297,00/ano'}
+                  </span>
+                </div>
+
+                {saasStripeError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-left space-y-2.5 animate-scale-up">
+                    <div>
+                      <p className="text-[10px] font-mono text-red-500 uppercase font-black leading-none flex items-center gap-1">
+                        ⚠️ Erro do Stripe (Permissão/Chave)
+                      </p>
+                      <p className="text-[10px] text-neutral-300 leading-normal font-sans mt-1">
+                        {saasStripeError}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleBypassStripeSaaSSimulate}
+                      className="w-full bg-[#39FF14] hover:bg-[#34e212] text-black font-mono uppercase font-black text-[10px] tracking-wide py-2 px-3 rounded-lg text-center cursor-pointer transition"
+                    >
+                      ⚡ Ignorar Erro e Usar Pagamento Simulado (Testar)
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1.5 justify-center text-[10px] text-neutral-500 font-mono">
+                  <Check size={12} className="text-indigo-400" />
+                  <span>Ambiente seguro certificado por Stripe Checkout</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleStripeCheckoutSaaS}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs py-3.5 rounded-xl transition shadow-lg shadow-indigo-600/25 hover:shadow-indigo-600/40 cursor-pointer text-center uppercase tracking-wider flex items-center justify-center gap-2"
+              >
+                <Lock size={12} className="text-indigo-200" /> Ir para o Stripe (Pagar Assinatura)
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-center border-t border-neutral-900 pt-4">
+            <button
+              onClick={() => onLogout()}
+              className="text-xs text-neutral-500 hover:text-white font-bold font-mono uppercase tracking-widest cursor-pointer animate-pulse"
+            >
+              ← Voltar ao Login
+            </button>
+          </div>
+        </div>
+
+        {/* Ensure the mockup Stripe Checkout overlay renders inside early return block if it's active */}
+        {showSimulatedStripe && (
+          <SimulatedStripeCheckout
+            planName={licenseSelectedPlan}
+            price={
+              licenseSelectedPlan === 'Mensal' ? 39.90 : 
+              licenseSelectedPlan === 'Trimestral' ? 97.00 : 
+              licenseSelectedPlan === 'Semestral' ? 180.00 : 297.00
+            }
+            studentName={activeTrainer?.name || 'Daniel Coach'}
+            onSuccess={() => {
+              setShowSimulatedStripe(false);
+              setLicensePaymentLoadingStep(4); // Trigger success step
+              if (onUpdateTrainer && activeTrainer) {
+                onUpdateTrainer({
+                  ...activeTrainer,
+                  subscriptionStatus: 'paid',
+                  selectedPlan: licenseSelectedPlan
+                });
+              }
+              setTimeout(() => {
+                setLicensePaymentLoadingStep(0);
+              }, 2000);
+            }}
+            onCancel={() => {
+              setShowSimulatedStripe(false);
+              setLicensePaymentLoadingStep(0);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col font-sans pb-16">
       
@@ -797,23 +1068,39 @@ export default function TrainerDashboard({
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 w-full">
                     <button
                       type="button"
                       onClick={() => setShowProfileModal(true)}
-                      className="flex-1 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 hover:text-white font-bold text-[11px] py-2 rounded-lg transition cursor-pointer"
+                      className="w-full bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 hover:text-white font-bold text-[11px] py-2 rounded-lg transition cursor-pointer"
                     >
                       Configurar Perfil / Link
                     </button>
                     {activeTrainer?.subscriptionStatus === 'trial' && (
-                      <button
-                        type="button"
-                        onClick={() => setShowUpgradeModal(true)}
-                        className="bg-emerald-500/15 border border-emerald-500/40 hover:bg-emerald-500 hover:text-black text-emerald-400 font-extrabold text-[11px] px-4 py-2 rounded-lg transition cursor-pointer flex items-center gap-1"
-                      >
-                        <DollarSign size={13} />
-                        <span>Regularizar Licença</span>
-                      </button>
+                      <div className="flex gap-2 w-full">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm("Deseja realmente CANCELAR o seu período de testes grátis? Seu acesso será suspenso imediatamente e você precisará assinar um plano pago para liberar o sistema.")) {
+                              onUpdateTrainer({
+                                ...activeTrainer,
+                                subscriptionStatus: 'expired'
+                              });
+                            }
+                          }}
+                          className="flex-1 bg-red-950/40 border border-red-500/35 hover:bg-red-900 hover:text-white text-red-400 font-bold text-[10px] py-2 px-3 rounded-lg transition cursor-pointer"
+                        >
+                          Cancelar Teste (Simular Bloqueio)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowUpgradeModal(true)}
+                          className="flex-1 bg-emerald-500/15 border border-emerald-500/40 hover:bg-emerald-555 hover:text-black text-[#39FF14] font-extrabold text-[10px] py-2 px-3 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <DollarSign size={12} />
+                          <span>Ativar Licença</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2126,7 +2413,8 @@ export default function TrainerDashboard({
                               pixQrCode: profilePixQrCode.trim(),
                               phoneWhatsApp: profilePhoneWhatsApp.trim(),
                               stripeEnabled: profileStripeEnabled,
-                              stripePublishableKey: profileStripePublishableKey.trim()
+                              stripePublishableKey: profileStripePublishableKey.trim(),
+                              stripeSecretKey: profileStripeSecretKey.trim()
                             };
                             onUpdateTrainer(updated);
                             setSavedReceivingFeedback(true);
@@ -2135,13 +2423,112 @@ export default function TrainerDashboard({
                         }}
                         className="bg-[#39FF14] text-black px-4 py-2 bg-[#39FF14] hover:bg-green-400 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 font-mono uppercase w-full sm:w-auto"
                       >
-                        <Check size={13} /> Gravar Dados de Recebimento
+                        <Check size={13} /> Gravar Dados de Recebimento Pix
                       </button>
                     </div>
 
                     {savedReceivingFeedback && (
                       <p className="text-[#39FF14] text-[10px] text-right font-mono animate-pulse">✓ Meios de recebimento salvos com sucesso!</p>
                     )}
+                  </div>
+
+                  {/* Dedicated Stripe API Credentials Integration Card */}
+                  <div className="p-5 bg-neutral-900/80 rounded-xl border border-neutral-800 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between border-b border-neutral-800 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <Lock size={16} className="text-[#39FF14]" />
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Integração Direta Stripe</h4>
+                      </div>
+                      <span className="text-[8px] font-mono font-bold bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/20">CREDENCIAIS EXCLUSIVAS</span>
+                    </div>
+
+                    <p className="text-[10px] text-neutral-400 font-sans leading-relaxed">
+                      Habilite pagamentos via cartão de crédito para seus alunos de consultoria conectando sua própria conta Stripe. Se as chaves estiverem em branco ou se a chave secreta expirar, o portal mudará automaticamente para o simulador seguro GymPulse para testes de fluxo.
+                    </p>
+
+                    <div className="flex items-center justify-between bg-neutral-950 p-2.5 rounded-xl border border-neutral-850">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] text-white font-mono font-bold uppercase block text-left">Habilitar checkout Stripe</span>
+                        <span className="text-[9px] text-neutral-500 block text-left">Permite receber por cartão de crédito direto dos alunos</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setProfileStripeEnabled(!profileStripeEnabled)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          profileStripeEnabled ? 'bg-[#39FF14]' : 'bg-neutral-850'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${
+                            profileStripeEnabled ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {profileStripeEnabled && (
+                      <div className="space-y-3 animate-fade-in text-left">
+                        <div>
+                          <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest mb-1.5">Stripe Publishable Key (pk_test_...)</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: pk_test_51Nx..."
+                            value={profileStripePublishableKey}
+                            onChange={(e) => setProfileStripePublishableKey(e.target.value)}
+                            className="w-full bg-neutral-950 border border-neutral-800 text-xs font-mono text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] text-neutral-400 font-mono uppercase tracking-widest mb-1.5">Stripe Secret Key (sk_test_... ou rk_test_...)</label>
+                          <div className="relative">
+                            <input
+                              type={showSecretKeyField ? 'text' : 'password'}
+                              placeholder="Ex: sk_test_51Nx... ou rk_test_..."
+                              value={profileStripeSecretKey}
+                              onChange={(e) => setProfileStripeSecretKey(e.target.value)}
+                              className="w-full bg-neutral-950 border border-neutral-800 text-xs font-mono text-white pl-3 pr-10 py-2.5 rounded-xl focus:outline-none focus:border-[#39FF14] transition"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSecretKeyField(!showSecretKeyField)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition cursor-pointer"
+                            >
+                              {showSecretKeyField ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                          <p className="text-[8px] font-mono text-neutral-550 mt-1 leading-normal">
+                            🔒 <strong>Segurança de Credenciais Garantida:</strong> Sua Secret Key é transmitida através de tráfego HTTPS criptografado direto ponta-a-ponta e armazenada de forma segura na nuvem da consultoria.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onUpdateTrainer && activeTrainer) {
+                            const updated: Trainer = {
+                              ...activeTrainer,
+                              pixKeyType: profilePixKeyType,
+                              pixKey: profilePixKey.trim(),
+                              pixQrCode: profilePixQrCode.trim(),
+                              phoneWhatsApp: profilePhoneWhatsApp.trim(),
+                              stripeEnabled: profileStripeEnabled,
+                              stripePublishableKey: profileStripePublishableKey.trim(),
+                              stripeSecretKey: profileStripeSecretKey.trim()
+                            };
+                            onUpdateTrainer(updated);
+                            setSavedReceivingFeedback(true);
+                            setTimeout(() => setSavedReceivingFeedback(false), 3000);
+                          }
+                        }}
+                        className="bg-indigo-600 hover:bg-[#39FF14] hover:text-black text-white px-4 py-2 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 font-mono uppercase w-full sm:w-auto"
+                      >
+                        <Check size={13} /> Gravar Credenciais Stripe
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -2785,7 +3172,8 @@ export default function TrainerDashboard({
                     pixKey: profilePixKey.trim(),
                     phoneWhatsApp: profilePhoneWhatsApp.trim(),
                     stripeEnabled: profileStripeEnabled,
-                    stripePublishableKey: profileStripePublishableKey.trim()
+                    stripePublishableKey: profileStripePublishableKey.trim(),
+                    stripeSecretKey: profileStripeSecretKey.trim()
                   };
                   onUpdateTrainer(updated);
                   setShowProfileModal(false);

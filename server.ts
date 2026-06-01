@@ -27,12 +27,24 @@ async function startServer() {
   // API Route for Stripe Checkout Session creation
   app.post("/api/stripe/create-checkout-session", async (req, res) => {
     try {
-      const { planName, price, successUrl, cancelUrl, trainerId, studentId } = req.body;
+      const { planName, price, successUrl, cancelUrl, trainerId, studentId, stripeSecretKey } = req.body;
 
-      const stripeClient = getStripe();
+      let stripeClient: Stripe | null = null;
+      if (stripeSecretKey && stripeSecretKey.trim()) {
+        try {
+          stripeClient = new Stripe(stripeSecretKey.trim());
+        } catch (initErr) {
+          console.error("Invalid custom Stripe Secret Key supplied by trainer:", initErr);
+        }
+      }
+
+      if (!stripeClient) {
+        stripeClient = getStripe();
+      }
+
       if (!stripeClient) {
         // Fallback for simulation when STRIPE_SECRET_KEY is not defined
-        console.warn("STRIPE_SECRET_KEY environment variable is not defined. Initiating client-side simulation.");
+        console.warn("STRIPE_SECRET_KEY environment variable is not defined and no custom key provided. Initiating sandbox simulation.");
         return res.json({
           isSimulation: true,
           message: "Modo Simulação (Sem Chave Secreta do Stripe configurada)"
@@ -74,6 +86,23 @@ async function startServer() {
       return res.json({ sessionUrl: session.url, isSimulation: false });
     } catch (error: any) {
       console.error("Error creating Stripe checkout session:", error);
+      const errMsg = error.message || "";
+      const isKeyError = errMsg.includes("API key") || 
+                         errMsg.includes("apiKey") || 
+                         errMsg.includes("authentication") || 
+                         errMsg.includes("key provided") || 
+                         errMsg.includes("test key") || 
+                         errMsg.includes("restricted") || 
+                         errMsg.includes("Expired");
+      
+      if (isKeyError) {
+        console.warn("Stripe key validation failed. Falling back to secure sandbox simulation session.");
+        return res.json({ 
+          isSimulation: true, 
+          message: "A chave secreta do Stripe está expirada ou inválida. Mudando automaticamente para modo de simulação seguro para teste de fluxo.",
+          error: errMsg
+        });
+      }
       return res.status(500).json({ error: error.message });
     }
   });

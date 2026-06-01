@@ -150,5 +150,6 @@ export interface Trainer {
   phoneWhatsApp?: string;
   stripeEnabled?: boolean;
   stripePublishableKey?: string;
+  stripeSecretKey?: string;
 }
 

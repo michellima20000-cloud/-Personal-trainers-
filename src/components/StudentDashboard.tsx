@@ -228,6 +228,9 @@ export default function StudentDashboard({
     setIsStripeProcessing(true);
     setStripeError('');
     try {
+      const studentTrainer = (trainers || []).find(t => t.id === currentStudent.trainerId);
+      const customSecretKey = studentTrainer?.stripeSecretKey || '';
+
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
@@ -239,7 +242,8 @@ export default function StudentDashboard({
           successUrl: window.location.origin + window.location.pathname + `?student_payment=success&studentId=${currentStudent.id}&plan=${currentStudent.plan || 'Mensal'}`,
           cancelUrl: window.location.href,
           trainerId: currentStudent.trainerId || '',
-          studentId: currentStudent.id
+          studentId: currentStudent.id,
+          stripeSecretKey: customSecretKey
         })
       });
 
