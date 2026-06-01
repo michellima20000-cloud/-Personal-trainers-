@@ -36,6 +36,9 @@ export default function AdminDashboard({
   const [studentSearch, setStudentSearch] = useState('');
   const [logsSearch, setLogsSearch] = useState('');
 
+  // Delete student confirmation state
+  const [confirmingDeleteStudentId, setConfirmingDeleteStudentId] = useState<string | null>(null);
+
   // Diagnostic states
   const [diagnosticsTesting, setDiagnosticsTesting] = useState(false);
   const [diagnosticsResult, setDiagnosticsResult] = useState<{
@@ -476,17 +479,38 @@ export default function AdminDashboard({
                       </button>
                       
                       {onDeleteStudent && (
-                        <button
-                          onClick={() => {
-                            if (confirm(`Deseja remover permanente o perfil de ${s.name}?`)) {
-                              onDeleteStudent(s.id);
-                            }
-                          }}
-                          className="bg-neutral-900 border border-neutral-800 hover:bg-red-950/20 hover:border-red-500/40 hover:text-red-400 p-2 rounded-xl transition cursor-pointer"
-                          title="Remover Aluno"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        confirmingDeleteStudentId === s.id ? (
+                          <div className="flex items-center gap-1.5 bg-red-950/30 border border-red-500/20 px-2.5 py-1 rounded-xl animate-fade-in text-[10px]">
+                            <span className="text-red-300 font-extrabold font-sans">Excluir?</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDeleteStudent(s.id);
+                                setConfirmingDeleteStudentId(null);
+                              }}
+                              className="bg-red-600 hover:bg-red-500 text-white font-extrabold px-1.5 py-1 rounded-lg text-[9px] uppercase tracking-wider transition cursor-pointer"
+                            >
+                              Sim
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmingDeleteStudentId(null)}
+                              className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-1.5 py-1 rounded-lg text-[9px] font-extrabold uppercase tracking-wider transition cursor-pointer"
+                            >
+                              Não
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setConfirmingDeleteStudentId(s.id);
+                            }}
+                            className="bg-neutral-900 border border-neutral-800 hover:bg-red-950/20 hover:border-red-500/40 hover:text-red-400 p-2 rounded-xl transition cursor-pointer"
+                            title="Remover Aluno"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )
                       )}
                     </div>
                   </div>

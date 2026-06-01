@@ -263,7 +263,10 @@ export default function TrainerDashboard({
       setLicenseSelectedPlan(activeTrainer.selectedPlan || 'Trimestral');
     }
   }, [activeTrainer]);
-  
+
+  // Inline delete confirmation state
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+
   // States for forms and modal toggles
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [newStudent, setNewStudent] = useState<Partial<Student>>({
@@ -279,6 +282,11 @@ export default function TrainerDashboard({
   });
 
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '');
+
+  React.useEffect(() => {
+    setIsConfirmingDelete(false);
+  }, [selectedStudentId]);
+
   const [editingSheetLetter, setEditingSheetLetter] = useState<'A' | 'B' | 'C' | 'D' | 'E'>('A');
   const [selectedExerciseId, setSelectedExerciseId] = useState(EXERCISE_BANK[0].id);
   const [newExerciseSets, setNewExerciseSets] = useState(4);
@@ -1121,17 +1129,41 @@ export default function TrainerDashboard({
                   
                   {/* Delete Student action */}
                   <div className="mt-4 pt-4 border-t border-neutral-800/60 flex justify-end">
-                    <button 
-                      onClick={() => {
-                        if (confirm(`Tem certeza que deseja excluir o cadastro de ${selectedStudent.name}?`)) {
-                          onDeleteStudent(selectedStudent.id);
-                          setSelectedStudentId(students[0]?.id || '');
-                        }
-                      }}
-                      className="text-red-400 hover:text-red-300 text-xs font-mono flex items-center gap-1 transition"
-                    >
-                      <Trash2 size={13} /> Deletar Aluno do Sistema
-                    </button>
+                    {isConfirmingDelete ? (
+                      <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 bg-red-950/20 border border-red-500/20 p-3 rounded-xl animate-fade-in text-[11px] w-full sm:w-auto justify-between">
+                        <span className="text-red-300 font-sans font-extrabold text-left mb-1 sm:mb-0">
+                          Confirmar a exclusão permanente de {selectedStudent.name}?
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onDeleteStudent(selectedStudent.id);
+                              setSelectedStudentId(students.find(s => s.id !== selectedStudent.id)?.id || '');
+                              setIsConfirmingDelete(false);
+                            }}
+                            className="bg-red-600 hover:bg-red-500 text-white font-extrabold px-3 py-1.5 rounded-lg text-[10px] uppercase font-mono tracking-wider transition cursor-pointer"
+                          >
+                            Sim, Excluir
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsConfirmingDelete(false)}
+                            className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase font-mono tracking-wider transition cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button 
+                        type="button"
+                        onClick={() => setIsConfirmingDelete(true)}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/5 px-3 py-2 rounded-lg text-xs font-mono flex items-center gap-1.5 transition duration-200 cursor-pointer"
+                      >
+                        <Trash2 size={13} /> Deletar Aluno do Sistema
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

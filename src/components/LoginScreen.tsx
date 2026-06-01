@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Dumbbell, Shield, Lock, Eye, EyeOff, Key, 
   Sparkles, Check, AlertCircle, ArrowRight, Laptop, Smartphone,
-  DollarSign, CheckSquare, Sparkle, QrCode, Clipboard, Star, Zap, Award
+  DollarSign, CheckSquare, Sparkle, QrCode, Clipboard, Star, Zap, Award,
+  Camera, Upload
 } from 'lucide-react';
 import { Student, Trainer, PlanType } from '../types';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
@@ -28,6 +29,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [studentPassword, setStudentPassword] = useState('123456');
   const [showStudentPass, setShowStudentPass] = useState(false);
 
+  // New Student Credentials Login States
+  const [studentLoginMode, setStudentLoginMode] = useState<'credentials' | 'demo'>('credentials');
+  const [studentLoginEmail, setStudentLoginEmail] = useState('');
+  const [studentLoginPassword, setStudentLoginPassword] = useState('');
+
   // Student Self-Registration State
   const [isRegisteringStudent, setIsRegisteringStudent] = useState(false);
   const [regName, setRegName] = useState('');
@@ -36,6 +42,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [regWeight, setRegWeight] = useState<number>(75);
   const [regHeight, setRegHeight] = useState<number>(1.75);
   const [regRestrictions, setRegRestrictions] = useState('');
+  const [regAvatar, setRegAvatar] = useState<string>('');
+  const [isDragging, setIsDragging] = useState(false);
+  const [regStudentEmail, setRegStudentEmail] = useState('');
+  const [regStudentPassword, setRegStudentPassword] = useState('');
+  const [regStudentTrainerId, setRegStudentTrainerId] = useState(trainers[0]?.id || '');
 
   // Trainer Self-Registration and Checkout States
   const [isRegisteringTrainer, setIsRegisteringTrainer] = useState(false);
@@ -325,33 +336,107 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setShowSimulatedStripe(true);
   };
 
+  // Dynamically attach email and password to mock accounts if they are not stored
+  const getStudentEmail = (s: Student) => {
+    if (s.email) return s.email;
+    return `${s.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')}@gympulse.com.br`;
+  };
+
+  const getStudentPassword = (s: Student) => {
+    if (s.password) return s.password;
+    return '123456';
+  };
+
   const handleStudentLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
     
-    if (!selectedStudentId) {
-      setErrorMsg('Por favor, selecione um perfil de aluno cadastrado.');
-      return;
-    }
-    
-    if (!studentPassword) {
-      setErrorMsg('Por favor, insira a senha de acesso de 6 dígitos.');
-      return;
-    }
+    if (studentLoginMode === 'credentials') {
+      if (!studentLoginEmail.trim()) {
+        setErrorMsg('Por favor, informe seu e-mail de acesso cadastrado.');
+        return;
+      }
+      if (!studentLoginPassword) {
+        setErrorMsg('Por favor, insira sua senha de acesso.');
+        return;
+      }
 
-    // Checking if mock student password is correct (defaults to 123456 or aluno123 for ease)
-    if (studentPassword === '123456' || studentPassword === 'aluno123') {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setSuccessMsg(`Sucesso! Carregando treino exclusivo de ${currentSelectedStudent?.name}...`);
+      const emailClean = studentLoginEmail.trim().toLowerCase();
+      const matchedStudent = students.find(s => {
+        const sEmail = getStudentEmail(s).toLowerCase();
+        const sPass = getStudentPassword(s);
+        return sEmail === emailClean && sPass === studentLoginPassword;
+      });
+
+      if (matchedStudent) {
+        setLoading(true);
         setTimeout(() => {
-          onLoginSuccess('student', selectedStudentId);
-        }, 1200);
-      }, 1000);
+          setLoading(false);
+          setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
+          setTimeout(() => {
+            onLoginSuccess('student', matchedStudent.id);
+          }, 1200);
+        }, 1000);
+      } else {
+        setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha criados na sua conta.');
+      }
     } else {
-      setErrorMsg('Senha incorreta! Utilize 123456 para testes de demonstração.');
+      if (!selectedStudentId) {
+        setErrorMsg('Por favor, selecione um perfil de aluno cadastrado.');
+        return;
+      }
+      
+      const currentSelectedStudent = students.find(s => s.id === selectedStudentId);
+      if (!currentSelectedStudent) return;
+      
+      const expectedPass = getStudentPassword(currentSelectedStudent);
+      
+      if (studentPassword === expectedPass) {
+        setLoading(true);
+        setTimeout(() => {
+          setLoading(false);
+          setSuccessMsg(`Sucesso! Carregando treino de demonstração de ${currentSelectedStudent.name}...`);
+          setTimeout(() => {
+            onLoginSuccess('student', selectedStudentId);
+          }, 1200);
+        }, 1000);
+      } else {
+        setErrorMsg(`Senha incorreta! Use "${expectedPass}" para esta conta de demonstração.`);
+      }
+    }
+  };
+
+  const handleRegAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setRegAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setRegAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -365,13 +450,32 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       return;
     }
 
+    if (!regStudentEmail.trim() || !regStudentEmail.includes('@')) {
+      setErrorMsg('Por favor, informe um e-mail válido para seu cadastro seguro.');
+      return;
+    }
+
+    if (!regStudentPassword.trim() || regStudentPassword.length < 4) {
+      setErrorMsg('Por favor, informe uma senha operacional de pelo menos 4 dígitos para seu login.');
+      return;
+    }
+
     setLoading(true);
     setTimeout(() => {
       const studentId = 's_' + Date.now();
+      
+      // Select the linked trainer: either the referredTrainer from invitation link, or selected trainer from dropdown list
+      const finalTrainerId = referredTrainer ? referredTrainer.id : (regStudentTrainerId || undefined);
+      const chosenTrainerName = referredTrainer 
+        ? referredTrainer.name 
+        : (trainers.find(t => t.id === finalTrainerId)?.name || 'Consultoria Geral');
+
       const createdStudent: Student = {
         id: studentId,
         name: regName.trim(),
-        avatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 900000)}?w=150&auto=format&fit=crop&q=80`,
+        email: regStudentEmail.trim().toLowerCase(),
+        password: regStudentPassword,
+        avatar: regAvatar || `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 900000)}?w=150&auto=format&fit=crop&q=80`,
         age: Number(regAge),
         weight: Number(regWeight),
         height: Number(regHeight),
@@ -379,20 +483,23 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         restrictions: regRestrictions ? regRestrictions.trim() : 'Nenhuma restrição informada pelo próprio aluno.',
         history: referredTrainer 
           ? `Cadastrado automaticamente via indicação do treinador ${referredTrainer.name}.`
-          : 'Cadastrado no login de portal.',
+          : `Cadastrado no portal direto e vinculado ao treinador ${chosenTrainerName}.`,
         plan: 'Mensal',
         status: 'Ativo',
         joinedAt: new Date().toLocaleDateString('pt-BR'),
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 150.00,
-        trainerId: referredTrainer ? referredTrainer.id : undefined
+        trainerId: finalTrainerId
       };
 
       onAddStudent(createdStudent);
       setLoading(false);
-      setSuccessMsg(`Cadastro efetuado! Bem-vindo(a), ${createdStudent.name}. Entrando no portal...`);
+      setSuccessMsg(`Cadastro efetuado! Bem-vindo(a), ${createdStudent.name}. Logando diretamente...`);
       setTimeout(() => {
         onLoginSuccess('student', studentId);
+        setRegAvatar('');
+        setRegStudentEmail('');
+        setRegStudentPassword('');
       }, 1300);
     }, 1000);
   };
@@ -1364,67 +1471,135 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
             {!isRegisteringStudent ? (
               <form onSubmit={handleStudentLogin} className="space-y-4">
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                    Escolha seu Perfil de Aluno
-                  </label>
-                  <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-1">
-                    <select
-                      value={selectedStudentId}
-                      onChange={(e) => setSelectedStudentId(e.target.value)}
-                      className="w-full bg-transparent text-xs text-white py-2.5 px-3 border-none outline-none font-bold cursor-pointer font-sans"
-                      disabled={loading}
-                    >
-                      <option value="" disabled className="text-neutral-500 bg-neutral-950">Selecione seu nome</option>
-                      {students.map((student) => (
-                        <option key={student.id} value={student.id} className="text-white bg-neutral-950">
-                          {student.name} ({student.objective})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  {/* Profile Preview Card below selector */}
-                  {currentSelectedStudent && (
-                    <div className="mt-3 bg-neutral-950/60 p-3 rounded-xl border border-neutral-800 flex items-center gap-3 animate-fade-in">
-                      <img 
-                        src={currentSelectedStudent.avatar} 
-                        alt={currentSelectedStudent.name} 
-                        className="w-9 h-9 rounded-full object-cover border border-neutral-700 pointer-events-none"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div>
-                        <p className="text-[11px] font-extrabold text-white leading-tight">{currentSelectedStudent.name}</p>
-                        <p className="text-[9px] font-mono text-neutral-400 mt-0.5 uppercase tracking-wide leading-none">{currentSelectedStudent.plan} de consultoria</p>
-                      </div>
-                    </div>
-                  )}
+                {/* Login Mode Switcher */}
+                <div className="flex justify-end mb-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStudentLoginMode(studentLoginMode === 'credentials' ? 'demo' : 'credentials');
+                      setErrorMsg('');
+                    }}
+                    className="text-[10px] text-[#39FF14] hover:underline font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-transparent border-none outline-none"
+                  >
+                    {studentLoginMode === 'credentials' ? '⚡ Ver Contas de Teste / Demo' : '🔒 Login Seguro (E-mail e Senha)'}
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                    Senha / Código de Acesso do Aluno
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showStudentPass ? 'text' : 'password'}
-                      value={studentPassword}
-                      onChange={(e) => setStudentPassword(e.target.value)}
-                      placeholder="Digite sua senha padrão (Ex: 123456)"
-                      maxLength={12}
-                      className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                      required
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowStudentPass(!showStudentPass)}
-                      className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
-                    >
-                      {showStudentPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
+                {studentLoginMode === 'credentials' ? (
+                  // Credentials Login Form (Individual and Secure)
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                        E-mail de Acesso do Aluno
+                      </label>
+                      <input
+                        type="email"
+                        value={studentLoginEmail}
+                        onChange={(e) => setStudentLoginEmail(e.target.value)}
+                        placeholder="Seu e-mail (Ex: michel@gympulse.com)"
+                        className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                        Sua Senha de Acesso
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showStudentPass ? 'text' : 'password'}
+                          value={studentLoginPassword}
+                          onChange={(e) => setStudentLoginPassword(e.target.value)}
+                          placeholder="Sua senha criada"
+                          className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                          required
+                          disabled={loading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowStudentPass(!showStudentPass)}
+                          className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
+                        >
+                          {showStudentPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  // Demo selector Form for developers / review
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                        Escolha seu Perfil de Aluno
+                      </label>
+                      <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-1">
+                        <select
+                          value={selectedStudentId}
+                          onChange={(e) => setSelectedStudentId(e.target.value)}
+                          className="w-full bg-transparent text-xs text-white py-2.5 px-3 border-none outline-none font-bold cursor-pointer font-sans"
+                          disabled={loading}
+                        >
+                          <option value="" disabled className="text-neutral-500 bg-white dark:bg-neutral-950 font-sans">Selecione seu nome</option>
+                          {students.map((student) => {
+                            const customMail = getStudentEmail(student);
+                            return (
+                              <option 
+                                key={student.id} 
+                                value={student.id} 
+                                className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans"
+                              >
+                                {student.name} ({customMail})
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                      
+                      {/* Profile Preview Card below selector */}
+                      {currentSelectedStudent && (
+                        <div className="mt-3 bg-neutral-950/60 p-3 rounded-xl border border-neutral-800 flex items-center gap-3 animate-fade-in">
+                          <img 
+                            src={currentSelectedStudent.avatar} 
+                            alt={currentSelectedStudent.name} 
+                            className="w-9 h-9 rounded-full object-cover border border-neutral-700 pointer-events-none"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div>
+                            <p className="text-[11px] font-extrabold text-white leading-tight">{currentSelectedStudent.name}</p>
+                            <p className="text-[9px] font-mono text-neutral-400 mt-0.5 uppercase tracking-wide leading-none">{getStudentEmail(currentSelectedStudent)}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                        Senha / Código de Acesso do Aluno
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showStudentPass ? 'text' : 'password'}
+                          value={studentPassword}
+                          onChange={(e) => setStudentPassword(e.target.value)}
+                          placeholder="Digite sua senha padrão (Ex: 123456)"
+                          maxLength={12}
+                          className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                          required
+                          disabled={loading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowStudentPass(!showStudentPass)}
+                          className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
+                        >
+                          {showStudentPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="submit"
@@ -1439,6 +1614,75 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
               </form>
             ) : (
               <form onSubmit={handleStudentSelfRegistration} className="space-y-3.5">
+                {/* Custom Interactive Avatar Upload */}
+                <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-neutral-950 border border-neutral-800/80 mb-2">
+                  <span className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-2 text-center w-full">
+                    Sua Foto de Perfil
+                  </span>
+                  
+                  <div className="relative group">
+                    <div 
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`relative w-20 h-20 rounded-full border-2 border-dashed flex items-center justify-center overflow-hidden transition-all duration-300 ${
+                        isDragging 
+                          ? 'border-[#39FF14] bg-[#39FF14]/10 scale-105' 
+                          : regAvatar 
+                            ? 'border-neutral-700 hover:border-[#39FF14]' 
+                            : 'border-neutral-800 hover:border-[#39FF14]/50 bg-neutral-900/60'
+                      }`}
+                    >
+                      <label 
+                        htmlFor="student-avatar-input" 
+                        className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer z-10"
+                      >
+                        {regAvatar ? (
+                          <>
+                            <img 
+                              src={regAvatar} 
+                              alt="Avatar Preview" 
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all duration-200">
+                              <Camera className="w-5 h-5 text-white" />
+                              <span className="text-[8px] text-white font-sans mt-1">Alterar</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-2 text-center">
+                            <Upload className="w-5 h-5 text-neutral-500 group-hover:text-[#39FF14] transition" />
+                            <span className="text-[8px] text-neutral-400 font-sans mt-1 group-hover:text-white transition">Enviar Foto</span>
+                          </div>
+                        )}
+                        <input 
+                          id="student-avatar-input" 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleRegAvatarChange}
+                          className="hidden" 
+                          disabled={loading}
+                        />
+                      </label>
+                    </div>
+
+                    {regAvatar && (
+                      <button
+                        type="button"
+                        onClick={() => setRegAvatar('')}
+                        className="absolute -top-1 -right-1 bg-red-650 hover:bg-red-600 text-white rounded-full p-1 text-[8px] transition shadow-md z-20 font-bold border border-neutral-800"
+                        title="Remover foto"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  
+                  <p className="text-[9px] text-neutral-500 font-sans mt-2 text-center">
+                    Arraste sua imagem ou clique para selecionar. (Opcional)
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
                     Nome Completo
@@ -1452,6 +1696,79 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                     required
                     disabled={loading}
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 block">
+                      E-mail para Login
+                    </label>
+                    <input
+                      type="email"
+                      value={regStudentEmail}
+                      onChange={(e) => setRegStudentEmail(e.target.value)}
+                      placeholder="Ex: joao@gmail.com"
+                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 block">
+                      Senha de Acesso
+                    </label>
+                    <input
+                      type="password"
+                      value={regStudentPassword}
+                      onChange={(e) => setRegStudentPassword(e.target.value)}
+                      placeholder="Crie uma senha"
+                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                {/* Trainer Link and Association Selection */}
+                <div>
+                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 block">
+                    Personal Trainer Associado
+                  </label>
+                  {referredTrainer ? (
+                    <div className="bg-[#121214] border border-[#39FF14]/30 p-3 rounded-xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#39FF14] opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#39FF14]"></span>
+                        </span>
+                        <span className="text-xs text-white font-extrabold font-sans">
+                          {referredTrainer.name} (Link Ativo)
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Automaticamente Vinculado!</span>
+                    </div>
+                  ) : (
+                    <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-1">
+                      <select
+                        value={regStudentTrainerId}
+                        onChange={(e) => setRegStudentTrainerId(e.target.value)}
+                        className="w-full bg-transparent text-xs text-white py-2 px-3 border-none outline-none font-bold cursor-pointer font-sans"
+                        required={!referredTrainer}
+                        disabled={loading}
+                      >
+                        <option value="" disabled className="text-neutral-500 bg-white dark:bg-neutral-950 font-sans">Selecione seu Personal Trainer</option>
+                        {trainers.map((t) => (
+                          <option 
+                            key={t.id} 
+                            value={t.id} 
+                            className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans font-bold"
+                          >
+                            {t.name} ({t.selectedPlan} Plan)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1479,11 +1796,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                       required
                       disabled={loading}
                     >
-                      <option value="Hipertrofia">Hipertrofia</option>
-                      <option value="Emagrecimento">Emagrecimento</option>
-                      <option value="Condicionamento">Resistência</option>
-                      <option value="Definição">Definição</option>
-                      <option value="Reabilitação">Reabilitação</option>
+                      <option value="Hipertrofia" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Hipertrofia</option>
+                      <option value="Emagrecimento" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Emagrecimento</option>
+                      <option value="Condicionamento" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Resistência</option>
+                      <option value="Definição" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Definição</option>
+                      <option value="Reabilitação" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Reabilitação</option>
                     </select>
                   </div>
                 </div>
@@ -1580,10 +1897,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           
           <div className="bg-neutral-950/85 p-2.5 rounded-lg border border-neutral-800">
             <p className="font-bold text-[#39FF14] flex items-center gap-1">
-              <Smartphone size={11} /> Aluno (Qualquer):
+              <Smartphone size={11} /> Alunos (Pre-cadastrados):
             </p>
-            <p className="text-neutral-300 mt-1">Perfil: <span className="text-white font-extrabold">Selecione na lista</span></p>
-            <p className="text-neutral-300">Senha: <span className="text-white font-extrabold">123456</span></p>
+            <p className="text-neutral-300 mt-1">E-mail: <span className="text-white font-extrabold select-all">ana@gympulse.com.br</span></p>
+            <p className="text-neutral-300">Ou use a conta que você criar!</p>
+            <p className="text-neutral-300">Senha padrão: <span className="text-white font-extrabold">123456</span></p>
           </div>
         </div>
       </div>

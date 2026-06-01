@@ -515,18 +515,10 @@ export default function StudentDashboard({
             </h1>
           </div>
 
-          {/* Persona Switcher Dropdown */}
+          {/* Logged in indicator */}
           <div className="flex items-center gap-2 bg-neutral-900 px-3.5 py-2 rounded-xl border border-neutral-800">
             <span className="text-xs text-neutral-400 shrink-0 select-none">Logado como:</span>
-            <select
-              value={activeStudentId}
-              onChange={(e) => onSelectStudent(e.target.value)}
-              className="bg-transparent border-none text-xs font-bold text-white outline-none cursor-pointer pr-1"
-            >
-              {students.map(s => (
-                <option key={s.id} value={s.id}>{s.name} ({s.objective})</option>
-              ))}
-            </select>
+            <span className="text-xs font-bold text-white font-sans">{currentStudent.name} ({currentStudent.objective})</span>
           </div>
         </div>
       </div>
@@ -1439,182 +1431,89 @@ export default function StudentDashboard({
                   </div>
                 ) : (
                   <div className="space-y-4 w-full">
-                    {/* Interactive Payment Switcher */}
-                    <div className="flex items-center gap-1.5 bg-neutral-950 p-1.5 rounded-2xl border border-neutral-850/80 max-w-xs">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPaymentMethod('pix')}
-                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono uppercase font-black tracking-wider transition duration-150 cursor-pointer text-center ${
-                          selectedPaymentMethod === 'pix'
-                            ? 'bg-[#39FF14] text-black font-extrabold shadow-md shadow-[#39FF14]/10'
-                            : 'text-neutral-400 hover:text-white hover:bg-neutral-900/50'
-                        }`}
-                      >
-                        💸 Pix Direto
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPaymentMethod('stripe')}
-                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono uppercase font-black tracking-wider transition duration-150 cursor-pointer text-center ${
-                          selectedPaymentMethod === 'stripe'
-                            ? 'bg-[#6366f1] text-white font-extrabold shadow-md shadow-indigo-600/10'
-                            : 'text-neutral-400 hover:text-white hover:bg-neutral-900/50'
-                        }`}
-                      >
-                        💳 Cartão Stripe
-                      </button>
-                    </div>
+                    <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4 font-sans w-full animate-fade-in">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            PIX Direto para {trainer.name}
+                          </h4>
+                          <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                            Pague diretamente copiando a chave Pix abaixo. Em seguida ordene a confirmação e o sistema preencherá o texto do comprovante no WhatsApp do profissional!
+                          </p>
+                        </div>
+                        <span className="text-[10px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/30 px-2 py-0.5 rounded font-bold font-mono">
+                          {trainerPixType}
+                        </span>
+                      </div>
 
-                    {selectedPaymentMethod === 'pix' ? (
-                      <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4 font-sans w-full animate-fade-in">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                          <div>
-                            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                              PIX Direto para {trainer.name}
-                            </h4>
-                            <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
-                              Pague diretamente copiando a chave Pix abaixo. Em seguida ordene a confirmação e o sistema preencherá o texto do comprovante no WhatsApp do profissional!
-                            </p>
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                        {/* Interactive QR Code Simulator */}
+                        <div className="md:col-span-4 flex flex-col items-center justify-center bg-neutral-950 p-4 rounded-xl border border-neutral-900 shadow-inner">
+                          <div className="w-28 h-28 bg-white p-2 rounded-lg relative flex items-center justify-center overflow-hidden">
+                            {trainer && (trainer as any).pixQrCode ? (
+                              <img 
+                                src={(trainer as any).pixQrCode} 
+                                alt="Pix QR Code" 
+                                className="w-full h-full object-contain"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <>
+                                {/* Beautiful QR Code pattern with a custom center dot */}
+                                <div className="grid grid-cols-4 gap-1 w-full h-full opacity-90 select-none pointer-events-none">
+                                  <div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
+                                  <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div>
+                                  <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
+                                  <div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div>
+                                </div>
+                                {/* Minimalist central emblem */}
+                                <div className="absolute w-7 h-7 bg-[#09090b] border-2 border-white rounded-full flex items-center justify-center shadow">
+                                  <span className="text-[8px] font-black text-[#39FF14]">PIX</span>
+                                </div>
+                              </>
+                            )}
                           </div>
-                          <span className="text-[10px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/30 px-2 py-0.5 rounded font-bold font-mono">
-                            {trainerPixType}
-                          </span>
+                          <span className="text-[8px] text-neutral-500 font-mono mt-2 uppercase tracking-tight">Escaneie para pagar rápido</span>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-                          {/* Interactive QR Code Simulator */}
-                          <div className="md:col-span-4 flex flex-col items-center justify-center bg-neutral-950 p-4 rounded-xl border border-neutral-900 shadow-inner">
-                            <div className="w-28 h-28 bg-white p-2 rounded-lg relative flex items-center justify-center overflow-hidden">
-                              {trainer && (trainer as any).pixQrCode ? (
-                                <img 
-                                  src={(trainer as any).pixQrCode} 
-                                  alt="Pix QR Code" 
-                                  className="w-full h-full object-contain"
-                                  referrerPolicy="no-referrer"
-                                />
-                              ) : (
-                                <>
-                                  {/* Beautiful QR Code pattern with a custom center dot */}
-                                  <div className="grid grid-cols-4 gap-1 w-full h-full opacity-90 select-none pointer-events-none">
-                                    <div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
-                                    <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div>
-                                    <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
-                                    <div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div>
-                                  </div>
-                                  {/* Minimalist central emblem */}
-                                  <div className="absolute w-7 h-7 bg-[#09090b] border-2 border-white rounded-full flex items-center justify-center shadow">
-                                    <span className="text-[8px] font-black text-[#39FF14]">PIX</span>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                            <span className="text-[8px] text-neutral-500 font-mono mt-2 uppercase tracking-tight">Escaneie para pagar rápido</span>
-                          </div>
-
-                          {/* Copier and direct WhatsApp submitter button */}
-                          <div className="md:col-span-8 space-y-3.5">
-                            <div className="space-y-1">
-                              <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest leading-none">Chave PIX do Treinador</label>
-                              <div className="flex items-center gap-1.5 mt-1.5 bg-neutral-950 p-3 rounded-xl border border-neutral-800 text-xs font-mono text-[#39FF14] relative overflow-hidden select-all cursor-pointer">
-                                <span className="truncate flex-1 select-all">{trainerPixKey}</span>
-                                <button 
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(trainerPixKey);
-                                    setPixCopied(true);
-                                    setTimeout(() => setPixCopied(false), 2500);
-                                  }}
-                                  className="text-neutral-400 hover:text-white p-1 hover:bg-neutral-900 rounded transition shrink-0 cursor-pointer"
-                                  title="Copiar Chave Pix"
-                                >
-                                  <Copy size={13} />
-                                </button>
-                              </div>
-                            </div>
-
-                            {pixCopied && (
-                              <p className="text-[10px] text-emerald-400 font-bold animate-bounce flex items-center gap-1">
-                                ✔ Chave Pix copiada com sucesso! Transfira o valor de R$ {currentStudent.value.toFixed(2)}.
-                              </p>
-                            )}
-
-                            <div className="pt-2">
-                              <button
-                                onClick={handleWhatsAppConfirmation}
-                                className="bg-emerald-650 lg:bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-4 rounded-xl text-xs font-extrabold transition cursor-pointer w-full flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/10 active:scale-[0.98]"
+                        {/* Copier and direct WhatsApp submitter button */}
+                        <div className="md:col-span-8 space-y-3.5">
+                          <div className="space-y-1">
+                            <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-widest leading-none">Chave PIX do Treinador</label>
+                            <div className="flex items-center gap-1.5 mt-1.5 bg-neutral-950 p-3 rounded-xl border border-neutral-800 text-xs font-mono text-[#39FF14] relative overflow-hidden select-all cursor-pointer">
+                              <span className="truncate flex-1 select-all">{trainerPixKey}</span>
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(trainerPixKey);
+                                  setPixCopied(true);
+                                  setTimeout(() => setPixCopied(false), 2500);
+                                }}
+                                className="text-neutral-400 hover:text-white p-1 hover:bg-neutral-900 rounded transition shrink-0 cursor-pointer"
+                                title="Copiar Chave Pix"
                               >
-                                <MessageCircle size={15} /> Copiar Pix & Enviar Comprovante no WhatsApp
+                                <Copy size={13} />
                               </button>
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Direct Stripe integration card with absolute lock-security */
-                      <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4 font-sans w-full animate-fade-in">
-                        <div className="flex items-center gap-2 border-b border-neutral-850 pb-2.5">
-                          <div className="w-2.5 h-2.5 rounded-full bg-[#6366f1] animate-pulse"></div>
-                          <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">Cartão de Crédito via Stripe Checkout</span>
-                        </div>
 
-                        <div className="space-y-4">
-                          <div className="bg-[#0f1015] border border-neutral-850 p-3.5 rounded-xl flex items-center justify-between text-xs font-mono max-w-md">
-                            <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Plano a renovar:</span>
-                            <span className="text-white font-black text-sm">{currentStudent.plan}</span>
-                          </div>
-
-                          <div className="bg-[#0f1015] border border-neutral-850 p-3.5 rounded-xl flex items-center justify-between text-xs font-mono max-w-md">
-                            <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Valor da renovação:</span>
-                            <span className="text-[#39FF14] font-black text-sm">R$ {currentStudent.value.toFixed(2)}</span>
-                          </div>
-
-                          {stripeError && (
-                            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 max-w-md space-y-2 text-left animate-scale-up">
-                              <p className="text-[10px] font-mono text-red-500 uppercase font-black leading-none flex items-center gap-1">
-                                ⚠️ Erro do Stripe
-                              </p>
-                              <p className="text-[11px] text-neutral-300 leading-normal font-sans">
-                                {stripeError}
-                              </p>
-                            </div>
+                          {pixCopied && (
+                            <p className="text-[10px] text-emerald-400 font-bold animate-bounce flex items-center gap-1">
+                              ✔ Chave Pix copiada com sucesso! Transfira o valor de R$ {currentStudent.value.toFixed(2)}.
+                            </p>
                           )}
 
-                          {isStripeSuccess && (
-                            <div className="bg-[#39FF14]/10 border border-[#39FF14]/30 rounded-xl p-3 max-w-md space-y-1 text-left animate-scale-up">
-                              <p className="text-[10px] font-mono text-[#39FF14] uppercase font-black leading-none flex items-center gap-1 animate-bounce">
-                                ✔ Pagamento aprovado!
-                              </p>
-                              <p className="text-[11px] text-neutral-300 leading-normal font-sans">
-                                Seu acesso foi renovado gratuitamente na base de dados integrada. Obrigado!
-                              </p>
-                            </div>
-                          )}
-
-                          {isStripeProcessing && (
-                            <div className="flex items-center gap-2 py-2 text-neutral-400 font-mono text-xs">
-                              <div className="w-4 h-4 border-2 border-dashed border-[#6366f1] rounded-full animate-spin"></div>
-                              <span>Conectando ao gateway Stripe seguro...</span>
-                            </div>
-                          )}
-
-                          <div className="flex gap-2 max-w-md">
+                          <div className="pt-2">
                             <button
-                              type="button"
-                              disabled={isStripeProcessing}
-                              onClick={handleStripeCheckoutStudent}
-                              className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-black text-xs py-3.5 rounded-xl transition shadow-lg shadow-indigo-600/15 hover:shadow-indigo-600/30 cursor-pointer text-center uppercase tracking-wider font-mono flex items-center justify-center gap-2"
+                              onClick={handleWhatsAppConfirmation}
+                              className="bg-emerald-650 lg:bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-4 rounded-xl text-xs font-extrabold transition cursor-pointer w-full flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/10 active:scale-[0.98]"
                             >
-                              <Lock size={12} className="text-indigo-200" /> Ir para o Stripe e Pagar
+                              <MessageCircle size={15} /> Copiar Pix & Enviar Comprovante no WhatsApp
                             </button>
                           </div>
-
-                          <div className="flex items-center gap-1.5 text-[10px] text-neutral-500 font-mono">
-                            <Check size={12} className="text-emerald-400" />
-                            <span>Ambiente seguro certificado SSL e PCI-DSS oficial</span>
-                          </div>
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -1123,8 +1123,8 @@ export default function App() {
     handleSendMessage(studentId, `(Automatizado) ` + randAnswer, 'student');
   };
 
-  const resetAllDataButton = async () => {
-    if (confirm('Deseja redefinir todo o banco de dados FIREBASE e limpar caches locais?')) {
+  const resetAllDataButton = async (bypassConfirm = true) => {
+    if (bypassConfirm) {
       setLoadingFirebase(true);
       try {
         addSyncLog("Restaurando banco de dados Firebase para seeds padrões...");

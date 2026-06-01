@@ -22,6 +22,8 @@ export interface Student {
   nextPayment: string;
   value: number;
   trainerId?: string;
+  email?: string;
+  password?: string;
 }
 
 export interface Exercise {
