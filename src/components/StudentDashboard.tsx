@@ -11,6 +11,7 @@ import { EXERCISE_BANK } from '../mockData';
 import { exportStudentReport } from '../utils/pdfGenerator';
 import ExerciseVisualizer from './ExerciseVisualizer';
 import { motion } from 'motion/react';
+import SimulatedStripeCheckout from './SimulatedStripeCheckout';
 
 interface StudentDashboardProps {
   students: Student[];
@@ -221,6 +222,7 @@ export default function StudentDashboard({
   const [isStripeProcessing, setIsStripeProcessing] = useState(false);
   const [isStripeSuccess, setIsStripeSuccess] = useState(false);
   const [stripeError, setStripeError] = useState('');
+  const [showSimulatedStripe, setShowSimulatedStripe] = useState(false);
 
   const handleStripeCheckoutStudent = async () => {
     setIsStripeProcessing(true);
@@ -262,25 +264,10 @@ export default function StudentDashboard({
           }
         }
       } else if (data.isSimulation) {
-        // Fallback simulation mode
+        // Fallback simulation mode - open premium mockup Stripe checkout page
         console.log("Stripe integration sandbox simulation mode activated (Missing server secret API key).");
-        setTimeout(() => {
-          setIsStripeProcessing(false);
-          setIsStripeSuccess(true);
-          setPaymentSuccess(true);
-          
-          if (onUpdateStudent) {
-            onUpdateStudent(currentStudent.id, {
-              status: 'Ativo',
-              nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')
-            });
-          }
-
-          setTimeout(() => {
-            setIsStripeSuccess(false);
-            setPaymentSuccess(false);
-          }, 5000);
-        }, 2000);
+        setShowSimulatedStripe(true);
+        setIsStripeProcessing(false);
       } else {
         // Real Stripe API error, abort simulation and display it clearly
         console.error("Student Stripe checkout session creation failed:", data.error);
@@ -2013,6 +2000,36 @@ export default function StudentDashboard({
             </button>
           </div>
         </div>
+      )}
+
+      {showSimulatedStripe && (
+        <SimulatedStripeCheckout
+          planName={currentStudent.plan || 'Mensal'}
+          price={currentStudent.value || 150.00}
+          studentName={currentStudent.name}
+          onSuccess={() => {
+            setShowSimulatedStripe(false);
+            setIsStripeProcessing(false);
+            setIsStripeSuccess(true);
+            setPaymentSuccess(true);
+            
+            if (onUpdateStudent) {
+              onUpdateStudent(currentStudent.id, {
+                status: 'Ativo',
+                nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')
+              });
+            }
+
+            setTimeout(() => {
+              setIsStripeSuccess(false);
+              setPaymentSuccess(false);
+            }, 6000);
+          }}
+          onCancel={() => {
+            setShowSimulatedStripe(false);
+            setIsStripeProcessing(false);
+          }}
+        />
       )}
 
     </div>

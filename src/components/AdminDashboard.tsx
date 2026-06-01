@@ -6,6 +6,11 @@ import {
   Lock, CheckSquare, MessageCircle, AlertTriangle, KeyRound
 } from 'lucide-react';
 import { Student, Trainer, AccessLog } from '../types';
+import { 
+  testConnection, 
+  firestoreErrorLogs, 
+  clearFirestoreErrorLogs 
+} from '../utils/firebase';
 
 interface AdminDashboardProps {
   students: Student[];
@@ -26,10 +31,61 @@ export default function AdminDashboard({
   onLogout,
   onDeleteStudent
 }: AdminDashboardProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'visao' | 'trainers' | 'students' | 'logs'>('visao');
+  const [activeSubTab, setActiveSubTab] = useState<'visao' | 'trainers' | 'students' | 'logs' | 'diagnostics'>('visao');
   const [trainerSearch, setTrainerSearch] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
   const [logsSearch, setLogsSearch] = useState('');
+
+  // Diagnostic states
+  const [diagnosticsTesting, setDiagnosticsTesting] = useState(false);
+  const [diagnosticsResult, setDiagnosticsResult] = useState<{
+    tested: boolean;
+    success: boolean;
+    error: string | null;
+    config: any;
+  } | null>(null);
+  const [diagnosticsSearch, setDiagnosticsSearch] = useState('');
+  const [logsRefreshTrigger, setLogsRefreshTrigger] = useState(0);
+  const [expandedLogIndex, setExpandedLogIndex] = useState<number | null>(null);
+  const [localErrorLogs, setLocalErrorLogs] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (activeSubTab === 'diagnostics') {
+      setLocalErrorLogs([...firestoreErrorLogs]);
+    }
+  }, [activeSubTab, logsRefreshTrigger]);
+
+  const handleTestConnection = async () => {
+    setDiagnosticsTesting(true);
+    setDiagnosticsResult(null);
+    try {
+      const res = await testConnection();
+      setDiagnosticsResult({
+        tested: true,
+        success: res.success,
+        error: res.error,
+        config: res.config
+      });
+      // Force refresh logs in case this test fails and writes an error log
+      setLogsRefreshTrigger(prev => prev + 1);
+    } catch (err: any) {
+      setDiagnosticsResult({
+        tested: true,
+        success: false,
+        error: err.message || String(err),
+        config: null
+      });
+    } finally {
+      setDiagnosticsTesting(false);
+    }
+  };
+
+  const handleClearLogs = () => {
+    clearFirestoreErrorLogs();
+    setLocalErrorLogs([]);
+    setExpandedLogIndex(null);
+    setLogsRefreshTrigger(prev => prev + 1);
+  };
 
   // Calculations for analytics
   const totalTrainers = trainers.length;
@@ -102,12 +158,13 @@ export default function AdminDashboard({
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
         
         {/* Navigation Tabs */}
-        <div className="flex overflow-x-auto gap-2 p-1 bg-neutral-900/50 rounded-xl border border-neutral-800 font-mono text-xs max-w-md">
+        <div className="flex overflow-x-auto gap-2 p-1 bg-neutral-900/50 rounded-xl border border-neutral-800 font-mono text-xs max-w-xl">
           {[
             { id: 'visao', label: 'Estatísticas', icon: BarChart2 },
             { id: 'trainers', label: 'Treinadores', icon: Laptop },
             { id: 'students', label: 'Alunos', icon: Users },
-            { id: 'logs', label: 'Audit / Segurança', icon: Clock }
+            { id: 'logs', label: 'Audit / Segurança', icon: Clock },
+            { id: 'diagnostics', label: 'Diagnóstico', icon: Database }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -509,6 +566,249 @@ export default function AdminDashboard({
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 5: Interactive Firestore Diagnostics */}
+        {activeSubTab === 'diagnostics' && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Header explaining diagnostics */}
+            <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-3 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 blur-xl rounded-full"></div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+                <Database size={16} className="text-[#39FF14]" /> Painel de Diagnóstico do Firestore
+              </h3>
+              <p className="text-xs text-neutral-400 leading-relaxed max-w-4xl">
+                Este console de diagnóstico permite monitorar o estado operacional da conexão com o banco de dados em tempo real, depurar configurações incorretas e coletar erros locais gerados pelas APIs do Firestore. Ideal para solucionar problemas como restrições de regras do Firebase, cotas excedidas ou parâmetros fiscais do projeto indisponíveis.
+              </p>
+            </div>
+
+            {/* Config & Connection Test in grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Connection Status & Config Box */}
+              <div className="bg-[#121214]/60 p-5 rounded-2xl border border-neutral-800 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Status & Parâmetros Ativos</h4>
+                  <span className="text-[10px] bg-[#39FF14]/10 border border-[#39FF14]/20 px-2 py-0.5 rounded font-mono text-[#39FF14] font-black uppercase font-mono">VITE CONTEXT</span>
+                </div>
+
+                <div className="space-y-2.5 font-mono text-xs">
+                  <div className="flex justify-between items-center py-1.5 border-b border-neutral-850">
+                    <span className="text-neutral-500">Project ID (GCP):</span>
+                    <span className="text-white font-bold max-w-[180px] break-all text-right">
+                      {diagnosticsResult?.config?.projectId || ((import.meta as any).env?.VITE_FIREBASE_PROJECT_ID) || 'Não Especificado'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-neutral-850">
+                    <span className="text-neutral-500">Database ID (Firestore):</span>
+                    <span className="text-amber-400 font-bold max-w-[180px] break-all text-right">
+                      {diagnosticsResult?.config?.databaseId || ((import.meta as any).env?.VITE_FIREBASE_FIRESTORE_DATABASE_ID) || '(default)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-neutral-850">
+                    <span className="text-neutral-500">Provider Auth Status:</span>
+                    <span className="text-emerald-400 font-bold text-right">
+                      Conectado Anônimo / Ativo
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5">
+                    <span className="text-neutral-500">API Key Configurado:</span>
+                    <span className="text-neutral-300 font-mono text-[11px] text-right">
+                      {diagnosticsResult?.config?.apiKeyObfuscated || '•••••••••'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Realtime verification test box */}
+              <div className="bg-[#121214]/60 p-5 rounded-2xl border border-[#39FF14]/10 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono mb-3">Teste de Integração em Tempo Real</h4>
+                  <p className="text-xs text-neutral-400 leading-relaxed mb-4 font-sans">
+                    Dispara uma consulta explícita no documento de integridade do Firestore (<code className="text-neutral-300 bg-neutral-950 px-1 py-0.5 rounded font-mono">test/connection</code>) para simular e checar a integridade da conexão de rede e a correta aplicação do seu <code className="text-neutral-300 bg-neutral-950 px-1 py-0.5 rounded font-mono">databaseId</code>.
+                  </p>
+
+                  {diagnosticsResult && (
+                    <div className={`p-3.5 rounded-xl border text-xs font-sans ${
+                      diagnosticsResult.success 
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
+                        : 'bg-red-500/10 border-red-500/20 text-red-300'
+                    }`}>
+                      <p className="font-bold font-mono uppercase text-[10px] mb-1 flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${diagnosticsResult.success ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                        {diagnosticsResult.success ? 'Conexão Bem Sucedida!' : 'Falha na Conexão!'}
+                      </p>
+                      <p className="leading-relaxed text-[11px] max-h-24 overflow-y-auto">
+                        {diagnosticsResult.success 
+                          ? 'O Firestore respondeu com êxito! Banco de dados e credenciais estão saudáveis e aceitando requisições do sistema.'
+                          : `Erro recebido: ${diagnosticsResult.error}`
+                        }
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleTestConnection}
+                  disabled={diagnosticsTesting}
+                  className="w-full mt-4 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 hover:border-[#39FF14]/50 hover:text-[#39FF14] text-white py-2.5 px-4 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 font-mono shadow-md disabled:opacity-50"
+                >
+                  <RefreshCw size={13} className={diagnosticsTesting ? 'animate-spin' : ''} />
+                  {diagnosticsTesting ? 'Verificando Integridade...' : 'Testar Conexão Agora'}
+                </button>
+              </div>
+            </div>
+
+            {/* Error logs listing */}
+            <div className="space-y-4 font-sans">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-neutral-950 p-4 rounded-xl border border-neutral-850">
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" size={14} />
+                    <input 
+                      type="text"
+                      placeholder="Filtrar erros registrados (mensagens, caminhos)..."
+                      value={diagnosticsSearch}
+                      onChange={(e) => setDiagnosticsSearch(e.target.value)}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white outline-none focus:border-[#39FF14] transition font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <span className="text-[10px] font-mono text-neutral-400">
+                    Histórico Local: {localErrorLogs.length} falhas
+                  </span>
+                  {localErrorLogs.length > 0 && (
+                    <button
+                      onClick={handleClearLogs}
+                      className="text-[10px] font-bold font-mono text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 px-3 py-1.5 rounded-lg bg-red-500/5 transition cursor-pointer"
+                    >
+                      Limpar Logs
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* List card elements of errors */}
+              <div className="space-y-3">
+                {localErrorLogs
+                  .filter(log => 
+                    log.error.toLowerCase().includes(diagnosticsSearch.toLowerCase()) ||
+                    (log.path || '').toLowerCase().includes(diagnosticsSearch.toLowerCase()) ||
+                    log.operationType.toLowerCase().includes(diagnosticsSearch.toLowerCase())
+                  )
+                  .map((log, index) => {
+                    const isExpanded = expandedLogIndex === index;
+                    return (
+                      <div key={index} className="bg-[#121214] border border-neutral-800 rounded-xl overflow-hidden shadow-md transition-all hover:border-neutral-750">
+                        <div 
+                          onClick={() => setExpandedLogIndex(isExpanded ? null : index)}
+                          className="p-4 flex items-start justify-between gap-4 cursor-pointer select-none"
+                        >
+                          <div className="space-y-1 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[9px] font-mono font-bold bg-amber-500/10 text-amber-500 border border-amber-500/25 px-2 py-0.5 rounded tracking-wide uppercase">
+                                {log.operationType}
+                              </span>
+                              {log.path && (
+                                <span className="text-[10px] font-mono text-neutral-400 px-1.5 py-0.5 bg-neutral-950 rounded">
+                                  {log.path}
+                                </span>
+                              )}
+                              <span className="text-[10px] font-mono text-neutral-500 ml-auto sm:ml-0">
+                                {new Date(log.timestamp).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <p className="text-xs font-semibold text-white leading-relaxed line-clamp-2 mt-1 select-all font-mono">
+                              {log.error}
+                            </p>
+                          </div>
+                          <span className="text-xs text-neutral-500 font-mono self-center font-bold px-2 whitespace-nowrap">
+                            {isExpanded ? 'Ocultar ↑' : 'Mais Detalhes ↓'}
+                          </span>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="border-t border-neutral-850 bg-neutral-950/60 p-4 font-mono text-[11px] text-neutral-300 space-y-3.5 divide-y divide-neutral-900">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase text-[#39FF14] mb-1.5">Contexto Completo do Erro</p>
+                              <div className="bg-neutral-950 p-3 rounded-lg border border-neutral-900 text-red-300 leading-relaxed max-h-48 overflow-y-auto select-all">
+                                {log.error}
+                              </div>
+                            </div>
+
+                            <div className="pt-3 grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-[10px] font-bold uppercase text-neutral-400 mb-1">Informações Operacionais</p>
+                                <p className="text-neutral-350">Tipo Operatório: <span className="text-white font-bold">{log.operationType}</span></p>
+                                <p className="text-neutral-350 mt-1">Caminho / Documento: <span className="text-white font-bold">{log.path || 'Não especificado'}</span></p>
+                                <p className="text-neutral-350 mt-1">Data Completa: <span className="text-white font-bold">{new Date(log.timestamp).toLocaleString()}</span></p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-bold uppercase text-neutral-400 mb-1">Status Autenticado no Erro</p>
+                                <p className="text-neutral-350">ID do Usuário: <span className="text-zinc-500 text-[10px] select-all">{log.authInfo?.userId || 'Ninguém Logado'}</span></p>
+                                <p className="text-neutral-350 mt-1">É Anônimo? <span className="text-white">{log.authInfo?.isAnonymous ? 'Sim' : 'Não'}</span></p>
+                                <p className="text-neutral-350 mt-1">Email Cadastrado: <span className="text-white font-bold">{log.authInfo?.email || 'N/A'}</span></p>
+                              </div>
+                            </div>
+
+                            <div className="pt-3">
+                              <p className="text-[10px] font-bold uppercase text-neutral-400 mb-1">Conselhos Rápidos para Solução de Problemas</p>
+                              <ul className="list-disc pl-4 space-y-1 text-neutral-400 font-sans leading-relaxed text-xs">
+                                {log.error.includes('Missing or insufficient permissions') ? (
+                                  <li><strong>Permissão Insuficiente</strong>: Suas regras de segurança do Firestore (`firestore.rules`) rejeitaram esta operação de escrita/leitura. Verifique se o usuário possui os direitos pretendidos ou se o formato do JSON enviado é recusado pelas funções de validação.</li>
+                                ) : log.error.includes('Database') && (log.error.includes('not found') || log.error.includes('encontrado')) ? (
+                                  <li><strong>Banco de dados não encontrado</strong>: O banco de dados configurado (`{diagnosticsResult?.config?.databaseId || '(default)'}`) não existe ou foi excluído neste ID de projeto. Certifique-se de configurar o ID correto ou opte pelo banco vazio '(default)' configurando strings limpas nas variáveis corporativas.</li>
+                                ) : log.error.includes('Quota exceeded') ? (
+                                  <li><strong>Cota de Uso Excedida</strong>: A cota diária gratuita do Firestore foi batida. Considere migrar para o plano pago do Google Cloud ou aguarde 24 horas para redefinição do limite diário do banco.</li>
+                                ) : (
+                                  <li>Verifique as definições declaradas em seu console de rede. Se estiver em modo de simulação, as operações com o backend oficial do Firebase são ignoradas estritamente em prol da fluidez local.</li>
+                                )}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                
+                {localErrorLogs.length === 0 && (
+                  <div className="p-8 text-center bg-[#121214] border border-neutral-800 rounded-2xl">
+                    <p className="text-sm font-bold text-neutral-400 mb-1">Nenhum erro de conexão registrado localmente</p>
+                    <p className="text-xs text-neutral-500 font-mono max-w-md mx-auto">Parabéns! Nenhuma requisição ao Firestore falhou até o momento ou os logs foram limpos recentemente.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick troubleshooting common errors helper cards */}
+            <div className="bg-neutral-900/30 p-5 rounded-2xl border border-neutral-800/80 space-y-3 font-sans">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <AlertTriangle size={14} className="text-amber-500" /> Guia Rápido de Instabilidade de Infraestrutura Firebase
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 text-xs">
+                <div className="space-y-1">
+                  <p className="font-bold text-white">1. ID de Banco Customizado vs. Default</p>
+                  <p className="text-neutral-400 leading-relaxed">
+                    Bancos em projetos novos usam o identificador <code className="text-neutral-300 bg-neutral-950 px-1 py-0.5 rounded font-mono">"(default)"</code>. Definir nomes diferentes no `.env.example` ou `VITE_FIREBASE_FIRESTORE_DATABASE_ID` resultará no erro de banco não encontrado se este banco de dados alternativo não tiver sido provisionado explicitamente.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-bold text-white">2. Regras de Segurança Hardened</p>
+                  <p className="text-neutral-400 leading-relaxed">
+                    A GymPulse utiliza regras de blindagem Zero-Trust. Acesso não autenticado ou modificação de dados de alunos por outros treinadores não impersonados gerará <code className="text-neutral-300 bg-neutral-950 px-1 py-0.5 rounded font-mono">PERMISSION_DENIED</code> sincronizado de proteção para blindar o portfólio.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-bold text-white">3. Sincronização Anônima</p>
+                  <p className="text-neutral-400 leading-relaxed">
+                    Em Sandbox ou novos logins, o sistema realiza um login anônimo automático em segundo plano para certificar que as requisições possuam um UID estável. Certifique-se de manter o provedor "Login Anônimo" ativo no Firebase Console.
+                  </p>
+                </div>
               </div>
             </div>
 

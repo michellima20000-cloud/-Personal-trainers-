@@ -8,25 +8,46 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { Student, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, AccessLog, MarketingPlan, Trainer } from '../types';
 
 // Initialize App and SDK exports with environment variables fallback
+const metaEnv = (import.meta as any).env || {};
+
 const config = {
-  apiKey: ((import.meta as any).env.VITE_FIREBASE_API_KEY as string) || firebaseConfig.apiKey,
-  authDomain: ((import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN as string) || firebaseConfig.authDomain,
-  projectId: ((import.meta as any).env.VITE_FIREBASE_PROJECT_ID as string) || firebaseConfig.projectId,
-  storageBucket: ((import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET as string) || firebaseConfig.storageBucket,
-  messagingSenderId: ((import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || firebaseConfig.messagingSenderId,
-  appId: ((import.meta as any).env.VITE_FIREBASE_APP_ID as string) || firebaseConfig.appId,
-  measurementId: ((import.meta as any).env.VITE_FIREBASE_MEASUREMENT_ID as string) || (firebaseConfig as any).measurementId,
-  databaseURL: ((import.meta as any).env.VITE_FIREBASE_DATABASE_URL as string) || (firebaseConfig as any).databaseURL,
+  apiKey: (metaEnv.VITE_FIREBASE_API_KEY as string) || firebaseConfig.apiKey,
+  authDomain: (metaEnv.VITE_FIREBASE_AUTH_DOMAIN as string) || firebaseConfig.authDomain,
+  projectId: (metaEnv.VITE_FIREBASE_PROJECT_ID as string) || firebaseConfig.projectId,
+  storageBucket: (metaEnv.VITE_FIREBASE_STORAGE_BUCKET as string) || firebaseConfig.storageBucket,
+  messagingSenderId: (metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || firebaseConfig.messagingSenderId,
+  appId: (metaEnv.VITE_FIREBASE_APP_ID as string) || firebaseConfig.appId,
+  measurementId: (metaEnv.VITE_FIREBASE_MEASUREMENT_ID as string) || (firebaseConfig as any).measurementId,
+  databaseURL: (metaEnv.VITE_FIREBASE_DATABASE_URL as string) || (firebaseConfig as any).databaseURL,
 };
 
 const app = initializeApp(config);
 
-const envDbId = ((import.meta as any).env.VITE_FIREBASE_FIRESTORE_DATABASE_ID as string);
-const databaseId = envDbId || firebaseConfig.firestoreDatabaseId;
+const envDbId = metaEnv.VITE_FIREBASE_FIRESTORE_DATABASE_ID as string;
+let databaseId = '';
+
+const isInvalidId = (id: any): boolean => {
+  if (!id) return true;
+  const s = String(id).trim();
+  return (
+    s === '' ||
+    s === 'undefined' ||
+    s === 'null' ||
+    s === '(default)' ||
+    s === '(padrão)' ||
+    s === 'default'
+  );
+};
+
+if (!isInvalidId(envDbId)) {
+  databaseId = String(envDbId).trim();
+} else if (!isInvalidId(firebaseConfig.firestoreDatabaseId)) {
+  databaseId = String(firebaseConfig.firestoreDatabaseId).trim();
+}
 
 console.log("[Firebase Initialization] Project ID:", config.projectId, "Database ID:", databaseId || "(default)");
 
-export const db = databaseId && databaseId !== "(default)"
+export const db = databaseId
   ? getFirestore(app, databaseId)
   : getFirestore(app);
 export const auth = getAuth(app);
@@ -46,13 +67,47 @@ export async function initializeAnonymousAuth(): Promise<void> {
 }
 
 // Connection test guard
-export async function testConnection(): Promise<void> {
+export async function testConnection(): Promise<{ success: boolean; error: string | null; config: any }> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
+    return {
+      success: true,
+      error: null,
+      config: {
+        projectId: config.projectId,
+        databaseId: databaseId || '(default)',
+        authDomain: config.authDomain,
+        apiKeyObfuscated: config.apiKey ? `${config.apiKey.substring(0, 6)}...${config.apiKey.substring(config.apiKey.length - 4)}` : 'N/A'
+      }
+    };
+  } catch (error: any) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.error("Please check your Firebase configuration.");
     }
+    // Log diagnostic error too
+    const dbgErr: FirestoreErrorInfo = {
+      error: errorMsg,
+      operationType: OperationType.GET,
+      path: 'test/connection',
+      authInfo: {
+        userId: auth.currentUser?.uid || null,
+        email: auth.currentUser?.email || null,
+        emailVerified: auth.currentUser?.emailVerified || null,
+        isAnonymous: auth.currentUser?.isAnonymous || null,
+      }
+    };
+    addFirestoreErrorLog(dbgErr);
+    return {
+      success: false,
+      error: errorMsg,
+      config: {
+        projectId: config.projectId,
+        databaseId: databaseId || '(default)',
+        authDomain: config.authDomain,
+        apiKeyObfuscated: config.apiKey ? `${config.apiKey.substring(0, 6)}...${config.apiKey.substring(config.apiKey.length - 4)}` : 'N/A'
+      }
+    };
   }
 }
 
@@ -83,6 +138,55 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export interface DiagnosticErrorLog extends FirestoreErrorInfo {
+  timestamp: string;
+}
+
+export const firestoreErrorLogs: DiagnosticErrorLog[] = (() => {
+  try {
+    const raw = localStorage.getItem('gympulse_firestore_errors');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+})();
+
+export function clearFirestoreErrorLogs(): void {
+  firestoreErrorLogs.length = 0;
+  try {
+    localStorage.removeItem('gympulse_firestore_errors');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function addFirestoreErrorLog(errInfo: FirestoreErrorInfo): void {
+  const log: DiagnosticErrorLog = {
+    ...errInfo,
+    timestamp: new Date().toISOString()
+  };
+  
+  // Check duplicates in the last 5 seconds to avoid flooding
+  const duplicate = firestoreErrorLogs.find(
+    existing => 
+      existing.error === log.error && 
+      existing.path === log.path && 
+      existing.operationType === log.operationType &&
+      (new Date(log.timestamp).getTime() - new Date(existing.timestamp).getTime() < 5000)
+  );
+  if (duplicate) return;
+
+  firestoreErrorLogs.unshift(log);
+  if (firestoreErrorLogs.length > 50) {
+    firestoreErrorLogs.pop();
+  }
+  try {
+    localStorage.setItem('gympulse_firestore_errors', JSON.stringify(firestoreErrorLogs));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -100,6 +204,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
+  addFirestoreErrorLog(errInfo);
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }

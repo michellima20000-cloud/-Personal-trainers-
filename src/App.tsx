@@ -66,49 +66,138 @@ const INITIAL_ACCESS_LOGS: AccessLog[] = [
   }
 ];
 
+const DEFAULT_TRAINER: Trainer = {
+  id: 't_default',
+  name: 'Daniel Personal Coach',
+  email: 'personal@gympulse.com.br',
+  password: 'personal123',
+  selectedPlan: 'Trimestral',
+  trialStartDate: new Date().toLocaleDateString('pt-BR'),
+  trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+  subscriptionStatus: 'paid',
+  customIdLink: 'daniel-personal',
+  pixKeyType: 'Chave Aleatória',
+  pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
+  phoneWhatsApp: '+5511999999999',
+  stripeEnabled: true,
+  stripePublishableKey: 'pk_test_sample_key'
+};
+
+const loadCachedOrSeed = () => {
+  const cachedStr = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
+  if (cachedStr) {
+    try {
+      const parsed = JSON.parse(cachedStr);
+      if (parsed && typeof parsed === 'object') {
+        return {
+          role: parsed.role || 'trainer',
+          isLoggedIn: parsed.isLoggedIn !== undefined ? parsed.isLoggedIn : true,
+          students: parsed.students || INITIAL_STUDENTS,
+          sheets: parsed.sheets || INITIAL_SHEETS,
+          evolution: parsed.evolution || INITIAL_EVOLUTION_RECORDS,
+          agenda: parsed.agenda || INITIAL_AGENDA,
+          chats: parsed.chats || INITIAL_CHATS,
+          notifications: parsed.notifications || INITIAL_NOTIFICATIONS,
+          revenueLogs: parsed.revenueLogs || REVENUE_LOGS,
+          accessLogs: parsed.accessLogs || INITIAL_ACCESS_LOGS,
+          marketingPlans: (parsed.marketingPlans || INITIAL_MARKETING_PLANS).filter((p: any) => p.id !== 'Semestral'),
+          trainers: parsed.trainers || [DEFAULT_TRAINER],
+          activeTrainer: parsed.activeTrainer || DEFAULT_TRAINER,
+          activeStudentId: parsed.activeStudentId || (parsed.students && parsed.students[0] && parsed.students[0].id) || 's1'
+        };
+      }
+    } catch (e) {
+      console.warn("Could not parse cached loading state, using initial seed data.", e);
+    }
+  }
+
+  // Fallback to defaults
+  return {
+    role: 'trainer',
+    isLoggedIn: true,
+    students: INITIAL_STUDENTS,
+    sheets: INITIAL_SHEETS,
+    evolution: INITIAL_EVOLUTION_RECORDS,
+    agenda: INITIAL_AGENDA,
+    chats: INITIAL_CHATS,
+    notifications: INITIAL_NOTIFICATIONS,
+    revenueLogs: REVENUE_LOGS,
+    accessLogs: INITIAL_ACCESS_LOGS,
+    marketingPlans: INITIAL_MARKETING_PLANS,
+    trainers: [DEFAULT_TRAINER],
+    activeTrainer: DEFAULT_TRAINER,
+    activeStudentId: 's1'
+  };
+};
+
+const getInitialStates = () => {
+  const initial = loadCachedOrSeed();
+  
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const urlRole = params.get('role');
+    const urlStudentId = params.get('studentId');
+    
+    if (urlRole === 'student' || urlRole === 'trainer') {
+      initial.role = urlRole as any;
+      initial.isLoggedIn = true;
+      if (urlStudentId) {
+        initial.activeStudentId = urlStudentId;
+      }
+    }
+  }
+  
+  return initial;
+};
+
+const preloadedState = getInitialStates();
+
 export default function App() {
-  const [role, setRole] = useState<'trainer' | 'student' | 'admin'>('trainer');
+  const [role, setRole] = useState<'trainer' | 'student' | 'admin'>(preloadedState.role);
   const [originalAdminSession, setOriginalAdminSession] = useState<boolean>(false);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(preloadedState.isLoggedIn);
   
   // Unified Databases
-  const [students, setStudents] = useState<Student[]>([]);
-  const [sheets, setSheets] = useState<Record<string, TrainingSheet>>({});
-  const [evolution, setEvolution] = useState<Record<string, EvolutionRecord[]>>({});
-  const [agenda, setAgenda] = useState<AgendaEvent[]>([]);
-  const [chats, setChats] = useState<Record<string, ChatMessage[]>>({});
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [revenueLogs, setRevenueLogs] = useState<RevenueLog[]>([]);
-  const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
-  const [marketingPlans, setMarketingPlans] = useState<MarketingPlan[]>([]);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [activeTrainer, setActiveTrainer] = useState<Trainer | null>(null);
+  const [students, setStudents] = useState<Student[]>(preloadedState.students);
+  const [sheets, setSheets] = useState<Record<string, TrainingSheet>>(preloadedState.sheets);
+  const [evolution, setEvolution] = useState<Record<string, EvolutionRecord[]>>(preloadedState.evolution);
+  const [agenda, setAgenda] = useState<AgendaEvent[]>(preloadedState.agenda);
+  const [chats, setChats] = useState<Record<string, ChatMessage[]>>(preloadedState.chats);
+  const [notifications, setNotifications] = useState<AppNotification[]>(preloadedState.notifications);
+  const [revenueLogs, setRevenueLogs] = useState<RevenueLog[]>(preloadedState.revenueLogs);
+  const [accessLogs, setAccessLogs] = useState<AccessLog[]>(preloadedState.accessLogs);
+  const [marketingPlans, setMarketingPlans] = useState<MarketingPlan[]>(preloadedState.marketingPlans);
+  const [trainers, setTrainers] = useState<Trainer[]>(preloadedState.trainers);
+  const [activeTrainer, setActiveTrainer] = useState<Trainer | null>(preloadedState.activeTrainer);
 
   // Selected student inside the student area role view
-  const [activeStudentId, setActiveStudentId] = useState<string>('');
+  const [activeStudentId, setActiveStudentId] = useState<string>(preloadedState.activeStudentId);
 
   // Sandbox notification/sync log banner state
   const [syncLogs, setSyncLogs] = useState<string[]>([
     'Inicializando barramento de eventos do banco...'
   ]);
-  const [loadingFirebase, setLoadingFirebase] = useState(true);
+  const [loadingFirebase, setLoadingFirebase] = useState(false);
+  const [syncingStatus, setSyncingStatus] = useState<'syncing' | 'synced' | 'error'>('syncing');
 
   // Initialize and Synchronize with Firebase
   useEffect(() => {
     async function initFirebaseSandbox() {
-      // 10 second safety boundary timeout for the entire database synchronization
+      // 3 second safety boundary timeout for the entire database synchronization
       let timeoutId: any;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error("Timeout de conexão")), 10000);
+        timeoutId = setTimeout(() => reject(new Error("Timeout de conexão")), 3000);
       });
 
       try {
-        addSyncLog("Autenticando sessão anônima segura no Firebase...");
-        await Promise.race([initializeAnonymousAuth(), timeoutPromise]);
-
-        // Fetching main collections in parallel to optimize boot speed and bypass sequential RTT delays
-        addSyncLog("Sincronizando tabelas com a nuvem em paralelo...");
+        // Run anonymous authentication in parallel with fetches to eliminate sequential RTT delays
         const parallelFetchPromise = (async () => {
+          try {
+            await initializeAnonymousAuth();
+          } catch (e) {
+            console.warn("Skipping anonymous auth wait", e);
+          }
+
           const [
             fetchedStudents,
             fetchedSheets,
@@ -311,17 +400,21 @@ export default function App() {
         // Ensure default active trainer is set in success path!
         const defaultMatch = remoteTrainers.find(t => t.email === 'personal@gympulse.com.br') || remoteTrainers[0];
         if (defaultMatch) {
-          setActiveTrainer(defaultMatch);
+          setActiveTrainer(prev => {
+            if (prev && remoteTrainers.some(t => t.id === prev.id)) {
+              return remoteTrainers.find(t => t.id === prev.id) || prev;
+            }
+            return defaultMatch;
+          });
         }
 
         // Parse URL parameters for invitation links
         const params = new URLSearchParams(window.location.search);
         const urlRole = params.get('role');
         const urlStudentId = params.get('studentId');
-        const urlTrainerIdLink = params.get('trainerId'); // custom unique link identifier e.g. daniel-personal
 
         const firstId = urlStudentId || remoteStudents?.[0]?.id || 's1';
-        setActiveStudentId(firstId);
+        setActiveStudentId(prev => urlStudentId || prev || firstId);
 
         if (urlRole === 'student') {
           setRole('student');
@@ -331,31 +424,34 @@ export default function App() {
           setRole('trainer');
           setIsLoggedIn(true);
           addSyncLog(`Link administrativo consultor detectado.`);
-        } else {
-          // Restore credentials locally if applicable
-          const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-          if (cached) {
-            try {
-              const parsed = JSON.parse(cached);
-              setIsLoggedIn(parsed.isLoggedIn || false);
-              setRole(parsed.role || 'trainer');
-              if (parsed.activeTrainer) {
-                setActiveTrainer(parsed.activeTrainer);
-              }
-              if (parsed.marketingPlans) {
-                setMarketingPlans((parsed.marketingPlans || []).filter((p: any) => p.id !== 'Semestral'));
-              }
-            } catch (e) {}
-          }
         }
 
+        // Cache the latest synchronized cloud data
+        saveState(
+          remoteStudents,
+          remoteSheets,
+          remoteEvolution,
+          remoteAgenda,
+          remoteChats,
+          remoteNotifications,
+          remoteRevenueLogs,
+          remoteAccessLogs,
+          urlRole ? true : preloadedState.isLoggedIn,
+          urlRole ? (urlRole as any) : preloadedState.role,
+          remoteMarketingPlans,
+          defaultMatch || preloadedState.activeTrainer,
+          remoteTrainers
+        );
+
         addSyncLog("Ambiente real do Firebase totalmente sincronizado.");
+        setSyncingStatus('synced');
         setLoadingFirebase(false);
       } catch (err) {
         clearTimeout(timeoutId);
         console.log("Firebase sync system warning:", err);
         addSyncLog("Erro de conexão ao Firebase. Ativando fallback...");
         loadDefaults();
+        setSyncingStatus('error');
         setLoadingFirebase(false);
       }
     }
@@ -1190,8 +1286,6 @@ export default function App() {
           )}
         </div>
       )}
-
-
 
     </div>
   );

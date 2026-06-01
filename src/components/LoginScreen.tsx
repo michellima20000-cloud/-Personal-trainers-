@@ -5,6 +5,7 @@ import {
   DollarSign, CheckSquare, Sparkle, QrCode, Clipboard, Star, Zap, Award
 } from 'lucide-react';
 import { Student, Trainer, PlanType } from '../types';
+import SimulatedStripeCheckout from './SimulatedStripeCheckout';
 
 interface LoginScreenProps {
   students: Student[];
@@ -52,6 +53,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [licenseCardExpiry, setLicenseCardExpiry] = useState('');
   const [licenseCardCvv, setLicenseCardCvv] = useState('');
   const [licensePaymentStep, setLicensePaymentStep] = useState(0); // 0 = idle, 1 = connecting API, 2 = tokenizing, 3 = finalizing, 4 = approved!
+  const [showSimulatedStripe, setShowSimulatedStripe] = useState(false);
+  const [trainerToRegister, setTrainerToRegister] = useState<Trainer | null>(null);
 
   // Automated Trial signature states
   const [trialSignatureName, setTrialSignatureName] = useState('');
@@ -289,20 +292,10 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       } else if (data.isSimulation) {
         // If Stripe secret key not config in environment, fall back to simulated credentials sequence
         console.warn("Stripe backend key is not configured. Falling back to checkout simulation modal.");
-        setLicensePaymentStep(2);
-        setTimeout(() => {
-          setLicensePaymentStep(3);
-          setTimeout(() => {
-            setLicensePaymentStep(4);
-            setTimeout(() => {
-              setLicensePaymentStep(0);
-              setLoading(false);
-              // Register trainer only upon successful simulated payment end
-              onAddTrainer(newTrainer);
-              onLoginSuccess('trainer', undefined, newTrainer);
-            }, 1500);
-          }, 1200);
-        }, 1200);
+        setTrainerToRegister(newTrainer);
+        setLicensePaymentStep(0);
+        setLoading(false);
+        setShowSimulatedStripe(true);
       } else {
         // Stripe API returned an error (such as a StripePermissionError due to restricted key permissions)
         console.error("Stripe API returned an error:", data.error);
@@ -324,23 +317,12 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
   const handleBypassStripeAndSimulate = () => {
     if (!failedStripeTrainer) return;
-    setLoading(true);
     setErrorMsg('');
+    setLoading(false);
     setCheckoutMethod('stripe');
-    setLicensePaymentStep(2); // start simulation flow
-    setTimeout(() => {
-      setLicensePaymentStep(3);
-      setTimeout(() => {
-        setLicensePaymentStep(4);
-        setTimeout(() => {
-          setLicensePaymentStep(0);
-          setLoading(false);
-          // Register the bypassed trainer into database
-          onAddTrainer(failedStripeTrainer);
-          onLoginSuccess('trainer', undefined, failedStripeTrainer);
-        }, 1500);
-      }, 1200);
-    }, 1200);
+    setLicensePaymentStep(0);
+    setTrainerToRegister(failedStripeTrainer);
+    setShowSimulatedStripe(true);
   };
 
   const handleStudentLogin = (e: React.FormEvent) => {
@@ -1605,6 +1587,35 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           </div>
         </div>
       </div>
+
+      {showSimulatedStripe && (
+        <SimulatedStripeCheckout
+          planName={trainerToRegister?.selectedPlan || regTrainerPlan}
+          price={
+            (trainerToRegister?.selectedPlan || regTrainerPlan) === 'Mensal' ? 39.90 :
+            (trainerToRegister?.selectedPlan || regTrainerPlan) === 'Trimestral' ? 97.00 :
+            (trainerToRegister?.selectedPlan || regTrainerPlan) === 'Semestral' ? 180.00 : 297.00
+          }
+          studentName={trainerToRegister?.name || regTrainerName || 'Michel Lima'}
+          onSuccess={() => {
+            setShowSimulatedStripe(false);
+            const verifiedTrainer = trainerToRegister || failedStripeTrainer;
+            if (verifiedTrainer) {
+              const paidTrainer = {
+                ...verifiedTrainer,
+                subscriptionStatus: 'paid' as const
+              };
+              onAddTrainer(paidTrainer);
+              onLoginSuccess('trainer', undefined, paidTrainer);
+            }
+          }}
+          onCancel={() => {
+            setShowSimulatedStripe(false);
+            setLoading(false);
+          }}
+        />
+      )}
+
     </div>
   );
 }

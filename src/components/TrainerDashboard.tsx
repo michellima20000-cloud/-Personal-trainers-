@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
+import SimulatedStripeCheckout from './SimulatedStripeCheckout';
 
 interface TrainerDashboardProps {
   students: Student[];
@@ -106,6 +107,7 @@ export default function TrainerDashboard({
   const [licensePaymentLoadingStep, setLicensePaymentLoadingStep] = useState(0); // 0 = none, 1 = connecting, 2 = authorizing, 3 = finalizing
   const [saasStripeError, setSaasStripeError] = useState("");
   const [licenseSelectedPlan, setLicenseSelectedPlan] = useState<PlanType>(activeTrainer?.selectedPlan || 'Trimestral');
+  const [showSimulatedStripe, setShowSimulatedStripe] = useState(false);
   
   // Profile Configuration states
   const [profileTrainerName, setProfileTrainerName] = useState(activeTrainer?.name || 'Daniel Personal Coach');
@@ -165,26 +167,10 @@ export default function TrainerDashboard({
           }
         }
       } else if (data.isSimulation) {
-        // Stripe Key not configured, fall back to simulation modal sequence
-        console.log("Stripe key is missing, falling back to instant browser payment simulation mode.");
-        setLicensePaymentLoadingStep(2);
-        setTimeout(() => {
-          setLicensePaymentLoadingStep(3);
-          setTimeout(() => {
-            if (onUpdateTrainer && activeTrainer) {
-              onUpdateTrainer({
-                ...activeTrainer,
-                subscriptionStatus: 'paid',
-                selectedPlan: licenseSelectedPlan
-              });
-            }
-            setLicensePaymentLoadingStep(4);
-            setTimeout(() => {
-              setLicensePaymentLoadingStep(0);
-              setShowUpgradeModal(false);
-            }, 2000);
-          }, 1200);
-        }, 1200);
+        // Stripe Key not configured, open mockup Stripe checkout overlay
+        console.log("Stripe key is missing, opening mockup Stripe checkout overlay.");
+        setLicensePaymentLoadingStep(0);
+        setShowSimulatedStripe(true);
       } else {
         // Error returned from Stripe API (e.g. key permission issues)
         console.error("Stripe API error response:", data.error);
@@ -2860,6 +2846,36 @@ export default function TrainerDashboard({
             </form>
           </div>
         </div>
+      )}
+
+      {showSimulatedStripe && (
+        <SimulatedStripeCheckout
+          planName={licenseSelectedPlan}
+          price={
+            licenseSelectedPlan === 'Mensal' ? 39.90 : 
+            licenseSelectedPlan === 'Trimestral' ? 97.00 : 
+            licenseSelectedPlan === 'Semestral' ? 180.00 : 297.00
+          }
+          studentName={activeTrainer?.name || 'Daniel Coach'}
+          onSuccess={() => {
+            setShowSimulatedStripe(false);
+            setLicensePaymentLoadingStep(4); // Trigger success step
+            if (onUpdateTrainer && activeTrainer) {
+              onUpdateTrainer({
+                ...activeTrainer,
+                subscriptionStatus: 'paid',
+                selectedPlan: licenseSelectedPlan
+              });
+            }
+            setTimeout(() => {
+              setLicensePaymentLoadingStep(0);
+            }, 5000);
+          }}
+          onCancel={() => {
+            setShowSimulatedStripe(false);
+            setLicensePaymentLoadingStep(0);
+          }}
+        />
       )}
 
     </div>
