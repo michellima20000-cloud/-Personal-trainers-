@@ -17,7 +17,15 @@ interface LoginScreenProps {
 }
 
 export default function LoginScreen({ students, trainers, onLoginSuccess, onAddStudent, onAddTrainer }: LoginScreenProps) {
-  const [activeTab, setActiveTab] = useState<'trainer' | 'student'>('trainer');
+  const [activeTab, setActiveTab] = useState<'trainer' | 'student'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('trainerId')) {
+        return 'student';
+      }
+    }
+    return 'trainer';
+  });
   
   // Trainer Auth Form State
   const [trainerEmail, setTrainerEmail] = useState('personal@gympulse.com.br');
@@ -37,7 +45,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [studentLoginPassword, setStudentLoginPassword] = useState('');
 
   // Student Self-Registration State
-  const [isRegisteringStudent, setIsRegisteringStudent] = useState(false);
+  const [isRegisteringStudent, setIsRegisteringStudent] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('trainerId')) {
+        return true;
+      }
+    }
+    return false;
+  });
   const [regName, setRegName] = useState('');
   const [regObjective, setRegObjective] = useState<'Hipertrofia' | 'Emagrecimento' | 'Condicionamento' | 'Definição' | 'Reabilitação'>('Hipertrofia');
   const [regAge, setRegAge] = useState<number>(25);
@@ -507,7 +523,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           ? `Cadastrado automaticamente via indicação do treinador ${referredTrainer.name}.`
           : `Cadastrado no portal direto e vinculado ao treinador ${chosenTrainerName}.`,
         plan: 'Mensal',
-        status: 'Inativo',
+        status: 'Ativo',
         joinedAt: new Date().toLocaleDateString('pt-BR'),
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 150.00,
