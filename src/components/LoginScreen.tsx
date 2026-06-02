@@ -30,9 +30,10 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [showStudentPass, setShowStudentPass] = useState(false);
 
   // New Student Credentials Login States
-  const [studentLoginMode, setStudentLoginMode] = useState<'credentials' | 'demo'>('credentials');
+  const [studentLoginMode, setStudentLoginMode] = useState<'credentials' | 'whatsapp' | 'demo'>('whatsapp');
   const [studentLoginEmail, setStudentLoginEmail] = useState('');
   const [studentLoginPassword, setStudentLoginPassword] = useState('');
+  const [studentLoginWhatsApp, setStudentLoginWhatsApp] = useState('');
 
   // Student Self-Registration State
   const [isRegisteringStudent, setIsRegisteringStudent] = useState(false);
@@ -46,7 +47,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [isDragging, setIsDragging] = useState(false);
   const [regStudentEmail, setRegStudentEmail] = useState('');
   const [regStudentPassword, setRegStudentPassword] = useState('');
+  const [regStudentPhone, setRegStudentPhone] = useState('');
   const [regStudentTrainerId, setRegStudentTrainerId] = useState(trainers[0]?.id || '');
+  const [isGooglePopupOpen, setIsGooglePopupOpen] = useState(false);
 
   // Trainer Self-Registration and Checkout States
   const [isRegisteringTrainer, setIsRegisteringTrainer] = useState(false);
@@ -360,7 +363,36 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setErrorMsg('');
     setSuccessMsg('');
     
-    if (studentLoginMode === 'credentials') {
+    if (studentLoginMode === 'whatsapp') {
+      const cleanedNum = studentLoginWhatsApp.replace(/\D/g, '');
+      if (!cleanedNum) {
+        setErrorMsg('Por favor, informe seu número de WhatsApp / Telefone.');
+        return;
+      }
+
+      // Check if any student registered phone matches (lenient end-with verification)
+      const matchedStudent = students.find(s => {
+        const studentPhone = (s.phoneWhatsApp || '').replace(/\D/g, '');
+        return studentPhone !== '' && (
+          studentPhone === cleanedNum || 
+          (studentPhone.length >= 8 && cleanedNum.endsWith(studentPhone)) || 
+          (cleanedNum.length >= 8 && studentPhone.endsWith(cleanedNum))
+        );
+      });
+
+      if (matchedStudent) {
+        setLoading(true);
+        setTimeout(() => {
+          setLoading(false);
+          setSuccessMsg(`Conectado! Bem-vindo(a) via WhatsApp, ${matchedStudent.name}.`);
+          setTimeout(() => {
+            onLoginSuccess('student', matchedStudent.id);
+          }, 1200);
+        }, 1000);
+      } else {
+        setErrorMsg(`WhatsApp não encontrado! Solicite ao seu Coach o cadastro do seu número (${studentLoginWhatsApp}) ou crie um novo cadastro ao lado em "Quero me Cadastrar".`);
+      }
+    } else if (studentLoginMode === 'credentials') {
       if (!studentLoginEmail.trim()) {
         setErrorMsg('Por favor, informe seu e-mail de acesso cadastrado.');
         return;
@@ -458,6 +490,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       return;
     }
 
+    if (!regStudentPhone.trim()) {
+      setErrorMsg('Por favor, informe seu WhatsApp para login rápido e contato.');
+      return;
+    }
+
     if (!regStudentEmail.trim() || !regStudentEmail.includes('@')) {
       setErrorMsg('Por favor, informe um e-mail válido para seu cadastro seguro.');
       return;
@@ -465,6 +502,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
     if (!regStudentPassword.trim() || regStudentPassword.length < 4) {
       setErrorMsg('Por favor, informe uma senha operacional de pelo menos 4 dígitos para seu login.');
+      return;
+    }
+
+    if (!referredTrainer && !regStudentTrainerId) {
+      setErrorMsg('O nome do Personal Trainer (Personal) é obrigatório no cadastro do aluno. Selecione seu Personal Trainer no final do formulário.');
       return;
     }
 
@@ -483,6 +525,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         name: regName.trim(),
         email: regStudentEmail.trim().toLowerCase(),
         password: regStudentPassword,
+        phoneWhatsApp: regStudentPhone.trim(),
         avatar: regAvatar || `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 900000)}?w=150&auto=format&fit=crop&q=80`,
         age: Number(regAge),
         weight: Number(regWeight),
@@ -497,7 +540,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         joinedAt: new Date().toLocaleDateString('pt-BR'),
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 150.00,
-        trainerId: finalTrainerId
+        trainerId: finalTrainerId,
+        trainerName: chosenTrainerName
       };
 
       onAddStudent(createdStudent);
@@ -508,6 +552,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         setRegAvatar('');
         setRegStudentEmail('');
         setRegStudentPassword('');
+        setRegStudentPhone('');
       }, 1300);
     }, 1000);
   };
@@ -1485,21 +1530,73 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
             {!isRegisteringStudent ? (
               <form onSubmit={handleStudentLogin} className="space-y-4">
-                {/* Login Mode Switcher */}
-                <div className="flex justify-end mb-2">
+                {/* Modern Login Mode Switcher */}
+                <div className="flex border border-neutral-800 bg-neutral-950 p-1 rounded-xl mb-4 gap-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      setStudentLoginMode(studentLoginMode === 'credentials' ? 'demo' : 'credentials');
-                      setErrorMsg('');
-                    }}
-                    className="text-[10px] text-[#39FF14] hover:underline font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-transparent border-none outline-none"
+                    onClick={() => { setStudentLoginMode('whatsapp'); setErrorMsg(''); }}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 transition duration-200 ${
+                      studentLoginMode === 'whatsapp' 
+                        ? 'bg-[#39FF14] text-black font-extrabold shadow-md' 
+                        : 'text-neutral-400 hover:text-white bg-transparent'
+                    }`}
                   >
-                    {studentLoginMode === 'credentials' ? '⚡ Ver Contas de Teste / Demo' : '🔒 Login Seguro (E-mail e Senha)'}
+                    <Smartphone size={13} />
+                    <span>WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStudentLoginMode('credentials'); setErrorMsg(''); }}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 transition duration-200 ${
+                      studentLoginMode === 'credentials' 
+                        ? 'bg-[#39FF14] text-black font-extrabold shadow-md' 
+                        : 'text-neutral-400 hover:text-white bg-transparent'
+                    }`}
+                  >
+                    <Lock size={13} />
+                    <span>E-mail</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStudentLoginMode('demo'); setErrorMsg(''); }}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 transition duration-200 ${
+                      studentLoginMode === 'demo' 
+                        ? 'bg-[#39FF14] text-black font-extrabold shadow-md' 
+                        : 'text-neutral-400 hover:text-white bg-transparent'
+                    }`}
+                  >
+                    <Zap size={13} />
+                    <span>Demo</span>
                   </button>
                 </div>
 
-                {studentLoginMode === 'credentials' ? (
+                {studentLoginMode === 'whatsapp' && (
+                  // WhatsApp direct fluid access
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                        Número do seu WhatsApp (Acesso Rápido)
+                      </label>
+                      <input
+                        type="tel"
+                        value={studentLoginWhatsApp}
+                        onChange={(e) => setStudentLoginWhatsApp(e.target.value)}
+                        placeholder="Ex: 11 99999-9999"
+                        className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                        required
+                        disabled={loading}
+                      />
+                      <div className="mt-2.5 bg-neutral-950/40 p-3 rounded-xl border border-neutral-800/80 text-[10px] text-neutral-400 leading-relaxed font-sans">
+                        ⚡ <strong>Por que usar?</strong> Seus alunos não precisam memorizar e-mails ou senhas complexas! Basta informar o número de telefone e o portal carrega os treinos diretamente.
+                        <p className="mt-1">
+                          👉 Experimente usar o celular de teste: <span className="text-[#39FF14] font-bold font-mono">11999999991</span> (Ana).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {studentLoginMode === 'credentials' && (
                   // Credentials Login Form (Individual and Secure)
                   <div className="space-y-3.5">
                     <div>
@@ -1541,7 +1638,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                       </div>
                     </div>
                   </div>
-                ) : (
+                )}
+
+                {studentLoginMode === 'demo' && (
                   // Demo selector Form for developers / review
                   <div className="space-y-3.5">
                     <div>
@@ -1627,7 +1726,43 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleStudentSelfRegistration} className="space-y-3.5">
+              <form onSubmit={handleStudentSelfRegistration} className="space-y-4">
+                {/* Google Autofill connection banner */}
+                <div className="bg-neutral-950 p-3 rounded-2xl border border-neutral-800 flex flex-col gap-2 items-center text-center">
+                  <div className="flex items-center gap-2">
+                    {/* SVG Google icon */}
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <span className="text-[11px] font-extrabold text-neutral-200">Preenchimento com Google (Gmail)</span>
+                  </div>
+                  <p className="text-[9px] text-neutral-400">
+                    Conecte sua conta para preencher nome, e-mail e foto do Gmail instantaneamente!
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsGooglePopupOpen(true)}
+                    className="w-full bg-white hover:bg-neutral-100 text-neutral-900 text-[10px] font-extrabold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition active:scale-97 cursor-pointer"
+                  >
+                    <span>⚡ Conectar Conta Google</span>
+                  </button>
+                </div>
+
                 {/* Custom Interactive Avatar Upload */}
                 <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-neutral-950 border border-neutral-800/80 mb-2">
                   <span className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-2 text-center w-full">
@@ -1710,6 +1845,24 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                     required
                     disabled={loading}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
+                    Seu WhatsApp / Telefone (Ex: 11 99999-9999)
+                  </label>
+                  <input
+                    type="tel"
+                    value={regStudentPhone}
+                    onChange={(e) => setRegStudentPhone(e.target.value)}
+                    placeholder="Seu número do WhatsApp"
+                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                    required
+                    disabled={loading}
+                  />
+                  <p className="text-[9px] text-[#39FF14] font-semibold mt-1">
+                    ℹ️ Com este número você fará Acesso Rápido imediato sem precisar de e-mail ou senhas!
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1946,6 +2099,164 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
             setLoading(false);
           }}
         />
+      )}
+
+      {/* Simulated Google Sign-In Account Selector Modal */}
+      {isGooglePopupOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white text-zinc-800 w-full max-w-sm rounded-lg p-6 shadow-2xl relative font-sans animate-scale-up">
+            <button
+              onClick={() => setIsGooglePopupOpen(false)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 transition text-sm cursor-pointer font-bold"
+            >
+              ✕
+            </button>
+
+            {/* Google Logo */}
+            <div className="flex justify-center mb-4">
+              <svg className="w-10 h-10" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+            </div>
+
+            <h3 className="text-lg font-bold text-center text-zinc-900">Fazer login com o Google</h3>
+            <p className="text-xs text-center text-zinc-500 mt-1 mb-5">
+              para continuar no <span className="font-bold text-[#22c55e]">GymPulse</span>
+            </p>
+
+            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-2 font-mono">
+              Selecione uma conta:
+            </p>
+
+            <div className="space-y-2 max-h-56 overflow-y-auto mb-4 pr-1">
+              {/* Account 1: Owner Michel Lima */}
+              <button
+                type="button"
+                className="w-full flex items-center justify-between p-2.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition text-left cursor-pointer active:scale-[0.99] group"
+                onClick={() => {
+                  setRegName("Michel Lima");
+                  setRegStudentEmail("michel.lima20000@gmail.com");
+                  setRegStudentPassword("google_michel123");
+                  setRegAvatar("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80");
+                  setIsGooglePopupOpen(false);
+                  setSuccessMsg("Google conectado! Bem-vindo, Michel Lima. Agora preencha seu WhatsApp para concluir.");
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold font-mono">
+                    M
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-zinc-850 group-hover:text-black">Michel Lima</p>
+                    <p className="text-[10px] text-zinc-400 font-mono">michel.lima20000@gmail.com</p>
+                  </div>
+                </div>
+                <span className="text-[10px] text-zinc-400 font-mono">Principal</span>
+              </button>
+
+              {/* Account 2: Ana Silva */}
+              <button
+                type="button"
+                className="w-full flex items-center p-2.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition text-left cursor-pointer active:scale-[0.99] group"
+                onClick={() => {
+                  setRegName("Ana Silva");
+                  setRegStudentEmail("ana.silva@gmail.com");
+                  setRegStudentPassword("google_ana123");
+                  setRegAvatar("https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80");
+                  setIsGooglePopupOpen(false);
+                  setSuccessMsg("Google conectado! Bem-vinda, Ana Silva. Agora preencha seu WhatsApp para concluir.");
+                }}
+              >
+                <div className="w-8 h-8 rounded-full bg-pink-500 text-white flex items-center justify-center text-xs font-bold mr-3 font-mono">
+                  A
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-zinc-850 group-hover:text-black">Ana Silva</p>
+                  <p className="text-[10px] text-zinc-400 font-mono">ana.silva@gmail.com</p>
+                </div>
+              </button>
+
+              {/* Account 3: Carlos Souza */}
+              <button
+                type="button"
+                className="w-full flex items-center p-2.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition text-left cursor-pointer active:scale-[0.99] group"
+                onClick={() => {
+                  setRegName("Carlos Souza");
+                  setRegStudentEmail("carlos.souza@gmail.com");
+                  setRegStudentPassword("google_carlos123");
+                  setRegAvatar("https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80");
+                  setIsGooglePopupOpen(false);
+                  setSuccessMsg("Google conectado! Bem-vindo, Carlos Souza. Agora preencha seu WhatsApp para concluir.");
+                }}
+              >
+                <div className="w-8 h-8 rounded-full bg-teal-500 text-white flex items-center justify-center text-xs font-bold mr-3 font-mono">
+                  C
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-zinc-850 group-hover:text-black">Carlos Souza</p>
+                  <p className="text-[10px] text-zinc-400 font-mono">carlos.souza@gmail.com</p>
+                </div>
+              </button>
+
+              {/* Custom Input Account Simulator */}
+              <div className="p-2.5 rounded-lg border border-zinc-200 bg-zinc-50 focus-within:ring-2 focus-within:ring-blue-500">
+                <p className="text-[10px] text-zinc-650 font-bold mb-1.5 font-sans">Usar outra conta do Gmail:</p>
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    placeholder="Seu Nome Completo"
+                    id="sim-google-name"
+                    className="w-full bg-white text-[11px] px-2 py-1.5 border border-zinc-300 rounded focus:outline-none"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Seu e-mail @gmail.com"
+                    id="sim-google-email"
+                    className="w-full bg-white text-[11px] px-2 py-1.5 border border-zinc-300 rounded focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold py-1.5 rounded transition cursor-pointer"
+                    onClick={() => {
+                      const nameInput = document.getElementById("sim-google-name") as HTMLInputElement;
+                      const emailInput = document.getElementById("sim-google-email") as HTMLInputElement;
+                      const nameVal = nameInput?.value?.trim() || "Aluno GymPulse";
+                      const emailVal = emailInput?.value?.trim() || "aluno@gmail.com";
+                      
+                      setRegName(nameVal);
+                      setRegStudentEmail(emailVal);
+                      setRegStudentPassword("simulated_pass_123");
+                      setRegAvatar(`https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80`);
+                      setIsGooglePopupOpen(false);
+                      setSuccessMsg(`Google Conectado! Bem-vindo(a), ${nameVal}. Agora insira seu WhatsApp para concluir.`);
+                    }}
+                  >
+                    Confirmar Conta Customizada
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-zinc-400 leading-normal font-sans pt-1 border-t border-zinc-100">
+              Para continuar, o Google compartilhará seu nome, endereço de e-mail e foto do perfil publicamente.
+            </p>
+          </div>
+        </div>
       )}
 
     </div>

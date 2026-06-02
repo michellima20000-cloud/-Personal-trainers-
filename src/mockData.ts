@@ -125,7 +125,8 @@ export const INITIAL_STUDENTS: Student[] = [
     status: 'Ativo',
     joinedAt: '12/01/2026',
     nextPayment: '12/07/2026',
-    value: 120.00
+    value: 120.00,
+    phoneWhatsApp: '11999999991'
   },
   {
     id: 's2',
@@ -141,7 +142,8 @@ export const INITIAL_STUDENTS: Student[] = [
     status: 'Ativo',
     joinedAt: '15/03/2026',
     nextPayment: '15/06/2026',
-    value: 140.00
+    value: 140.00,
+    phoneWhatsApp: '11999999992'
   },
   {
     id: 's3',
@@ -157,7 +159,8 @@ export const INITIAL_STUDENTS: Student[] = [
     status: 'Ativo',
     joinedAt: '01/05/2026',
     nextPayment: '01/06/2026',
-    value: 150.00
+    value: 150.00,
+    phoneWhatsApp: '11999999993'
   },
   {
     id: 's4',
@@ -173,7 +176,8 @@ export const INITIAL_STUDENTS: Student[] = [
     status: 'Inativo',
     joinedAt: '10/11/2025',
     nextPayment: '10/05/2026',
-    value: 110.00
+    value: 110.00,
+    phoneWhatsApp: '11999999994'
   }
 ];
 

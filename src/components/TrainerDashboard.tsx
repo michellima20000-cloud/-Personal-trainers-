@@ -366,7 +366,9 @@ export default function TrainerDashboard({
       status: 'Ativo',
       joinedAt: new Date().toLocaleDateString('pt-BR'),
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-      value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00
+      value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
+      trainerId: activeTrainer?.id || 't_default',
+      trainerName: activeTrainer?.name || 'Daniel Personal Coach'
     };
 
     onAddStudent(createdStudent);
@@ -1213,7 +1215,14 @@ export default function TrainerDashboard({
                           referrerPolicy="no-referrer"
                         />
                         <div>
-                          <p className="text-xs font-mono text-neutral-400 uppercase tracking-wider">Aluno Selecionado</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-xs font-mono text-neutral-400 uppercase tracking-wider">Aluno Selecionado</p>
+                            {selectedStudent.trainerName && (
+                              <span className="text-[10px] bg-[#39FF14]/10 border border-[#39FF14]/20 text-[#39FF14] px-2 py-0.5 rounded-full font-sans font-bold">
+                                Personal: {selectedStudent.trainerName}
+                              </span>
+                            )}
+                          </div>
                           <h3 className="text-lg font-extrabold text-white my-0">{selectedStudent.name}</h3>
                         </div>
                       </div>
