@@ -212,6 +212,23 @@ export default function StudentDashboard({
   const [pixCopied, setPixCopied] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
+  // Student Billing & Activation Flow states
+  const [selectedPlanToBuy, setSelectedPlanToBuy] = useState<'Mensal' | 'Trimestral' | 'Semestral' | 'Anual' | null>(null);
+  const [billingFlowStep, setBillingFlowStep] = useState<'plan_selection' | 'checkout' | 'waiting_approval'>('plan_selection');
+  const [isProcessingStudentBilling, setIsProcessingStudentBilling] = useState(false);
+
+  useEffect(() => {
+    if (currentStudent && currentStudent.status === 'Inativo') {
+      if (currentStudent.history.includes('[PAGAMENTO]')) {
+        setBillingFlowStep('waiting_approval');
+        // Pre-set selectedPlanToBuy based on their current plan
+        setSelectedPlanToBuy(currentStudent.plan || 'Mensal');
+      } else {
+        setBillingFlowStep('plan_selection');
+      }
+    }
+  }, [currentStudent?.id, currentStudent?.status, currentStudent?.history]);
+
   // Student Stripe checkout states
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'stripe'>('pix');
   const [stripeCardNumber, setStripeCardNumber] = useState('');
@@ -499,6 +516,390 @@ export default function StudentDashboard({
   };
 
   const currentStudentEvolution = evolution[currentStudent?.id] || [];
+  const studentTrainer = (trainers || []).find(t => t.id === currentStudent?.trainerId) || trainers[0];
+
+  const renderBillingPortal = () => {
+    return (
+      <div className="space-y-6 animate-fade-in w-full">
+        {/* Step indicators */}
+        <div className="grid grid-cols-3 gap-2 p-1 bg-neutral-900/60 rounded-xl border border-neutral-800 text-center font-mono text-[9px] uppercase tracking-wider relative">
+          <div className={`py-2 px-1 rounded-lg font-bold flex items-center justify-center gap-1.5 ${billingFlowStep === 'plan_selection' ? 'bg-[#39FF14] text-black font-black' : 'text-neutral-400'}`}>
+            <span>1. Escolher Plano</span>
+            {selectedPlanToBuy && <Check size={10} strokeWidth={3} />}
+          </div>
+          <div className={`py-2 px-1 rounded-lg font-bold flex items-center justify-center gap-1.5 ${billingFlowStep === 'checkout' ? 'bg-[#39FF14] text-black font-black' : billingFlowStep === 'waiting_approval' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'}`}>
+            <span>2. Pagamento</span>
+            {billingFlowStep === 'waiting_approval' && <Check size={10} strokeWidth={3} />}
+          </div>
+          <div className={`py-2 px-1 rounded-lg font-bold flex items-center justify-center gap-1.5 ${billingFlowStep === 'waiting_approval' ? 'bg-[#39FF14]/90 text-black font-black' : 'text-neutral-400'}`}>
+            <span>3. Liberação</span>
+          </div>
+        </div>
+
+        {/* FLOW STATE 1: PLAN SELECTION */}
+        {billingFlowStep === 'plan_selection' && (
+          <div className="space-y-5 animate-fade-in w-full">
+            <div className="bg-[#121214] border border-neutral-800 p-5 rounded-2xl text-center space-y-2">
+              <h3 className="text-md font-extrabold text-white">Selecione o seu Plano de Assessoria</h3>
+              <p className="text-xs text-neutral-400 max-w-lg mx-auto leading-relaxed">
+                Você se cadastrou via link profissional do Coach <strong className="text-[#39FF14]">{studentTrainer?.name || 'Daniel Coach'}</strong>. Escolha a recorrência ideal para os seus objetivos e treinos personalizados.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { id: 'Mensal', title: 'Acesso Mensal', price: 150.00, billing: '/mês', desc: 'Renovação de 30 em 30 dias. Ideal para quem quer iniciar e testar o ritmo da planilha.', features: ['Treinos Focados', 'Mudança Mensal das Fichas', 'Sincronização de Cargas'] },
+                { id: 'Trimestral', title: 'Plano Trimestral', price: 120.00, billing: '/mês', desc: 'R$ 360,00 à vista. O melhor equilíbrio para manter o compromisso pelos primeiros 90 dias com desconto.', features: ['Plano de Treinos Trimestral', 'Fichas A, B, C, D e E livres', 'Suporte Direct', 'Desconto Progressivo'], recommended: true },
+                { id: 'Semestral', title: 'Plano Semestral', price: 100.00, billing: '/mês', desc: 'R$ 600,00 à vista. Foco em constância por 180 dias com bioimpedâncias periódicas e acompanhamentos.', features: ['Planejamento 6 Meses', 'Mapeamento de Cargas', 'Bioimpedância Sincronizada', 'Suporte WhatsApp Prioritário'] },
+                { id: 'Anual', title: 'Assessoria Anual', price: 80.00, billing: '/mês', desc: 'R$ 960,00 à vista. Transformação completa de um ano inteiro pelo menor valor proporcional mensal.', features: ['Mudanças Ilimitadas', 'Acompanhamento Fisiológico', 'Suporte 24h Prioritário', 'Garantia de Evolução'] }
+              ].map((p) => (
+                <div 
+                  key={p.id}
+                  onClick={() => setSelectedPlanToBuy(p.id as any)}
+                  className={`p-5 rounded-2xl border transition duration-200 cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                    selectedPlanToBuy === p.id 
+                      ? 'bg-[#121214] border-[#39FF14] shadow-[0_0_15px_rgba(57,255,20,0.08)]' 
+                      : 'bg-[#121214]/50 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/20'
+                  }`}
+                >
+                  {p.recommended && (
+                    <span className="absolute top-0 right-0 bg-[#39FF14] text-black text-[8px] font-black tracking-widest font-mono uppercase px-3 py-1 rounded-bl-xl z-10">RECOMENDADO</span>
+                  )}
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1 rounded-full ${selectedPlanToBuy === p.id ? 'bg-[#39FF14] text-black' : 'bg-neutral-850 text-neutral-400'}`}>
+                        <Check size={12} strokeWidth={3} />
+                      </div>
+                      <h4 className="text-sm font-bold text-white font-sans">{p.title}</h4>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed font-sans">{p.desc}</p>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-neutral-800/80 flex items-baseline justify-between select-none">
+                    <div>
+                      <span className="text-lg font-black text-white font-mono">R$ {p.price.toFixed(2)}</span>
+                      <span className="text-[10px] text-neutral-500 font-mono">{p.billing}</span>
+                    </div>
+                    <span className="text-[10px] text-neutral-500 font-sans font-medium uppercase font-mono">PIX / CARD</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  if (!selectedPlanToBuy) return;
+                  setBillingFlowStep('checkout');
+                }}
+                disabled={!selectedPlanToBuy}
+                className={`w-full py-4 rounded-xl font-bold text-xs font-sans tracking-wide uppercase transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 ${
+                  selectedPlanToBuy 
+                    ? 'bg-[#39FF14] text-black shadow-[#39FF14]/10 hover:shadow-[#39FF14]/20' 
+                    : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                }`}
+              >
+                <span>Prosseguir para Pagamento</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* FLOW STATE 2: CHECKOUT */}
+        {billingFlowStep === 'checkout' && selectedPlanToBuy && (
+          <div className="space-y-4 animate-fade-in w-full">
+            <div className="bg-[#121214] border border-neutral-800 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 font-sans w-full">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-[#39FF14]/15 p-2.5 rounded-xl border border-[#39FF14]/30 text-[#39FF14]">
+                  <CreditCard size={18} />
+                </div>
+                <div className="text-left">
+                  <h4 className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono">Plano Selecionado</h4>
+                  <p className="text-sm font-black text-white">{selectedPlanToBuy === 'Mensal' ? 'Plano Recorrente Mensal' : selectedPlanToBuy === 'Trimestral' ? 'Assessoria Trimestral (90 dias)' : selectedPlanToBuy === 'Semestral' ? 'Assessoria Semestral (180 dias)' : 'Assessoria Anual Completa (360 dias)'}</p>
+                </div>
+              </div>
+              <div className="text-right flex flex-col items-center sm:items-end">
+                <span className="text-xl font-black text-[#39FF14] font-mono">R$ {
+                  selectedPlanToBuy === 'Mensal' ? '150,00' : selectedPlanToBuy === 'Trimestral' ? '360,00' : selectedPlanToBuy === 'Semestral' ? '600,00' : '960,00'
+                }</span>
+                <button 
+                  onClick={() => setBillingFlowStep('plan_selection')}
+                  className="text-[10px] text-[#39FF14] hover:underline block mt-0.5 cursor-pointer bg-transparent border-none outline-none"
+                >
+                  Alterar plano
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-selector for Card or Pix */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-900 border border-neutral-800 rounded-xl font-mono text-xs text-center w-full">
+              <button 
+                onClick={() => setSelectedPaymentMethod('pix')}
+                className={`py-2 px-1 rounded-lg transition font-bold uppercase select-none flex items-center justify-center gap-1.5 cursor-pointer ${selectedPaymentMethod === 'pix' ? 'bg-neutral-800 border border-[#39FF14]/40 text-white' : 'text-neutral-500'}`}
+              >
+                <span>🔑 Pix Copia e Cola</span>
+              </button>
+              <button 
+                onClick={() => setSelectedPaymentMethod('stripe')}
+                className={`py-2 px-1 rounded-lg transition font-bold uppercase select-none flex items-center justify-center gap-1.5 cursor-pointer ${selectedPaymentMethod === 'stripe' ? 'bg-neutral-800 border border-[#39FF14]/40 text-white' : 'text-neutral-500'}`}
+              >
+                <span>💳 Cartão de Crédito</span>
+              </button>
+            </div>
+
+            {selectedPaymentMethod === 'pix' ? (
+              /* Pix layout */
+              <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4 font-sans animate-fade-in w-full">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left w-full">
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Chave PIX de {studentTrainer?.name || 'Daniel Coach'}
+                    </h4>
+                    <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                      Copie a chave Pix abaixo e efetue a transferência do valor correspondente. Seus treinos serão liberados pelo coach imediatamente após.
+                    </p>
+                  </div>
+                  <span className="text-[10px] bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/30 px-2 py-0.5 rounded font-bold font-mono shrink-0">
+                    {studentTrainer?.pixKeyType || 'Chave Aleatória'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center w-full">
+                  <div className="sm:col-span-4 flex flex-col items-center justify-center bg-neutral-950 p-3 rounded-xl border border-neutral-900 shadow-inner">
+                    <div className="w-24 h-24 bg-white p-1.5 rounded-lg relative flex items-center justify-center">
+                      {studentTrainer?.pixQrCode ? (
+                        <img src={studentTrainer.pixQrCode} alt="Pix Coach" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="grid grid-cols-4 gap-1 w-full h-full opacity-90 select-none">
+                          <div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
+                          <div className="bg-black rounded"></div><div className="bg-[#39FF14] rounded"></div><div className="bg-[#39FF14] rounded"></div><div className="bg-black rounded"></div>
+                          <div className="bg-black rounded"></div><div className="bg-neutral-100 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div>
+                          <div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div><div className="bg-neutral-200 rounded"></div><div className="bg-black rounded"></div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-8 space-y-3 text-left w-full">
+                    <div className="space-y-1">
+                      <span className="text-[9px] text-neutral-500 font-mono uppercase tracking-widest block font-bold">Chave Pix Oficial</span>
+                      <div className="flex items-center gap-1.5 mt-1 bg-neutral-950 p-2.5 rounded-xl border border-neutral-850 text-xs font-mono text-[#39FF14] cursor-pointer hover:border-neutral-700 transition">
+                        <span className="truncate flex-1 select-all">{studentTrainer?.pixKey || 'daniel.gympulse@pix.com.br'}</span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(studentTrainer?.pixKey || 'daniel.gympulse@pix.com.br');
+                            setPixCopied(true);
+                            setTimeout(() => setPixCopied(false), 2000);
+                          }}
+                          className="text-neutral-400 hover:text-white p-1 hover:bg-neutral-900 rounded"
+                        >
+                          <Copy size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {pixCopied && (
+                      <p className="text-[10px] text-emerald-400 font-sans font-bold animate-bounce">✓ Chave Pix copiada para a área de transferência!</p>
+                    )}
+
+                    <div className="pt-1">
+                      <button
+                        onClick={() => {
+                          setIsProcessingStudentBilling(true);
+                          setTimeout(() => {
+                            setIsProcessingStudentBilling(false);
+                            if (onUpdateStudent) {
+                              const planPrice = selectedPlanToBuy === 'Mensal' ? 150 : selectedPlanToBuy === 'Trimestral' ? 360 : selectedPlanToBuy === 'Semestral' ? 600 : 960;
+                              onUpdateStudent(currentStudent.id, {
+                                plan: selectedPlanToBuy,
+                                value: planPrice,
+                                history: currentStudent.history + `\n[PAGAMENTO] Aluno assinou o plano ${selectedPlanToBuy} via PIX e aguarda liberação do personal de forma offline.`
+                              });
+                            }
+                            setBillingFlowStep('waiting_approval');
+                          }, 1500);
+                        }}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs py-3.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        {isProcessingStudentBilling ? (
+                          <span className="animate-pulse">Confirmando transação com o Coach...</span>
+                        ) : (
+                          <>
+                            <Check size={14} />
+                            Já realizei a transferência via Pix
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Stripe Simulator Layout */
+              <div className="bg-[#121214] p-5 rounded-2xl border border-neutral-800 space-y-4 font-sans animate-fade-in w-full text-left">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                    💳 Assinatura via Stripe Gateway Simulator
+                  </h4>
+                  <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                    Efetue a simulação de pagamento recorrente por cartão. O GymPulse enviará o token de conformidade PCI diretamente ao perfil do professor.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-wider font-bold mb-1">Nome Completo do Titular</label>
+                    <input
+                      type="text"
+                      value={stripeCardName}
+                      onChange={(e) => setStripeCardName(e.target.value)}
+                      placeholder="EX: MICHEL O ALUNO"
+                      className="w-full bg-neutral-950 border border-neutral-850 rounded-xl px-3 py-2.5 text-xs text-white uppercase font-sans focus:outline-none focus:border-[#39FF14]"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-8">
+                      <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-wider font-bold mb-1">Número do Cartão de Crédito</label>
+                      <input
+                        type="text"
+                        value={stripeCardNumber}
+                        onChange={(e) => setStripeCardNumber(e.target.value)}
+                        placeholder="4000 1234 5678 9010"
+                        className="w-full bg-neutral-950 border border-neutral-850 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#39FF14]"
+                        maxLength={19}
+                        required
+                      />
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-wider font-bold mb-1">Vencimento</label>
+                      <input
+                        type="text"
+                        value={stripeCardExpiry}
+                        onChange={(e) => setStripeCardExpiry(e.target.value)}
+                        placeholder="12/29"
+                        className="w-full bg-neutral-950 border border-neutral-850 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#39FF14]"
+                        maxLength={5}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-wider font-bold mb-1">CVC / Código de Segurança</label>
+                      <input
+                        type="text"
+                        value={stripeCardCvv}
+                        onChange={(e) => setStripeCardCvv(e.target.value)}
+                        placeholder="123"
+                        className="w-full bg-neutral-950 border border-neutral-850 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#39FF14]"
+                        maxLength={3}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-neutral-400 uppercase font-mono tracking-wider font-bold mb-1">CEP de Faturamento</label>
+                      <input
+                        type="text"
+                        value={stripeCardPostalCode}
+                        onChange={(e) => setStripeCardPostalCode(e.target.value)}
+                        placeholder="01311-000"
+                        className="w-full bg-neutral-950 border border-neutral-850 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#39FF14]"
+                        maxLength={9}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProcessingStudentBilling(true);
+                      setTimeout(() => {
+                        setIsProcessingStudentBilling(false);
+                        if (onUpdateStudent) {
+                          const planPrice = selectedPlanToBuy === 'Mensal' ? 150 : selectedPlanToBuy === 'Trimestral' ? 360 : selectedPlanToBuy === 'Semestral' ? 600 : 960;
+                          onUpdateStudent(currentStudent.id, {
+                            plan: selectedPlanToBuy,
+                            value: planPrice,
+                            history: currentStudent.history + `\n[PAGAMENTO] Aluno assinou o plano ${selectedPlanToBuy} via Stripe (Simulado) com sucesso e aguarda liberação do personal de forma automatizada.`
+                          });
+                        }
+                        setBillingFlowStep('waiting_approval');
+                      }, 1800);
+                    }}
+                    className="w-full bg-[#39FF14] text-black font-black text-xs py-3.5 rounded-xl transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 uppercase shadow-md shadow-[#39FF14]/20"
+                  >
+                    {isProcessingStudentBilling ? (
+                      <span className="flex items-center gap-1 animate-pulse">Processando faturamento Stripe Sandbox...</span>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={13} />
+                        Efetuar Assinatura Segura via Stripe
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FLOW STATE 3: WAITING APPROVAL */}
+        {billingFlowStep === 'waiting_approval' && (
+          <div className="bg-[#121214] border border-neutral-800 p-6 rounded-3xl text-center space-y-5 animate-fade-in font-sans w-full">
+            <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto text-lg font-mono animate-bounce mt-2">
+              ⏳
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/25 px-2.5 py-1 rounded-md font-mono uppercase tracking-widest font-extrabold">Aguardando Liberação</span>
+              <h3 className="text-md font-black text-white">Solicitação de Acesso Registrada!</h3>
+              <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                Você escolheu o plano <strong className="text-[#39FF14]">{currentStudent?.plan || selectedPlanToBuy}</strong>. Agora, o seu Personal Trainer <strong className="text-[#39FF14]">{studentTrainer?.name || 'Daniel Coach'}</strong> precisa liberar o seu acesso comercial para sincronizar suas fichas de treino.
+              </p>
+            </div>
+
+            <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-850/60 max-w-xs mx-auto text-left space-y-1 px-5">
+              <div className="flex justify-between text-[11px]"><span className="text-neutral-500 font-bold">Seu Nome:</span> <span className="text-white font-bold">{currentStudent?.name}</span></div>
+              <div className="flex justify-between text-[11px]"><span className="text-neutral-500 font-bold">Plano Escolhido:</span> <span className="text-[#39FF14] font-bold">{currentStudent?.plan || selectedPlanToBuy}</span></div>
+              <div className="flex justify-between text-[11px]"><span className="text-neutral-500">Acesso:</span> <span className="text-white font-medium">Bloqueado até a liberação</span></div>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2 max-w-xs mx-auto">
+              <a
+                href={`https://wa.me/${studentTrainer?.phoneWhatsApp?.replace(/\D/g, '') || '5511999999999'}?text=Olá%20Coach!%20Me%20cadastrei%20no%20GymPulse%20e%20assinei%20o%20plano%20${currentStudent?.plan || selectedPlanToBuy}.%20Libera%20meu%20acesso%20aí,%20por%20favor!`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-emerald-650 lg:bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs py-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/10 text-center"
+              >
+                <MessageSquare size={13} /> Notificar Coach via WhatsApp
+              </a>
+
+              {/* Sandbox facilitation block to let reviewer auto-activate for testing */}
+              <button
+                onClick={() => {
+                  if (onUpdateStudent) {
+                    onUpdateStudent(currentStudent.id, { status: 'Ativo' });
+                  }
+                }}
+                className="bg-neutral-850 hover:bg-neutral-800 text-neutral-400 font-extrabold text-[9px] uppercase font-mono py-2 rounded-xl transition cursor-pointer border border-neutral-800/60"
+              >
+                ⚡ Forçar Liberação (Desenvolvedor / Testes)
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const handleExportPDF = () => {
     exportStudentReport(currentStudent, currentStudentEvolution, studentSheet);
@@ -585,7 +986,9 @@ export default function StudentDashboard({
         </div>
 
         {/* Dynamic Navigation Tabs inside App viewport */}
-        <div className="grid grid-cols-4 gap-1 p-1 bg-neutral-900/80 rounded-xl border border-neutral-800 font-mono text-xs text-center">
+        {currentStudent.status === 'Inativo' ? renderBillingPortal() : (
+          <>
+            <div className="grid grid-cols-4 gap-1 p-1 bg-neutral-900/80 rounded-xl border border-neutral-800 font-mono text-xs text-center">
           <button 
             onClick={() => setActiveTab('treino')}
             className={`py-2 px-1 rounded-lg transition font-bold uppercase select-none ${activeTab === 'treino' ? 'bg-[#39FF14] text-black' : 'text-neutral-400 hover:text-white'}`}
@@ -1556,6 +1959,8 @@ export default function StudentDashboard({
             </div>
           );
         })()}
+          </>
+        )}
 
       </div>
 

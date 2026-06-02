@@ -23,7 +23,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [trainerEmail, setTrainerEmail] = useState('personal@gympulse.com.br');
   const [trainerPassword, setTrainerPassword] = useState('personal123');
   const [showTrainerPass, setShowTrainerPass] = useState(false);
-  const [trainerLoginMode, setTrainerLoginMode] = useState<'credentials' | 'demo'>('demo');
+  const [trainerLoginMode, setTrainerLoginMode] = useState<'credentials' | 'demo'>('credentials');
   const [selectedTrainerId, setSelectedTrainerId] = useState(trainers[0]?.id || 't_default');
   
   // Student Auth Form State
@@ -507,7 +507,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           ? `Cadastrado automaticamente via indicação do treinador ${referredTrainer.name}.`
           : `Cadastrado no portal direto e vinculado ao treinador ${chosenTrainerName}.`,
         plan: 'Mensal',
-        status: 'Ativo',
+        status: 'Inativo',
         joinedAt: new Date().toLocaleDateString('pt-BR'),
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 150.00,
@@ -666,126 +666,46 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
                  {!isRegisteringTrainer ? (
                   <form onSubmit={handleTrainerLogin} className="space-y-4">
-                    {/* Login Mode Switcher */}
-                    <div className="flex justify-end mb-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTrainerLoginMode(trainerLoginMode === 'credentials' ? 'demo' : 'credentials');
-                          setErrorMsg('');
-                        }}
-                        className="text-[10px] text-[#39FF14] hover:underline font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-transparent border-none outline-none"
-                      >
-                        {trainerLoginMode === 'credentials' ? '⚡ Ver Contas de Teste / Demo' : '🔒 Login Seguro (E-mail e Senha)'}
-                      </button>
-                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                          E-mail Profissional
+                        </label>
+                        <input
+                          type="email"
+                          value={trainerEmail}
+                          onChange={(e) => setTrainerEmail(e.target.value)}
+                          placeholder="seuemail@gympulse.com"
+                          className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                          required
+                          disabled={loading}
+                        />
+                      </div>
 
-                    {trainerLoginMode === 'credentials' ? (
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            E-mail Profissional
-                          </label>
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                          Senha Operacional
+                        </label>
+                        <div className="relative">
                           <input
-                            type="email"
-                            value={trainerEmail}
-                            onChange={(e) => setTrainerEmail(e.target.value)}
-                            placeholder="seuemail@gympulse.com"
-                            className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                            type={showTrainerPass ? 'text' : 'password'}
+                            value={trainerPassword}
+                            onChange={(e) => setTrainerPassword(e.target.value)}
+                            placeholder="Insira sua senha de segurança"
+                            className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
                             required
                             disabled={loading}
                           />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            Senha Operacional
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showTrainerPass ? 'text' : 'password'}
-                              value={trainerPassword}
-                              onChange={(e) => setTrainerPassword(e.target.value)}
-                              placeholder="Insira sua senha de segurança"
-                              className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                              required
-                              disabled={loading}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowTrainerPass(!showTrainerPass)}
-                              className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
-                            >
-                              {showTrainerPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowTrainerPass(!showTrainerPass)}
+                            className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
+                          >
+                            {showTrainerPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            Escolha seu Perfil de Treinador
-                          </label>
-                          <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-1">
-                            <select
-                              value={selectedTrainerId}
-                              onChange={(e) => setSelectedTrainerId(e.target.value)}
-                              className="w-full bg-transparent text-xs text-white py-2.5 px-3 border-none outline-none font-bold cursor-pointer font-sans"
-                              disabled={loading}
-                            >
-                              <option value="" disabled className="text-neutral-500 bg-white dark:bg-neutral-950 font-sans">Selecione seu nome</option>
-                              {trainers.map((trainer) => (
-                                <option 
-                                  key={trainer.id} 
-                                  value={trainer.id} 
-                                  className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans"
-                                >
-                                  {trainer.name} ({trainer.email})
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          
-                          {/* Profile Preview Card below selector */}
-                          {currentSelectedTrainer && (
-                            <div className="mt-3 bg-neutral-950/60 p-3 rounded-xl border border-neutral-800 flex items-center gap-3 animate-fade-in">
-                              <div className="w-9 h-9 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/30 flex items-center justify-center text-[#39FF14] font-black text-xs uppercase shrink-0">
-                                {currentSelectedTrainer.name.charAt(0)}
-                              </div>
-                              <div>
-                                <p className="text-[11px] font-extrabold text-white leading-tight">{currentSelectedTrainer.name}</p>
-                                <p className="text-[9px] font-mono text-[#39FF14] mt-0.5 uppercase tracking-wide leading-none">{currentSelectedTrainer.email}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            Senha Operacional
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showTrainerPass ? 'text' : 'password'}
-                              value={trainerPassword}
-                              onChange={(e) => setTrainerPassword(e.target.value)}
-                              placeholder="Fórmula de segurança do treinador..."
-                              className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                              required
-                              disabled={loading}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowTrainerPass(!showTrainerPass)}
-                              className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
-                            >
-                              {showTrainerPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    </div>
 
                     <button
                       type="submit"
