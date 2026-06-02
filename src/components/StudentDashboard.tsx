@@ -1161,7 +1161,7 @@ export default function StudentDashboard({
           const trainerList = trainers || [];
           const trainer = (trainerList.find(t => t.id === currentStudent.trainerId) || trainerList[0] || {
             id: 'default-trainer',
-            name: currentStudent.trainerName || 'Daniel Personal Coach',
+            name: 'Daniel Personal Coach',
             email: 'trainer@gympulse.com',
             selectedPlan: 'Mensal',
             trialStartDate: '',

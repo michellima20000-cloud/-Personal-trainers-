@@ -61,6 +61,7 @@ export default function TrainerDashboard({
 }: TrainerDashboardProps) {
   const [activeTab, setActiveTab] = useState<'alunos' | 'cadastrar_aluno' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs'>('alunos');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSortBy, setStudentSortBy] = useState<'name' | 'joinDate'>('name');
   
@@ -366,9 +367,7 @@ export default function TrainerDashboard({
       status: 'Ativo',
       joinedAt: new Date().toLocaleDateString('pt-BR'),
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-      value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
-      trainerId: activeTrainer?.id || 't_default',
-      trainerName: activeTrainer?.name || 'Daniel Personal Coach'
+      value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00
     };
 
     onAddStudent(createdStudent);
@@ -823,9 +822,20 @@ export default function TrainerDashboard({
       <div className="bg-[#121214] border-b border-neutral-800 py-6 px-4 md:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
-              <span className="text-[#39FF14] h-8 w-2 bg-[#39FF14] rounded-full inline-block"></span>
-              GymPulse <span className="text-xs bg-[#39FF14]/10 text-[#39FF14] px-2.5 py-0.5 rounded-full border border-[#39FF14]/20 font-mono tracking-widest uppercase">TRAINER CORE</span>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[#39FF14] h-8 w-2 bg-[#39FF14] rounded-full inline-block"></span>
+                <span>GymPulse</span>
+              </div>
+              <span className="text-xs bg-[#39FF14]/10 text-[#39FF14] px-2.5 py-0.5 rounded-full border border-[#39FF14]/20 font-mono tracking-widest uppercase">
+                TRAINER CORE
+              </span>
+              {activeTrainer && (
+                <div className="text-xs bg-neutral-900 text-neutral-300 border border-neutral-800 px-3 py-1 rounded-full flex items-center gap-1.5 font-normal">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse"></span>
+                  <span>Logado como: <strong className="text-[#39FF14] font-bold">{activeTrainer.name}</strong> ({activeTrainer.email})</span>
+                </div>
+              )}
             </h1>
             <p className="text-xs md:text-sm text-neutral-400 mt-1">Simulação completa do painel do treinador principal.</p>
           </div>
@@ -879,6 +889,19 @@ export default function TrainerDashboard({
         
         {/* Sidebar Nav Panels */}
         <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
+          {activeTrainer && (
+            <div className="mb-4 bg-gradient-to-br from-neutral-900 to-neutral-950 border border-neutral-800 p-4 rounded-2xl relative overflow-hidden flex items-center gap-3 shadow-lg shadow-black/40">
+              <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-12 h-12 bg-[#39FF14]/5 rounded-full blur-xl"></div>
+              <div className="w-10 h-10 rounded-full bg-[#39FF14]/15 border border-[#39FF14]/30 flex items-center justify-center text-[#39FF14] font-black text-sm uppercase shrink-0">
+                {activeTrainer.name.charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[8px] text-neutral-500 font-mono uppercase tracking-widest leading-none font-bold">Painel de Controle</p>
+                <p className="text-xs font-bold text-white truncate mt-1">{activeTrainer.name}</p>
+                <p className="text-[9px] text-[#39FF14] truncate font-mono mt-0.5">{activeTrainer.email}</p>
+              </div>
+            </div>
+          )}
           <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest pl-3 mb-2">GERENCIAMENTO</p>
           
           <button 
@@ -1192,8 +1215,39 @@ export default function TrainerDashboard({
                       </div>
 
                       <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between text-xs text-neutral-400">
-                        <span>Peso Atual: <strong className="text-white font-mono">{lastEv ? `${lastEv.weight} kg` : `${student.weight} kg`}</strong></span>
-                        <span className="text-[10px] text-neutral-500 font-mono">Venc: {student.nextPayment}</span>
+                        <div className="flex flex-col">
+                          <span>Peso Atual: <strong className="text-white font-mono">{lastEv ? `${lastEv.weight} kg` : `${student.weight} kg`}</strong></span>
+                          <span className="text-[10px] text-neutral-500 font-mono mt-0.5">Venc: {student.nextPayment}</span>
+                        </div>
+                        
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const inviteUrl = `${window.location.origin}?role=student&studentId=${student.id}`;
+                            navigator.clipboard.writeText(inviteUrl);
+                            setCopiedStudentId(student.id);
+                            setTimeout(() => setCopiedStudentId(null), 2000);
+                          }}
+                          className={`text-[10px] px-2.5 py-1.5 rounded-lg border flex items-center gap-1 transition-all font-mono font-bold cursor-pointer shrink-0 ${
+                            copiedStudentId === student.id
+                              ? 'bg-[#39FF14] text-black border-[#39FF14]'
+                              : 'bg-neutral-900 border-neutral-800 text-[#39FF14] hover:bg-[#39FF14]/10 hover:border-[#39FF14]/30'
+                          }`}
+                          title="Copiar link de acesso exclusivo deste aluno"
+                        >
+                          {copiedStudentId === student.id ? (
+                            <>
+                              <Check size={11} />
+                              <span>Copiado</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={11} />
+                              <span>Link de Convite</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   );
@@ -1215,14 +1269,7 @@ export default function TrainerDashboard({
                           referrerPolicy="no-referrer"
                         />
                         <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-xs font-mono text-neutral-400 uppercase tracking-wider">Aluno Selecionado</p>
-                            {selectedStudent.trainerName && (
-                              <span className="text-[10px] bg-[#39FF14]/10 border border-[#39FF14]/20 text-[#39FF14] px-2 py-0.5 rounded-full font-sans font-bold">
-                                Personal: {selectedStudent.trainerName}
-                              </span>
-                            )}
-                          </div>
+                          <p className="text-xs font-mono text-neutral-400 uppercase tracking-wider">Aluno Selecionado</p>
                           <h3 className="text-lg font-extrabold text-white my-0">{selectedStudent.name}</h3>
                         </div>
                       </div>
@@ -1328,20 +1375,22 @@ export default function TrainerDashboard({
                         <div className="flex items-center justify-between">
                           <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono font-bold flex items-center gap-1">
                             <span className="w-1.5 h-1.5 bg-[#39FF14] rounded-full"></span>
-                            Link de Acesso do Aluno
+                            Link de Acesso Exclusivo (com studentId)
                           </p>
                           <span className="text-[9px] bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/20 px-1.5 py-0.5 rounded font-mono font-bold">
                             ENVIAR ALUNO
                           </span>
                         </div>
                         <p className="text-[11px] text-neutral-400 font-sans leading-relaxed">
-                          Compartilhe o link de acesso exclusivo para que o aluno acesse diretamente o portal dele:
+                          Compartilhe o link de acesso exclusivo ou copie uma mensagem formatada profissionalmente para enviar via WhatsApp:
                         </p>
+                        
                         <div className="flex items-center gap-2 bg-neutral-950 p-2 rounded-lg border border-neutral-800">
                           <span className="text-[10px] font-mono text-[#39FF14] select-all truncate flex-1 leading-none py-1">
                             {window.location.origin}?role=student&studentId={selectedStudent.id}
                           </span>
                           <button
+                            type="button"
                             onClick={() => {
                               const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
                               navigator.clipboard.writeText(inviteUrl);
@@ -1351,7 +1400,47 @@ export default function TrainerDashboard({
                             className="bg-[#39FF14]/10 hover:bg-[#39FF14] hover:text-black text-[#39FF14] text-[10px] font-bold px-3 py-1.5 rounded-md border border-[#39FF14]/30 hover:border-transparent transition flex items-center gap-1 cursor-pointer shrink-0"
                           >
                             {copiedLink ? <Check size={11} /> : <Copy size={11} />}
-                            <span>{copiedLink ? 'Copiado' : 'Copiar'}</span>
+                            <span>{copiedLink ? 'Copiado!' : 'Apenas Link'}</span>
+                          </button>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
+                              const message = `Olá, *${selectedStudent.name}*! 💪🏋️‍♂️\n\nAqui está o seu link de convite exclusivo para acessar o seu aplicativo de treinos no *GymPulse*.\n\nAtravés dele você poderá ver sua ficha de exercícios atualizada, acompanhar suas avaliações físicas e tirar dúvidas comigo.\n\n👉 Clique para acessar: ${inviteUrl}`;
+                              navigator.clipboard.writeText(message);
+                              setCopiedStudentId(selectedStudent.id);
+                              setTimeout(() => setCopiedStudentId(null), 2500);
+                            }}
+                            className="flex-1 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-300 font-bold text-xs py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                          >
+                            {copiedStudentId === selectedStudent.id ? (
+                              <>
+                                <Check size={13} className="text-[#39FF14]" />
+                                <span className="text-white">Mensagem Copiada!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={13} className="text-neutral-400" />
+                                <span>Copiar Mensagem Formatada</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
+                              const message = `Olá, *${selectedStudent.name}*! 💪🏋️‍♂️ Aqui está o seu link de convite exclusivo para acessar o seu aplicativo de treinos no *GymPulse*: ${inviteUrl}`;
+                              const encodedText = encodeURIComponent(message);
+                              window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
+                            }}
+                            className="bg-[#25D366] hover:bg-[#128C7E] text-white font-extrabold text-xs py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer font-sans shadow-lg shadow-green-500/10 hover:scale-[1.01]"
+                          >
+                            <Phone size={13} />
+                            <span>Enviar via WhatsApp</span>
                           </button>
                         </div>
                       </div>

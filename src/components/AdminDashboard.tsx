@@ -460,9 +460,7 @@ export default function AdminDashboard({
                         </div>
                         <div>
                           <span className="text-neutral-500 block">Coach Resp.:</span>
-                          <span className="text-neutral-300 font-bold truncate pr-1 block" title={s.trainerName || trainersObj.name}>
-                            {s.trainerName || trainersObj.name}
-                          </span>
+                          <span className="text-neutral-300 font-bold truncate pr-1 block">{trainersObj.name.split(' ')[0]}</span>
                         </div>
                         <div className="col-span-2 pt-1 border-t border-neutral-900/80">
                           <span className="text-neutral-500 block">Caso Clínico/Restrição:</span>
