@@ -138,8 +138,12 @@ const getInitialStates = () => {
     const params = new URLSearchParams(window.location.search);
     const urlRole = params.get('role');
     const urlStudentId = params.get('studentId');
+    const urlTrainerId = params.get('trainerId');
     
-    if (urlRole === 'student' || urlRole === 'trainer') {
+    if (urlTrainerId) {
+      initial.isLoggedIn = false;
+      initial.role = 'student';
+    } else if (urlRole === 'student' || urlRole === 'trainer') {
       initial.role = urlRole as any;
       initial.isLoggedIn = true;
       if (urlStudentId) {
@@ -415,17 +419,31 @@ export default function App() {
         const params = new URLSearchParams(window.location.search);
         const urlRole = params.get('role');
         const urlStudentId = params.get('studentId');
+        const urlTrainerId = params.get('trainerId');
 
         const firstId = urlStudentId || remoteStudents?.[0]?.id || 's1';
         setActiveStudentId(prev => urlStudentId || prev || firstId);
 
-        if (urlRole === 'student') {
+        let finalIsLoggedIn = preloadedState.isLoggedIn;
+        let finalRole = preloadedState.role;
+
+        if (urlTrainerId) {
+          setRole('student');
+          setIsLoggedIn(false);
+          finalRole = 'student';
+          finalIsLoggedIn = false;
+          addSyncLog(`Link de onboarding de treinador detectado: Redirecionando para Cadastro.`);
+        } else if (urlRole === 'student') {
           setRole('student');
           setIsLoggedIn(true);
+          finalRole = 'student';
+          finalIsLoggedIn = true;
           addSyncLog(`Link de convite detectado: Logado como Aluno.`);
         } else if (urlRole === 'trainer') {
           setRole('trainer');
           setIsLoggedIn(true);
+          finalRole = 'trainer';
+          finalIsLoggedIn = true;
           addSyncLog(`Link administrativo consultor detectado.`);
         }
 
@@ -439,8 +457,8 @@ export default function App() {
           remoteNotifications,
           remoteRevenueLogs,
           remoteAccessLogs,
-          urlRole ? true : preloadedState.isLoggedIn,
-          urlRole ? (urlRole as any) : preloadedState.role,
+          finalIsLoggedIn,
+          finalRole,
           remoteMarketingPlans,
           defaultMatch || preloadedState.activeTrainer,
           remoteTrainers

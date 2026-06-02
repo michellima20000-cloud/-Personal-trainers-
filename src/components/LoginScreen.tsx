@@ -82,7 +82,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     const trainerRefId = params.get('trainerId');
     if (trainerRefId && trainers && trainers.length > 0) {
       const match = trainers.find(
-        t => t.customIdLink.toLowerCase() === trainerRefId.toLowerCase() || t.id === trainerRefId
+        t => (t.customIdLink || '').toLowerCase() === trainerRefId.toLowerCase() || t.id === trainerRefId
       );
       if (match) {
         setReferredTrainer(match);
