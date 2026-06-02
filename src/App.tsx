@@ -188,10 +188,10 @@ export default function App() {
   // Initialize and Synchronize with Firebase
   useEffect(() => {
     async function initFirebaseSandbox() {
-      // 3 second safety boundary timeout for the entire database synchronization
+      // 15 second safety boundary timeout for the entire database synchronization
       let timeoutId: any;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error("Timeout de conexão")), 3000);
+        timeoutId = setTimeout(() => reject(new Error("Timeout de conexão")), 15000);
       });
 
       try {
@@ -1243,67 +1243,65 @@ export default function App() {
               onAddTrainer={handleAddTrainer}
             />
           ) : (
-            students.length > 0 && (
-              role === 'admin' ? (
-                <AdminDashboard
-                  students={students}
-                  trainers={trainers}
-                  accessLogs={accessLogs}
-                  onImpersonateTrainer={handleImpersonateTrainer}
-                  onImpersonateStudent={handleImpersonateStudent}
-                  onLogout={handleLogout}
-                  onDeleteStudent={handleDeleteStudent}
-                />
-              ) : role === 'trainer' ? (
-                <TrainerDashboard
-                  students={students}
-                  sheets={sheets}
-                  evolution={evolution}
-                  agenda={agenda}
-                  chats={chats}
-                  notifications={notifications}
-                  revenueLogs={revenueLogs}
-                  accessLogs={accessLogs}
-                  marketingPlans={marketingPlans}
-                  activeTrainer={activeTrainer}
-                  onUpdateTrainer={handleUpdateTrainer}
-                  onAddStudent={handleAddStudent}
-                  onUpdateStudent={handleUpdateStudent}
-                  onDeleteStudent={handleDeleteStudent}
-                  onUpdateSheet={handleUpdateSheet}
-                  onAddAgendaEvent={handleAddAgendaEvent}
-                  onDeleteAgendaEvent={handleDeleteAgendaEvent}
-                  onSendMessage={(id, text) => handleSendMessage(id, text, 'trainer')}
-                  onSendNotification={handleSendNotification}
-                  onTriggerAutoResponse={handleTriggerAutoResponse}
-                  onLogout={handleLogout}
-                  onUpdateMarketingPlan={handleUpdateMarketingPlan}
-                />
-              ) : (
-                <StudentDashboard
-                  students={students}
-                  trainers={trainers}
-                  sheets={sheets}
-                  evolution={evolution}
-                  chats={chats}
-                  activeStudentId={activeStudentId}
-                  accessLogs={accessLogs}
-                  onSelectStudent={(id) => {
-                    setActiveStudentId(id);
-                    addSyncLog(`Alterado aluno ativo no portal do aluno para: "${students.find(s=>s.id===id)?.name}".`);
-                  }}
-                  onUpdateSheetExercises={async (id, letter, items) => {
-                    const currentSheet = sheets[id] || { A: [], B: [], C: [], D: [], E: [] };
-                    handleUpdateSheet(id, { ...currentSheet, [letter]: items });
-                  }}
-                  onAddEvolutionRecord={handleAddEvolutionRecord}
-                  onSendMessage={(id, text) => handleSendMessage(id, text, 'student')}
-                  onCompleteWorkout={handleCompleteWorkout}
-                  onLogout={handleLogout}
-                  onUpdateTrainer={handleUpdateTrainer}
-                  onUpdateStudent={handleUpdateStudent}
-                />
-              )
+            role === 'admin' ? (
+              <AdminDashboard
+                students={students}
+                trainers={trainers}
+                accessLogs={accessLogs}
+                onImpersonateTrainer={handleImpersonateTrainer}
+                onImpersonateStudent={handleImpersonateStudent}
+                onLogout={handleLogout}
+                onDeleteStudent={handleDeleteStudent}
+              />
+            ) : role === 'trainer' ? (
+              <TrainerDashboard
+                students={students}
+                sheets={sheets}
+                evolution={evolution}
+                agenda={agenda}
+                chats={chats}
+                notifications={notifications}
+                revenueLogs={revenueLogs}
+                accessLogs={accessLogs}
+                marketingPlans={marketingPlans}
+                activeTrainer={activeTrainer}
+                onUpdateTrainer={handleUpdateTrainer}
+                onAddStudent={handleAddStudent}
+                onUpdateStudent={handleUpdateStudent}
+                onDeleteStudent={handleDeleteStudent}
+                onUpdateSheet={handleUpdateSheet}
+                onAddAgendaEvent={handleAddAgendaEvent}
+                onDeleteAgendaEvent={handleDeleteAgendaEvent}
+                onSendMessage={(id, text) => handleSendMessage(id, text, 'trainer')}
+                onSendNotification={handleSendNotification}
+                onTriggerAutoResponse={handleTriggerAutoResponse}
+                onLogout={handleLogout}
+                onUpdateMarketingPlan={handleUpdateMarketingPlan}
+              />
+            ) : (
+              <StudentDashboard
+                students={students}
+                trainers={trainers}
+                sheets={sheets}
+                evolution={evolution}
+                chats={chats}
+                activeStudentId={activeStudentId}
+                accessLogs={accessLogs}
+                onSelectStudent={(id) => {
+                  setActiveStudentId(id);
+                  addSyncLog(`Alterado aluno ativo no portal do aluno para: "${students.find(s=>s.id===id)?.name}".`);
+                }}
+                onUpdateSheetExercises={async (id, letter, items) => {
+                  const currentSheet = sheets[id] || { A: [], B: [], C: [], D: [], E: [] };
+                  handleUpdateSheet(id, { ...currentSheet, [letter]: items });
+                }}
+                onAddEvolutionRecord={handleAddEvolutionRecord}
+                onSendMessage={(id, text) => handleSendMessage(id, text, 'student')}
+                onCompleteWorkout={handleCompleteWorkout}
+                onLogout={handleLogout}
+                onUpdateTrainer={handleUpdateTrainer}
+                onUpdateStudent={handleUpdateStudent}
+              />
             )
           )}
         </div>

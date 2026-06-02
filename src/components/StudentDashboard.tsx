@@ -120,12 +120,46 @@ export default function StudentDashboard({
   onUpdateTrainer,
   onUpdateStudent
 }: StudentDashboardProps) {
-  const currentStudent = students.find(s => s.id === activeStudentId) || students[0];
+  const currentStudent = students.find(s => s.id === activeStudentId);
   
   const studentAccessLogs = useMemo(() => {
     if (!currentStudent) return [];
     return accessLogs.filter(log => log.role === 'student' && log.userId === currentStudent.id);
   }, [accessLogs, currentStudent?.id]);
+
+  if (!currentStudent) {
+    return (
+      <div className="flex-1 min-h-screen bg-[#0C0C0E] flex flex-col items-center justify-center p-6 text-center font-sans text-white">
+        <div className="max-w-md w-full bg-[#121214] border border-neutral-800 rounded-3xl p-8 shadow-2xl relative">
+          <div className="absolute top-0 right-0 left-0 h-[3px] bg-gradient-to-r from-red-500/80 via-rose-400 to-transparent rounded-t-3xl"></div>
+          <div className="inline-flex items-center justify-center bg-red-500/15 border border-red-500/40 text-red-500 p-4 rounded-2xl mb-4">
+            <AlertCircle className="w-10 h-10 animate-pulse text-red-500" />
+          </div>
+          <h2 className="text-xl font-black uppercase tracking-wider text-white">Acesso Não Sincronizado</h2>
+          <p className="text-sm text-neutral-400 mt-2">
+            Não foi possível carregar a conta vinculada a este link ou token de acesso.
+          </p>
+          <p className="text-xs text-neutral-500 mt-2 font-mono uppercase bg-neutral-950 py-2.5 px-3 rounded-lg border border-neutral-800">
+            ID Procurado: {activeStudentId || 'Nenhum'}
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
+            <button
+              onClick={() => {
+                if (onLogout) {
+                  onLogout();
+                } else {
+                  window.location.href = window.location.origin;
+                }
+              }}
+              className="w-full bg-[#39FF14] text-black font-extrabold text-xs py-3.5 rounded-xl hover:shadow-lg hover:shadow-[#39FF14]/15 cursor-pointer transition block text-center border-none outline-none"
+            >
+              Voltar ao Login / Cadastrar Aluno
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   // Tabs: workout, performance, chat, subscript
   const [activeTab, setActiveTab] = useState<'treino' | 'evolucao' | 'chat' | 'plano'>('treino');
