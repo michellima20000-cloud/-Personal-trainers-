@@ -490,3 +490,146 @@ export async function saveTrainer(trainer: Trainer): Promise<void> {
   }
 }
 
+export async function deleteTrainerDoc(trainerId: string): Promise<void> {
+  const p = `trainers/${trainerId}`;
+  try {
+    await deleteDoc(doc(db, 'trainers', trainerId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, p);
+  }
+}
+
+export async function deleteStudentDoc(studentId: string): Promise<void> {
+  const p = `students/${studentId}`;
+  try {
+    await deleteDoc(doc(db, 'students', studentId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, p);
+  }
+}
+
+export async function deleteSheetDoc(studentId: string): Promise<void> {
+  const p = `sheets/${studentId}`;
+  try {
+    await deleteDoc(doc(db, 'sheets', studentId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, p);
+  }
+}
+
+export async function deleteNotificationDoc(notifId: string): Promise<void> {
+  const p = `notifications/${notifId}`;
+  try {
+    await deleteDoc(doc(db, 'notifications', notifId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, p);
+  }
+}
+
+export async function deleteRevenueLogDoc(logId: string): Promise<void> {
+  const p = `revenueLogs/${logId}`;
+  try {
+    await deleteDoc(doc(db, 'revenueLogs', logId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, p);
+  }
+}
+
+export async function deleteAccessLogDoc(logId: string): Promise<void> {
+  const p = `accessLogs/${logId}`;
+  try {
+    await deleteDoc(doc(db, 'accessLogs', logId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, p);
+  }
+}
+
+// Global batch/sequential delete operations to clear data
+export async function purgeTestAccountsFirestore(): Promise<void> {
+  const testStudentIds = ['s1', 's2', 's3', 's4', 's5'];
+  const testTrainerIds = ['t_default'];
+
+  // Delete students & subcollections, sheets
+  for (const sid of testStudentIds) {
+    try {
+      // Clear Chats subcollection docs
+      const chatsSnap = await getDocs(collection(db, 'students', sid, 'chats'));
+      for (const d of chatsSnap.docs) {
+        await deleteDoc(doc(db, 'students', sid, 'chats', d.id));
+      }
+      // Clear Evolution subcollection docs
+      const evolSnap = await getDocs(collection(db, 'students', sid, 'evolution'));
+      for (const d of evolSnap.docs) {
+        await deleteDoc(doc(db, 'students', sid, 'evolution', d.id));
+      }
+      // Delete main student profile
+      await deleteDoc(doc(db, 'students', sid));
+      // Delete their training plan sheet
+      await deleteDoc(doc(db, 'sheets', sid));
+    } catch (e) {
+      console.warn(`Error deleting test student ${sid}:`, e);
+    }
+  }
+
+  // Delete t_default trainer
+  for (const tid of testTrainerIds) {
+    try {
+      await deleteDoc(doc(db, 'trainers', tid));
+    } catch (e) {
+      console.warn(`Error deleting test trainer ${tid}:`, e);
+    }
+  }
+
+  // Also clear seed agenda events
+  try {
+    const agendaSnap = await getDocs(collection(db, 'agenda'));
+    for (const d of agendaSnap.docs) {
+      // Clear sample schedules matching seeded event names
+      const title = d.data().title;
+      if (title && (title.includes('Avaliação') || title.includes('Treino Intermediário') || title.includes('Reunião de Metas') || title.includes('Personal Trainer'))) {
+        await deleteDoc(doc(db, 'agenda', d.id));
+      }
+    }
+  } catch (e) {
+    console.warn("Error cleaning seed agenda:", e);
+  }
+
+  // Also clear seed notification logs
+  try {
+    const notifsSnap = await getDocs(collection(db, 'notifications'));
+    for (const d of notifsSnap.docs) {
+      const id = d.id;
+      if (id.startsWith('not_') || id.startsWith('sh_') || id.startsWith('ev_') || id.startsWith('log_')) {
+        await deleteDoc(doc(db, 'notifications', d.id));
+      }
+    }
+  } catch (e) {
+    console.warn("Error cleaning seed notifications:", e);
+  }
+}
+
+export async function purgeEntireDatabaseFirestore(): Promise<void> {
+  const collections = ['students', 'sheets', 'agenda', 'notifications', 'revenueLogs', 'accessLogs', 'trainers'];
+
+  for (const colName of collections) {
+    try {
+      const snap = await getDocs(collection(db, colName));
+      for (const docItem of snap.docs) {
+        // If student, clear subcollections first
+        if (colName === 'students') {
+          const chatsSnap = await getDocs(collection(db, 'students', docItem.id, 'chats'));
+          for (const d of chatsSnap.docs) {
+            await deleteDoc(doc(db, 'students', docItem.id, 'chats', d.id));
+          }
+          const evolSnap = await getDocs(collection(db, 'students', docItem.id, 'evolution'));
+          for (const d of evolSnap.docs) {
+            await deleteDoc(doc(db, 'students', docItem.id, 'evolution', d.id));
+          }
+        }
+        await deleteDoc(doc(db, colName, docItem.id));
+      }
+    } catch (e) {
+      console.warn(`Error clearing collection ${colName}:`, e);
+    }
+  }
+}

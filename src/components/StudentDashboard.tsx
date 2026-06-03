@@ -4,7 +4,8 @@ import {
   Play, Pause, RotateCcw, Check, CheckCircle2, 
   Award, Clock, Eye, AlertCircle, Plus, Send, ChevronRight, 
   HelpCircle, Copy, Smartphone, CheckSquare, Sparkles, MessageCircle, X,
-  FileText, LogOut, Activity, ExternalLink, RefreshCw, Upload, Image
+  FileText, LogOut, Activity, ExternalLink, RefreshCw, Upload, Image,
+  Phone, Video
 } from 'lucide-react';
 import { Student, Trainer, Exercise, TrainingSheet, EvolutionRecord, ChatMessage, Objective, PlanType, WorkoutExercise, AccessLog } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -1540,12 +1541,45 @@ export default function StudentDashboard({
         {/* Tab 3 Content: Direct Chat Messaging with Video/Audio demo */}
         {activeTab === 'chat' && (
           <div className="space-y-4">
-            <div className="bg-[#121214] p-4 rounded-xl border border-neutral-800 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-[#39FF14] rounded-full animate-ping"></div>
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Personal Trainer Disponível</h3>
+            <div className="bg-[#121214] p-4 rounded-xl border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 bg-[#39FF14] rounded-full animate-ping shrink-0"></div>
+                <div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono my-0">Contato do Personal Trainer</h3>
+                  <p className="text-[10px] text-neutral-400 font-sans m-0 mt-0.5">Ativo: <strong className="text-[#39FF14]">{studentTrainer?.name || 'Daniel Personal'}</strong></p>
+                </div>
               </div>
-              <span className="text-[10px] text-neutral-400 font-mono">Feedback geralmente em menos de 1 hora!</span>
+              
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    const phoneDigits = studentTrainer?.phoneWhatsApp ? studentTrainer.phoneWhatsApp.replace(/\D/g, '') : '';
+                    if (phoneDigits) {
+                      window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=Ol%C3%A1%20Coach!%20Estou%2520te%20chamando%20aqui%20para%20tirar%20algumas%20d%C3%BAvidas%20sobre%20meu%20treino.`, '_blank');
+                    } else {
+                      alert('O Personal Trainer não cadastrou nenhum WhatsApp de contato.');
+                    }
+                  }}
+                  className="bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700/80 px-3 py-1.5 rounded-xl transition-all font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-neutral-700 font-bold"
+                  title="Chamar no WhatsApp"
+                >
+                  <Phone size={12} className="text-[#39FF14]" />
+                  <span>WhatsApp</span>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    const roomUrl = `https://meet.jit.si/GymPulse-Call-${currentStudent.id}-${studentTrainer?.id || 'default'}`;
+                    onSendMessage(currentStudent.id, `🎥 Aluno iniciou uma chamada de vídeo de treino online! Entre na sala ao vivo:\n${roomUrl}`);
+                    window.open(roomUrl, '_blank');
+                  }}
+                  className="bg-[#39FF14]/15 text-[#39FF14] hover:bg-[#39FF14]/25 px-3 py-1.5 rounded-xl transition-all font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-[#39FF14]/30 font-bold"
+                  title="Iniciar chamada de Vídeo"
+                >
+                  <Video size={12} />
+                  <span>Vídeo Chamada</span>
+                </button>
+              </div>
             </div>
 
             {/* Chat Messages Window */}

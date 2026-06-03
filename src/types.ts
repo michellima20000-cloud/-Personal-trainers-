@@ -24,6 +24,7 @@ export interface Student {
   trainerId?: string;
   email?: string;
   password?: string;
+  phoneWhatsApp?: string;
 }
 
 export interface Exercise {

@@ -282,7 +282,8 @@ export default function TrainerDashboard({
     restrictions: '',
     history: '',
     plan: 'Mensal',
-    status: 'Ativo'
+    status: 'Ativo',
+    phoneWhatsApp: ''
   });
 
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '');
@@ -331,6 +332,7 @@ export default function TrainerDashboard({
   const [editingStudentPlan, setEditingStudentPlan] = useState<boolean>(false);
   const [tempStudentPlan, setTempStudentPlan] = useState<PlanType>('Mensal');
   const [tempStudentValue, setTempStudentValue] = useState<number>(0);
+  const [tempStudentStatus, setTempStudentStatus] = useState<'Ativo' | 'Inativo'>('Ativo');
 
   // Computed Stats for Trainer Overview
   const totalStudents = students.length;
@@ -364,10 +366,11 @@ export default function TrainerDashboard({
       restrictions: newStudent.restrictions || 'Nenhuma restrição informada.',
       history: newStudent.history || 'Iniciante.',
       plan: (newStudent.plan as PlanType) || 'Mensal',
-      status: 'Ativo',
+      status: (newStudent.status as 'Ativo' | 'Inativo') || 'Ativo',
       joinedAt: new Date().toLocaleDateString('pt-BR'),
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-      value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00
+      value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
+      phoneWhatsApp: newStudent.phoneWhatsApp || undefined
     };
 
     onAddStudent(createdStudent);
@@ -383,7 +386,8 @@ export default function TrainerDashboard({
       restrictions: '',
       history: '',
       plan: 'Mensal',
-      status: 'Ativo'
+      status: 'Ativo',
+      phoneWhatsApp: ''
     });
   };
 
@@ -830,14 +834,8 @@ export default function TrainerDashboard({
               <span className="text-xs bg-[#39FF14]/10 text-[#39FF14] px-2.5 py-0.5 rounded-full border border-[#39FF14]/20 font-mono tracking-widest uppercase">
                 TRAINER CORE
               </span>
-              {activeTrainer && (
-                <div className="text-xs bg-neutral-900 text-neutral-300 border border-neutral-800 px-3 py-1 rounded-full flex items-center gap-1.5 font-normal">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse"></span>
-                  <span>Logado como: <strong className="text-[#39FF14] font-bold">{activeTrainer.name}</strong> ({activeTrainer.email})</span>
-                </div>
-              )}
             </h1>
-            <p className="text-xs md:text-sm text-neutral-400 mt-1">Simulação completa do painel do treinador principal.</p>
+            <p className="text-xs md:text-sm text-neutral-400 mt-1">Simulação completa do painel de treino do profissional.</p>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full md:w-auto">
@@ -1271,6 +1269,28 @@ export default function TrainerDashboard({
                         <div>
                           <p className="text-xs font-mono text-neutral-400 uppercase tracking-wider">Aluno Selecionado</p>
                           <h3 className="text-lg font-extrabold text-white my-0">{selectedStudent.name}</h3>
+                          <div className="flex items-center gap-2 mt-0.5 select-none flex-wrap">
+                            <span className={`text-[9px] font-mono border px-1.5 py-0.5 rounded-md font-bold tracking-wider ${
+                              selectedStudent.status === 'Inativo'
+                                ? 'bg-red-950/40 border-red-800 text-red-400'
+                                : 'bg-emerald-950/40 border-emerald-800 text-[#39FF14]'
+                            }`}>
+                              {selectedStudent.status === 'Inativo' ? 'INATIVO (BLOQUEADO)' : 'ATIVO (LIBERADO)'}
+                            </span>
+                            {selectedStudent.phoneWhatsApp ? (
+                              <a
+                                href={`https://api.whatsapp.com/send?phone=${selectedStudent.phoneWhatsApp.replace(/[^0-9+]/g, '')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-[#25D366] px-1.5 py-0.5 rounded-md font-mono hover:underline transition-all"
+                              >
+                                <Phone size={10} className="shrink-0" />
+                                <span>{selectedStudent.phoneWhatsApp}</span>
+                              </a>
+                            ) : (
+                              <span className="text-[9px] text-neutral-500 font-mono italic">(Sem WhatsApp cadastrado)</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1302,6 +1322,7 @@ export default function TrainerDashboard({
                             onClick={() => {
                               setTempStudentPlan(selectedStudent.plan);
                               setTempStudentValue(selectedStudent.value);
+                              setTempStudentStatus(selectedStudent.status || 'Ativo');
                               setEditingStudentPlan(true);
                             }}
                             className="flex items-center gap-1.5 py-1 px-3 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 hover:bg-neutral-800 text-[10px] font-medium text-[#39FF14] transition-all cursor-pointer font-mono"
@@ -1313,7 +1334,7 @@ export default function TrainerDashboard({
                       ) : (
                         <div className="bg-neutral-900 p-3 rounded-xl border border-neutral-800 space-y-3">
                           <p className="text-[10px] text-neutral-400 uppercase font-mono">Editar Plano Individual de {selectedStudent.name}</p>
-                          <div className="grid grid-cols-2 gap-3 font-sans">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-sans">
                             <div>
                               <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Tipo de Plano</label>
                               <select 
@@ -1344,6 +1365,17 @@ export default function TrainerDashboard({
                                 className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
                               />
                             </div>
+                            <div>
+                              <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Estado de Acesso</label>
+                              <select 
+                                value={tempStudentStatus}
+                                onChange={(e) => setTempStudentStatus(e.target.value as 'Ativo' | 'Inativo')}
+                                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer font-mono"
+                              >
+                                <option value="Ativo">Ativo (Liberado)</option>
+                                <option value="Inativo">Inativo (Bloqueado)</option>
+                              </select>
+                            </div>
                           </div>
                           <div className="flex items-center justify-end gap-2 pt-1 font-mono">
                             <button 
@@ -1358,7 +1390,8 @@ export default function TrainerDashboard({
                               onClick={() => {
                                 onUpdateStudent(selectedStudent.id, {
                                   plan: tempStudentPlan,
-                                  value: tempStudentValue
+                                  value: tempStudentValue,
+                                  status: tempStudentStatus
                                 });
                                 setEditingStudentPlan(false);
                               }}
@@ -1382,7 +1415,7 @@ export default function TrainerDashboard({
                           </span>
                         </div>
                         <p className="text-[11px] text-neutral-400 font-sans leading-relaxed">
-                          Compartilhe o link de acesso exclusivo ou copie uma mensagem formatada profissionalmente para enviar via WhatsApp:
+                          Compartilhe o link de acesso exclusivo ou envie o convite diretamente via WhatsApp:
                         </p>
                         
                         <div className="flex items-center gap-2 bg-neutral-950 p-2 rounded-lg border border-neutral-800">
@@ -1404,40 +1437,17 @@ export default function TrainerDashboard({
                           </button>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
-                              const message = `Olá, *${selectedStudent.name}*! 💪🏋️‍♂️\n\nAqui está o seu link de convite exclusivo para acessar o seu aplicativo de treinos no *GymPulse*.\n\nAtravés dele você poderá ver sua ficha de exercícios atualizada, acompanhar suas avaliações físicas e tirar dúvidas comigo.\n\n👉 Clique para acessar: ${inviteUrl}`;
-                              navigator.clipboard.writeText(message);
-                              setCopiedStudentId(selectedStudent.id);
-                              setTimeout(() => setCopiedStudentId(null), 2500);
-                            }}
-                            className="flex-1 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-300 font-bold text-xs py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer font-sans"
-                          >
-                            {copiedStudentId === selectedStudent.id ? (
-                              <>
-                                <Check size={13} className="text-[#39FF14]" />
-                                <span className="text-white">Mensagem Copiada!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={13} className="text-neutral-400" />
-                                <span>Copiar Mensagem Formatada</span>
-                              </>
-                            )}
-                          </button>
-
+                        <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => {
                               const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
                               const message = `Olá, *${selectedStudent.name}*! 💪🏋️‍♂️ Aqui está o seu link de convite exclusivo para acessar o seu aplicativo de treinos no *GymPulse*: ${inviteUrl}`;
                               const encodedText = encodeURIComponent(message);
-                              window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
+                              const dest = selectedStudent.phoneWhatsApp ? selectedStudent.phoneWhatsApp.replace(/[^0-9]/g, '') : '';
+                              window.open(`https://api.whatsapp.com/send?phone=${dest}&text=${encodedText}`, '_blank');
                             }}
-                            className="bg-[#25D366] hover:bg-[#128C7E] text-white font-extrabold text-xs py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer font-sans shadow-lg shadow-green-500/10 hover:scale-[1.01]"
+                            className="bg-[#25D366] hover:bg-[#128C7E] text-white font-extrabold text-xs py-2 w-full rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer font-sans shadow-lg shadow-green-500/10 hover:scale-[1.01]"
                           >
                             <Phone size={13} />
                             <span>Enviar via WhatsApp</span>
@@ -1631,7 +1641,7 @@ export default function TrainerDashboard({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Plano Inicial de Cobrança</label>
                     <select 
@@ -1655,6 +1665,18 @@ export default function TrainerDashboard({
                       <option value="Ativo">Ativo (Acesso Liberado Fichas)</option>
                       <option value="Inativo">Inativo (Acesso Suspenso)</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">WhatsApp do Aluno</label>
+                    <input 
+                      type="tel"
+                      required
+                      value={newStudent.phoneWhatsApp || ''}
+                      onChange={(e) => setNewStudent({...newStudent, phoneWhatsApp: e.target.value})}
+                      placeholder="Ex: +5511999999999"
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans font-mono"
+                    />
                   </div>
                 </div>
 
@@ -2042,9 +2064,40 @@ export default function TrainerDashboard({
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-1 text-neutral-400">
-                        <button className="p-1 hover:bg-neutral-800 rounded transition"><Phone size={14} /></button>
-                        <button className="p-1 hover:bg-neutral-800 rounded transition"><Video size={14} /></button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => {
+                            const student = students.find(s => s.id === chatStudentId);
+                            if (!student) return;
+                            const phoneDigits = student.phoneWhatsApp ? student.phoneWhatsApp.replace(/\D/g, '') : '';
+                            if (phoneDigits) {
+                              window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=Ol%C3%A1%20${encodeURIComponent(student.name)}%2C%20aqui%20%C3%A9%20seu%20Personal%20Trainer!%20Como%20est%C3%A3o%20os%20treinos%3F`, '_blank');
+                            } else {
+                              alert('Este aluno ainda não cadastrou o número de WhatsApp.');
+                            }
+                          }}
+                          className="bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700/80 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer border border-neutral-700 text-[10px] font-mono font-bold"
+                          title="Chamar aluno no WhatsApp"
+                        >
+                          <Phone size={11} className="text-[#39FF14]" />
+                          <span className="hidden sm:inline">WhatsApp</span>
+                        </button>
+
+                        <button 
+                          onClick={() => {
+                            const student = students.find(s => s.id === chatStudentId);
+                            if (!student) return;
+                            const trainerId = activeTrainer?.id || 'trainer';
+                            const roomUrl = `https://meet.jit.si/GymPulse-Call-${student.id}-${trainerId}`;
+                            onSendMessage(chatStudentId, `🎥 Profissional iniciou uma chamada de vídeo de treino online! Entre na sala ao vivo:\n${roomUrl}`);
+                            window.open(roomUrl, '_blank');
+                          }}
+                          className="bg-[#39FF14]/15 text-[#39FF14] hover:bg-[#39FF14]/25 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer border border-[#39FF14]/30 text-[10px] font-mono font-bold"
+                          title="Fazer chamada de Vídeo"
+                        >
+                          <Video size={11} />
+                          <span className="hidden sm:inline">Vídeo Chamada</span>
+                        </button>
                       </div>
                     </div>
 

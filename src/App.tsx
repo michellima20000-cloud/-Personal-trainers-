@@ -19,7 +19,7 @@ import StudentDashboard from './components/StudentDashboard';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 
-import { deleteDoc, doc } from 'firebase/firestore';
+import { deleteDoc, doc, collection, onSnapshot } from 'firebase/firestore';
 import { 
   db,
   initializeAnonymousAuth, 
@@ -32,7 +32,9 @@ import {
   fetchRevenueLogs, saveRevenueLog,
   fetchAccessLogs, saveAccessLog,
   fetchMarketingPlans, saveMarketingPlan, deleteMarketingPlan,
-  fetchTrainers, saveTrainer
+  fetchTrainers, saveTrainer,
+  purgeTestAccountsFirestore,
+  purgeEntireDatabaseFirestore
 } from './utils/firebase';
 
 const LOCAL_STORAGE_KEY = 'gympulse_sandbox_state_v1';
@@ -182,7 +184,7 @@ export default function App() {
   const [syncLogs, setSyncLogs] = useState<string[]>([
     'Inicializando barramento de eventos do banco...'
   ]);
-  const [loadingFirebase, setLoadingFirebase] = useState(false);
+  const [loadingFirebase, setLoadingFirebase] = useState(true);
   const [syncingStatus, setSyncingStatus] = useState<'syncing' | 'synced' | 'error'>('syncing');
 
   // Initialize and Synchronize with Firebase
@@ -481,6 +483,16 @@ export default function App() {
   }, []);
 
   const loadDefaults = () => {
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let parsed: any = null;
+    if (cached) {
+      try {
+        parsed = JSON.parse(cached);
+      } catch (e) {
+        console.error("Error parsing cache in loadDefaults:", e);
+      }
+    }
+
     const defaultTrainer: Trainer = {
       id: 't_default',
       name: 'Daniel Personal Coach',
@@ -499,33 +511,25 @@ export default function App() {
       stripeSecretKey: ''
     };
 
-    setStudents(INITIAL_STUDENTS);
-    setSheets(INITIAL_SHEETS);
-    setEvolution(INITIAL_EVOLUTION_RECORDS);
-    setAgenda(INITIAL_AGENDA);
-    setChats(INITIAL_CHATS);
-    setNotifications(INITIAL_NOTIFICATIONS);
-    setRevenueLogs(REVENUE_LOGS);
-    setAccessLogs(INITIAL_ACCESS_LOGS);
-    setMarketingPlans(INITIAL_MARKETING_PLANS);
-    setTrainers([defaultTrainer]);
-    setActiveTrainer(defaultTrainer);
-    setActiveStudentId(INITIAL_STUDENTS[0]?.id || 's1');
+    setStudents(parsed?.students || INITIAL_STUDENTS);
+    setSheets(parsed?.sheets || INITIAL_SHEETS);
+    setEvolution(parsed?.evolution || INITIAL_EVOLUTION_RECORDS);
+    setAgenda(parsed?.agenda || INITIAL_AGENDA);
+    setChats(parsed?.chats || INITIAL_CHATS);
+    setNotifications(parsed?.notifications || INITIAL_NOTIFICATIONS);
+    setRevenueLogs(parsed?.revenueLogs || REVENUE_LOGS);
+    setAccessLogs(parsed?.accessLogs || INITIAL_ACCESS_LOGS);
+    setMarketingPlans((parsed?.marketingPlans || INITIAL_MARKETING_PLANS).filter((p: any) => p.id !== 'Semestral'));
+    setTrainers(parsed?.trainers || [defaultTrainer]);
+    setActiveTrainer(parsed?.activeTrainer || defaultTrainer);
+    setActiveStudentId(parsed?.activeStudentId || (parsed?.students && parsed?.students[0]?.id) || INITIAL_STUDENTS[0]?.id || 's1');
 
-    // Restore cached session status even during fallback so login persists
-    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        setIsLoggedIn(parsed.isLoggedIn || false);
-        setRole(parsed.role || 'trainer');
-        if (parsed.activeTrainer) {
-          setActiveTrainer(parsed.activeTrainer);
-        }
-      } catch (e) {}
+    if (parsed) {
+      setIsLoggedIn(parsed.isLoggedIn !== undefined ? parsed.isLoggedIn : false);
+      setRole(parsed.role || 'trainer');
     }
 
-    addSyncLog('Dados de demonstração local carregados em cache de fallback.');
+    addSyncLog('Dados locais recuperados do cache offline de segurança.');
   };
 
   // Cache configuration state helper
@@ -604,6 +608,48 @@ export default function App() {
       return updated;
     });
   }, [role, activeStudentId, students.length, isLoggedIn, loadingFirebase]);
+
+  // Real-time synchronization of chats from Firebase Firestore using collections onSnapshot
+  useEffect(() => {
+    if (loadingFirebase || !isLoggedIn || students.length === 0) return;
+
+    const unsubscribes: (() => void)[] = [];
+
+    students.forEach((student) => {
+      const q = collection(db, 'students', student.id, 'chats');
+      const unsub = onSnapshot(q, (snapshot) => {
+        const msgs: ChatMessage[] = [];
+        snapshot.forEach((doc) => {
+          msgs.push(doc.data() as ChatMessage);
+        });
+
+        // Sort messages chronologically by msg.id timestamp (msg_17156...)
+        msgs.sort((a, b) => {
+          const tA = Number(a.id.replace('msg_', '')) || 0;
+          const tB = Number(b.id.replace('msg_', '')) || 0;
+          return tA - tB;
+        });
+
+        setChats((prev) => {
+          const prevMsgs = prev[student.id] || [];
+          if (JSON.stringify(prevMsgs) === JSON.stringify(msgs)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [student.id]: msgs
+          };
+        });
+      }, (error) => {
+        console.error(`Error syncing chats for student ${student.id}:`, error);
+      });
+      unsubscribes.push(unsub);
+    });
+
+    return () => {
+      unsubscribes.forEach((unsub) => unsub());
+    };
+  }, [loadingFirebase, isLoggedIn, students]);
 
   // Handle real or simulated Stripe Redirect Return parameters
   useEffect(() => {
@@ -1189,7 +1235,7 @@ export default function App() {
         setNotifications(INITIAL_NOTIFICATIONS);
         setRevenueLogs(REVENUE_LOGS);
         setAccessLogs(INITIAL_ACCESS_LOGS);
-        setActiveStudentId(INITIAL_STUDENTS[0].id);
+        setActiveStudentId(INITIAL_STUDENTS[0]?.id || 's1');
 
         setIsLoggedIn(false);
         addSyncLog("Firebase restaurado com dados sementes de demonstração.");
@@ -1200,6 +1246,71 @@ export default function App() {
       }
     }
   };
+
+  const handlePurgeTestAccounts = async () => {
+    setLoadingFirebase(true);
+    try {
+      addSyncLog("Excluindo alunos fictícios e treinador de testes do Firebase...");
+      await purgeTestAccountsFirestore();
+      
+      const remainingStudents = students.filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id));
+      setStudents(remainingStudents);
+      
+      const newSheets = { ...sheets };
+      const newEvolution = { ...evolution };
+      const newChats = { ...chats };
+      
+      for (const sid of ['s1', 's2', 's3', 's4', 's5']) {
+        delete newSheets[sid];
+        delete newEvolution[sid];
+        delete newChats[sid];
+      }
+      setSheets(newSheets);
+      setEvolution(newEvolution);
+      setChats(newChats);
+      
+      setTrainers(prev => prev.filter(t => t.id !== 't_default'));
+      if (activeTrainer?.id === 't_default') {
+        setActiveTrainer(null);
+        setIsLoggedIn(false);
+      }
+      
+      addSyncLog("Contas de teste de demonstração removidas com sucesso.");
+    } catch (err: any) {
+      console.error(err);
+      addSyncLog("Erro ao remover contas de teste: " + err.message);
+    } finally {
+      setLoadingFirebase(false);
+    }
+  };
+
+  const handlePurgeAllData = async () => {
+    setLoadingFirebase(true);
+    try {
+      addSyncLog("Limpando base de dados do Firestore totalmente...");
+      await purgeEntireDatabaseFirestore();
+      
+      setStudents([]);
+      setSheets({});
+      setEvolution({});
+      setAgenda([]);
+      setChats({});
+      setNotifications([]);
+      setRevenueLogs([]);
+      setAccessLogs([]);
+      setTrainers([]);
+      setActiveTrainer(null);
+      setIsLoggedIn(false);
+      
+      addSyncLog("Toda a base de dados foi apagada com sucesso (estado virgem de produção).");
+    } catch (err: any) {
+      console.error(err);
+      addSyncLog("Erro ao limpar base de dados: " + err.message);
+    } finally {
+      setLoadingFirebase(false);
+    }
+  };
+
 
   return (
     <div className="bg-[#09090b] min-h-screen text-neutral-100 flex flex-col antialiased selection:bg-[#39FF14] selection:text-black">
@@ -1252,6 +1363,8 @@ export default function App() {
                 onImpersonateStudent={handleImpersonateStudent}
                 onLogout={handleLogout}
                 onDeleteStudent={handleDeleteStudent}
+                onPurgeTestAccounts={handlePurgeTestAccounts}
+                onPurgeAllData={handlePurgeAllData}
               />
             ) : role === 'trainer' ? (
               <TrainerDashboard

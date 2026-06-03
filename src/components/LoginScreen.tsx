@@ -65,12 +65,14 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [regStudentEmail, setRegStudentEmail] = useState('');
   const [regStudentPassword, setRegStudentPassword] = useState('');
   const [regStudentTrainerId, setRegStudentTrainerId] = useState(trainers[0]?.id || '');
+  const [regPhone, setRegPhone] = useState('');
 
   // Trainer Self-Registration and Checkout States
   const [isRegisteringTrainer, setIsRegisteringTrainer] = useState(false);
   const [regTrainerName, setRegTrainerName] = useState('');
   const [regTrainerEmail, setRegTrainerEmail] = useState('');
   const [regTrainerPassword, setRegTrainerPassword] = useState('');
+  const [regTrainerWhatsApp, setRegTrainerWhatsApp] = useState('');
   const [regTrainerPlan, setRegTrainerPlan] = useState<PlanType>('Trimestral');
   const [trainerCheckoutStep, setTrainerCheckoutStep] = useState<'form' | 'checkout'>('form');
   const [checkoutMethod, setCheckoutMethod] = useState<'trial' | 'pix' | 'stripe' | null>(null);
@@ -102,11 +104,18 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       );
       if (match) {
         setReferredTrainer(match);
+        setRegStudentTrainerId(match.id);
         setActiveTab('student');
         setIsRegisteringStudent(true);
       }
     }
   }, [trainers]);
+
+  useEffect(() => {
+    if (!regStudentTrainerId && trainers && trainers.length > 0) {
+      setRegStudentTrainerId(trainers[0].id);
+    }
+  }, [trainers, regStudentTrainerId]);
 
   // Sync selected trainer in demo mode with email and password state fields
   useEffect(() => {
@@ -241,7 +250,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         customIdLink: customId,
         pixKeyType: 'Chave Aleatória',
         pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-        phoneWhatsApp: '+5511999999999',
+        phoneWhatsApp: regTrainerWhatsApp.trim() || '+5511999999999',
         stripeEnabled: true,
         stripePublishableKey: 'pk_test_sample_key',
         stripeSecretKey: ''
@@ -286,7 +295,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       customIdLink: customId,
       pixKeyType: 'Chave Aleatória',
       pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-      phoneWhatsApp: '+5511999999999',
+      phoneWhatsApp: regTrainerWhatsApp.trim() || '+5511999999999',
       stripeEnabled: true,
       stripePublishableKey: 'pk_sample_publishable',
       stripeSecretKey: ''
@@ -523,11 +532,12 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           ? `Cadastrado automaticamente via indicação do treinador ${referredTrainer.name}.`
           : `Cadastrado no portal direto e vinculado ao treinador ${chosenTrainerName}.`,
         plan: 'Mensal',
-        status: 'Ativo',
+        status: 'Inativo',
         joinedAt: new Date().toLocaleDateString('pt-BR'),
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 150.00,
-        trainerId: finalTrainerId
+        trainerId: finalTrainerId,
+        phoneWhatsApp: regPhone.trim() || undefined
       };
 
       onAddStudent(createdStudent);
@@ -538,6 +548,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         setRegAvatar('');
         setRegStudentEmail('');
         setRegStudentPassword('');
+        setRegPhone('');
       }, 1300);
     }, 1000);
   };
@@ -760,6 +771,21 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                         value={regTrainerEmail}
                         onChange={(e) => setRegTrainerEmail(e.target.value)}
                         placeholder="seu-email@gmail.com"
+                        className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
+                        WhatsApp com DDD (obrigatório)
+                      </label>
+                      <input
+                        type="text"
+                        value={regTrainerWhatsApp}
+                        onChange={(e) => setRegTrainerWhatsApp(e.target.value)}
+                        placeholder="Ex: +55 (11) 99999-9999"
                         className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
                         required
                         disabled={loading}
@@ -1679,10 +1705,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                             : 'border-neutral-800 hover:border-[#39FF14]/50 bg-neutral-900/60'
                       }`}
                     >
-                      <label 
-                        htmlFor="student-avatar-input" 
-                        className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer z-10"
-                      >
+                      {/* Visual Layer - pointer-events-none prevents blocking inputs below it on touch screens */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10 w-full h-full">
                         {regAvatar ? (
                           <>
                             <img 
@@ -1701,22 +1725,24 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                             <span className="text-[8px] text-neutral-400 font-sans mt-1 group-hover:text-white transition">Enviar Foto</span>
                           </div>
                         )}
-                        <input 
-                          id="student-avatar-input" 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={handleRegAvatarChange}
-                          className="hidden" 
-                          disabled={loading}
-                        />
-                      </label>
+                      </div>
+
+                      {/* Actual native file input overlay. Fully interactive on all mobile devices and webviews */}
+                      <input 
+                        id="student-avatar-input" 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleRegAvatarChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
+                        disabled={loading}
+                      />
                     </div>
 
                     {regAvatar && (
                       <button
                         type="button"
                         onClick={() => setRegAvatar('')}
-                        className="absolute -top-1 -right-1 bg-red-650 hover:bg-red-600 text-white rounded-full p-1 text-[8px] transition shadow-md z-20 font-bold border border-neutral-800"
+                        className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-500 text-white rounded-full p-1 text-[8px] transition shadow-md z-30 font-bold border border-neutral-800"
                         title="Remover foto"
                       >
                         ✕
@@ -1777,44 +1803,36 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
                 {/* Trainer Link and Association Selection */}
                 <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 block">
-                    Personal Trainer Associado
-                  </label>
-                  {referredTrainer ? (
-                    <div className="bg-[#121214] border border-[#39FF14]/30 p-3 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#39FF14] opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#39FF14]"></span>
-                        </span>
-                        <span className="text-xs text-white font-extrabold font-sans">
-                          {referredTrainer.name} (Link Ativo)
-                        </span>
-                      </div>
-                      <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Automaticamente Vinculado!</span>
-                    </div>
-                  ) : (
-                    <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-1">
-                      <select
-                        value={regStudentTrainerId}
-                        onChange={(e) => setRegStudentTrainerId(e.target.value)}
-                        className="w-full bg-transparent text-xs text-white py-2 px-3 border-none outline-none font-bold cursor-pointer font-sans"
-                        required={!referredTrainer}
-                        disabled={loading}
-                      >
-                        <option value="" disabled className="text-neutral-500 bg-white dark:bg-neutral-950 font-sans">Selecione seu Personal Trainer</option>
-                        {trainers.map((t) => (
-                          <option 
-                            key={t.id} 
-                            value={t.id} 
-                            className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans font-bold"
-                          >
-                            {t.name} ({t.selectedPlan} Plan)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest">
+                      Personal Trainer Associado
+                    </label>
+                    {referredTrainer && (
+                      <span className="text-[8px] bg-[#39FF14]/10 border border-[#39FF14]/30 text-[#39FF14] px-1.5 py-0.5 rounded font-extrabold font-sans uppercase tracking-wider animate-pulse">
+                        ✓ Vínculo Ativo via Link/Convite
+                      </span>
+                    )}
+                  </div>
+                  <div className={`rounded-xl p-1 transition-all duration-300 ${referredTrainer ? 'bg-[#121214] border border-[#39FF14]/30 shadow-md shadow-[#39FF14]/5' : 'bg-neutral-950 border border-neutral-800'}`}>
+                    <select
+                      value={regStudentTrainerId}
+                      onChange={(e) => setRegStudentTrainerId(e.target.value)}
+                      className="w-full bg-transparent text-xs text-white py-2 px-3 border-none outline-none font-bold cursor-pointer font-sans"
+                      required
+                      disabled={loading}
+                    >
+                      <option value="" disabled className="text-neutral-500 bg-white dark:bg-neutral-950 font-sans">Selecione seu Personal Trainer</option>
+                      {trainers.map((t) => (
+                        <option 
+                          key={t.id} 
+                          value={t.id} 
+                          className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans font-bold"
+                        >
+                          {t.name} ({t.selectedPlan} Plan)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1892,6 +1910,21 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                     onChange={(e) => setRegRestrictions(e.target.value)}
                     placeholder="Ex: Nenhuma, dor joelho..."
                     className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                    disabled={loading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
+                    Número de WhatsApp (Celular com DDD)
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    placeholder="Ex: +5511999999999"
+                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans font-mono"
                     disabled={loading}
                   />
                 </div>

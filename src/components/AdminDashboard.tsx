@@ -20,6 +20,8 @@ interface AdminDashboardProps {
   onImpersonateStudent: (student: Student) => void;
   onLogout: () => void;
   onDeleteStudent?: (id: string) => void;
+  onPurgeTestAccounts?: () => Promise<void>;
+  onPurgeAllData?: () => Promise<void>;
 }
 
 export default function AdminDashboard({
@@ -29,7 +31,9 @@ export default function AdminDashboard({
   onImpersonateTrainer,
   onImpersonateStudent,
   onLogout,
-  onDeleteStudent
+  onDeleteStudent,
+  onPurgeTestAccounts,
+  onPurgeAllData
 }: AdminDashboardProps) {
   const [activeSubTab, setActiveSubTab] = useState<'visao' | 'trainers' | 'students' | 'logs' | 'diagnostics'>('visao');
   const [trainerSearch, setTrainerSearch] = useState('');
@@ -683,6 +687,74 @@ export default function AdminDashboard({
                   <RefreshCw size={13} className={diagnosticsTesting ? 'animate-spin' : ''} />
                   {diagnosticsTesting ? 'Verificando Integridade...' : 'Testar Conexão Agora'}
                 </button>
+              </div>
+            </div>
+
+            {/* Database Purge / Clean Slate Section */}
+            <div className="bg-[#121214]/60 p-5 rounded-2xl border border-red-500/20 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-red-500 uppercase tracking-widest font-mono flex items-center gap-1.5 mb-0">
+                  <AlertTriangle size={14} className="text-red-500" /> Ferramentas de Limpeza do Sistema (Ambiente de Produção)
+                </h4>
+                <span className="text-[9px] bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded font-mono text-red-400 font-bold uppercase">AÇÃO IRREVERSÍVEL</span>
+              </div>
+              <p className="text-xs text-neutral-400 leading-relaxed font-sans max-w-4xl m-0">
+                Ferramenta exclusiva de administração para purgar contas de testes predefinidas do banco de dados (deixando o sistema 100% limpo) ou redefinir completamente todas as tabelas e coleções do Cloud Firestore para inicialização SaaS limpa.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {/* Purge Seed / Demo accounts */}
+                <div className="border border-neutral-800 p-4 rounded-xl bg-neutral-950 flex flex-col justify-between">
+                  <div>
+                    <h5 className="text-xs font-bold text-white font-mono uppercase mb-1">Purgar Apenas Contas de Teste</h5>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed font-sans m-0">
+                      Remove especificamente as contas de alunos fictícios predefinidas (<strong className="text-neutral-200">Ana Silva, Carlos Souza, Igor Santos, etc.</strong>) do Firestore, seus treinos, subcoleções de chat e biometria correspondentes, além do Personal Trainer de demonstração (<strong className="text-neutral-200">Daniel Personal Coach</strong>). Ideal para deixar o sistema pronto e intocado para novos usuários reais.
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm("Aviso: Esta ação irá excluir permanentemente todos os registros dos alunos fictícios (s1, s2, s3, s4, s5) e o treinador t_default do Firestore. Deseja continuar?")) return;
+                      try {
+                        if (onPurgeTestAccounts) {
+                          await onPurgeTestAccounts();
+                          alert("Contas de teste de demonstração removidas com sucesso do Firebase Firestore.");
+                        }
+                      } catch (err: any) {
+                        alert("Erro ao purgar dados: " + (err.message || String(err)));
+                      }
+                    }}
+                    className="w-full mt-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-white border border-amber-500/30 hover:border-amber-500 text-[10px] font-black tracking-widest uppercase font-mono py-2 rounded-lg transition cursor-pointer"
+                  >
+                    🚀 Remover Contas Fictícias de Demonstração
+                  </button>
+                </div>
+
+                {/* Reset entire database to zero */}
+                <div className="border border-neutral-800 p-4 rounded-xl bg-neutral-950 flex flex-col justify-between">
+                  <div>
+                    <h5 className="text-xs font-bold text-red-500 font-mono uppercase mb-1">Apagar Tudo e Redefinir (Limpeza 100%)</h5>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed font-sans m-0">
+                      Apaga completamente <strong className="text-red-500">todos os documentos</strong> de absolutamente todas as coleções do Firestore (Alunos, Treinadores, Prontuários, Eventos de Agenda, Avisos e Logs). Reinicializa o portal como um formulário SaaS 100% virgem de produção.
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm("⚠️ ALERTA EXTREMO: Isso irá DESTRUIR e APAGAR todos os dados registrados em seu projeto do Firebase, restaurando as coleções ao estado vazio absoluto. Você tem certeza absoluta disso?")) return;
+                      if (!window.confirm("Você confirma estar ciente de que as informações de produção perder-se-ão definitivamente sem possibilidade de recuperação?")) return;
+                      try {
+                        if (onPurgeAllData) {
+                          await onPurgeAllData();
+                          alert("Toda base de dados do Cloud Firestore foi limpa de forma absoluta.");
+                        }
+                      } catch (err: any) {
+                        alert("Erro ao redefinir base: " + (err.message || String(err)));
+                      }
+                    }}
+                    className="w-full mt-4 bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 hover:border-red-600 text-[10px] font-black tracking-widest uppercase font-mono py-2 rounded-lg transition cursor-pointer"
+                  >
+                    ⚠️ DESTRUIR TODA BASE (LIMPEZA 100% PRODUÇÃO)
+                  </button>
+                </div>
               </div>
             </div>
 
