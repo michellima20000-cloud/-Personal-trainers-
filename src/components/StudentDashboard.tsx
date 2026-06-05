@@ -161,7 +161,893 @@ export default function StudentDashboard({
       </div>
     );
   }
+
+  // Onboarding Wizard states for incoming invite-link student profiles
+  const [obStep, setObStep] = useState<number>(0); // 0 = welcome, 1 = ident, 2 = bio, 3 = payment, 4 = complete
+  const [obName, setObName] = useState('');
+  const [obEmail, setObEmail] = useState('');
+  const [obPhone, setObPhone] = useState('');
+  const [obPassword, setObPassword] = useState('');
+  const [obAccessMethod, setObAccessMethod] = useState<'google' | 'password'>('password');
+  const [obAge, setObAge] = useState(25);
+  const [obWeight, setObWeight] = useState(70);
+  const [obHeight, setObHeight] = useState(1.70);
+  const [obObjective, setObObjective] = useState<Objective>('Hipertrofia');
+  const [obRestrictions, setObRestrictions] = useState('');
   
+  // Google modal mock state inside student onboarding
+  const [obShowGoogleModal, setObShowGoogleModal] = useState(false);
+  const [obGoogleEmailInput, setObGoogleEmailInput] = useState('');
+  const [obShowGoogleCustomInput, setObShowGoogleCustomInput] = useState(false);
+  
+  // Payment step inside onboarding
+  const [obPaymentType, setObPaymentType] = useState<'pix' | 'card' | null>(null);
+  const [obPixCopied, setObPixCopied] = useState(false);
+  const [obCardName, setObCardName] = useState('');
+  const [obCardNum, setObCardNum] = useState('');
+  const [obCardExpiry, setObCardExpiry] = useState('');
+  const [obCardCvv, setObCardCvv] = useState('');
+  const [obPayingStatus, setObPayingStatus] = useState<'idle' | 'processing' | 'done'>('idle');
+  const [obErrorMsg, setObErrorMsg] = useState('');
+
+  // Synchronize onboarding state fields with currentStudent data when it updates
+  useEffect(() => {
+    if (currentStudent && !currentStudent.isProfileComplete) {
+      setObName(currentStudent.name || '');
+      setObEmail(currentStudent.email || '');
+      setObPhone(currentStudent.phoneWhatsApp || '');
+      setObPassword(currentStudent.password || '123456');
+      if (currentStudent.accessMethod) {
+        setObAccessMethod(currentStudent.accessMethod);
+      }
+      setObAge(currentStudent.age || 25);
+      setObWeight(currentStudent.weight || 70);
+      setObHeight(currentStudent.height || 1.70);
+      setObObjective(currentStudent.objective || 'Hipertrofia');
+      setObRestrictions(currentStudent.restrictions || '');
+    }
+  }, [currentStudent?.id, currentStudent?.isProfileComplete]);
+
+  // Google Select Account handler
+  const handleObGoogleSelect = (selectedEmail: string) => {
+    setObEmail(selectedEmail);
+    setObAccessMethod('google');
+    setObShowGoogleModal(false);
+    setObErrorMsg('');
+  };
+
+  // Onboarding finalize submittal
+  const handleSaveOnboardingSubmit = () => {
+    setObErrorMsg('');
+    if (obStep === 1) {
+      if (!obName.trim()) { return setObErrorMsg('Nome Completo é obrigatório.'); }
+      if (!obEmail.trim() || !obEmail.includes('@')) { return setObErrorMsg('Informe um e-mail válido.'); }
+      if (!obPhone.trim()) { return setObErrorMsg('Número de WhatsApp é obrigatório.'); }
+      if (obAccessMethod === 'password' && (!obPassword || obPassword.length < 4)) {
+        return setObErrorMsg('A senha padrão precisa ter pelo menos 4 caracteres.');
+      }
+      setObStep(2);
+    } else if (obStep === 2) {
+      if (!obAge || obAge <= 0) { return setObErrorMsg('Por favor, informe uma idade válida.'); }
+      if (!obWeight || obWeight <= 0) { return setObErrorMsg('Por favor, informe seu peso atual.'); }
+      if (!obHeight || obHeight <= 0) { return setObErrorMsg('Por favor, informe sua altura atual.'); }
+      setObStep(3);
+    } else if (obStep === 3) {
+      if (!obPaymentType) {
+        return setObErrorMsg('Por favor, escolha um meio de adesão (Pix ou Cartão) para validar.');
+      }
+      if (obPaymentType === 'card') {
+        if (!obCardName.trim()) { return setObErrorMsg('Nome impresso no cartão é obrigatório.'); }
+        if (!obCardNum.trim() || obCardNum.length < 14) { return setObErrorMsg('Número de cartão inválido.'); }
+        if (!obCardExpiry.trim() || !obCardExpiry.includes('/')) { return setObErrorMsg('Validade incorreta (MM/AA).'); }
+        if (!obCardCvv.trim() || obCardCvv.length < 3) { return setObErrorMsg('Código CVV inválido.'); }
+      }
+      
+      setObPayingStatus('processing');
+      setTimeout(() => {
+        setObPayingStatus('done');
+        setTimeout(() => {
+          onUpdateStudent?.(currentStudent.id, {
+            name: obName.trim(),
+            email: obEmail.trim().toLowerCase(),
+            phoneWhatsApp: obPhone.trim(),
+            password: obPassword,
+            accessMethod: obAccessMethod,
+            age: Number(obAge),
+            weight: Number(obWeight),
+            height: Number(obHeight),
+            objective: obObjective,
+            restrictions: obRestrictions.trim() || 'Nenhuma restrição declarada.',
+            isProfileComplete: true,
+            paymentDetailsConfirmed: true,
+            status: 'Inativo' // Set status as Inativo so they see the high-fidelity pending screen waiting for trainer's review!
+          });
+          setObStep(4);
+          setObPayingStatus('idle');
+        }, 800);
+      }, 1800);
+    }
+  };
+
+  // CHECKPOINT 1: Student is still on Pending Profile complete wizard
+  if (currentStudent && !currentStudent.isProfileComplete) {
+    const assignedPlan = currentStudent.plan || 'Mensal';
+    const planPrice = assignedPlan === 'Anual' ? 90.00 : assignedPlan === 'Semestral' ? 120.00 : assignedPlan === 'Trimestral' ? 140.00 : 150.00;
+
+    return (
+      <div className="min-h-screen bg-[#070709] text-white flex flex-col justify-between p-4 sm:p-6 font-sans relative overflow-hidden selection:bg-[#39FF14] selection:text-black">
+        {/* Ambient grids/glow details */}
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#39FF14]/5 rounded-full blur-[120px] pointer-events-none select-none"></div>
+        <div className="absolute bottom-12 right-1/4 w-80 h-80 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none select-none"></div>
+
+        {/* Global Progress Header */}
+        <header className="max-w-xl mx-auto w-full pt-4 pb-2 flex items-center justify-between border-b border-neutral-800/80 mb-6">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black uppercase tracking-widest text-[#39FF14] font-mono flex items-center gap-1.5">
+              GYMPULSE <span className="w-1 h-1 bg-[#39FF14] rounded-full"></span>
+            </span>
+            <span className="text-[9px] bg-neutral-800 px-2 py-0.5 rounded font-mono text-neutral-400">ONBOARDING CLIENTE</span>
+          </div>
+          <button 
+            type="button"
+            onClick={onLogout}
+            className="text-[10px] text-neutral-400 hover:text-white font-mono uppercase tracking-wider bg-transparent border-none outline-none cursor-pointer"
+          >
+            Sair
+          </button>
+        </header>
+
+        {/* Wizard Main Panel */}
+        <main className="max-w-xl mx-auto w-full flex-1 flex flex-col justify-center py-4">
+          <div className="bg-[#121214]/65 border border-neutral-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl relative">
+            <div className="absolute top-0 right-0 left-0 h-[2px] bg-gradient-to-r from-transparent via-[#39FF14]/40 to-transparent"></div>
+
+            {/* Steps tracker badge dots */}
+            {obStep < 4 && (
+              <div className="flex items-center justify-center gap-3 mb-6">
+                {[0, 1, 2, 3].map((val) => {
+                  const isActive = obStep === val;
+                  const isPast = obStep > val;
+                  return (
+                    <div key={val} className="flex items-center gap-1.5">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono transition-all border ${
+                        isActive 
+                          ? 'bg-[#39FF14] text-black border-transparent scale-110 shadow-lg shadow-[#39FF14]/15' 
+                          : isPast 
+                            ? 'bg-emerald-900/40 text-[#39FF14] border-emerald-900 text-center' 
+                            : 'bg-neutral-900 border-neutral-800 text-neutral-500'
+                      }`}>
+                        {isPast ? '✓' : val + 1}
+                      </div>
+                      {val < 3 && <div className={`w-4 h-[1px] ${obStep > val ? 'bg-emerald-900' : 'bg-neutral-800'}`}></div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Error banner */}
+            {obErrorMsg && (
+              <div className="bg-red-950/40 border border-red-800 text-red-300 rounded-xl p-3 mb-4 text-xs font-medium font-sans flex items-start gap-2 animate-fade-in">
+                <AlertCircle size={14} className="shrink-0 mt-0.5 text-red-400" />
+                <span>{obErrorMsg}</span>
+              </div>
+            )}
+
+            {/* STEP 0: Welcome Screen */}
+            {obStep === 0 && (
+              <div className="space-y-6 text-center animate-fade-in">
+                <div className="inline-flex items-center justify-center bg-[#39FF14]/10 border border-[#39FF14]/20 p-4 rounded-2xl">
+                  <Sparkles size={28} className="text-[#39FF14]" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl font-sans">
+                    Ative Seu Portal de Treinos!
+                  </h2>
+                  <p className="text-xs sm:text-sm text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                    Olá, <strong className="text-white">{obName}</strong>! Seu Personal Trainer enviou um link de convite exclusivo para você fazer parte do portal do aluno do GymPulse.
+                  </p>
+                </div>
+
+                <div className="bg-[#0C0C0E] border border-neutral-800 p-4 rounded-2xl text-left space-y-2 max-w-sm mx-auto">
+                  <p className="text-[10px] uppercase font-mono tracking-wider text-neutral-400">Configurado para você:</p>
+                  <div className="flex items-center justify-between text-xs text-white">
+                    <span className="font-sans">Plano de Consultoria:</span>
+                    <strong className="text-[#39FF14] font-bold">{assignedPlan}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-white">
+                    <span className="font-sans">Mensalidade Recomendada:</span>
+                    <strong className="text-white font-mono">R$ {planPrice.toFixed(2)}</strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setObStep(1)}
+                  className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold text-xs py-3.5 rounded-xl transition duration-200 cursor-pointer active:scale-95 shadow-lg shadow-[#39FF14]/10 hover:shadow-[#39FF14]/20"
+                >
+                  Concluir Cadastro Rápido (1 minuto) →
+                </button>
+              </div>
+            )}
+
+            {/* STEP 1: Identification & Auth */}
+            {obStep === 1 && (
+              <div className="space-y-5 animate-fade-in">
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">1. Dados Básicos de Identificação</h3>
+                  <p className="text-xs text-neutral-400">Valide seus dados e escolha seu método de acesso preferencial.</p>
+                </div>
+
+                <div className="space-y-3.5 pt-1">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                      Nome Completo
+                    </label>
+                    <input
+                      type="text"
+                      value={obName}
+                      onChange={(e) => setObName(e.target.value)}
+                      placeholder="Identifique seu nome de treino"
+                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                      Número de WhatsApp (DDD incluso)
+                    </label>
+                    <input
+                      type="text"
+                      value={obPhone}
+                      onChange={(e) => setObPhone(e.target.value)}
+                      placeholder="Ex: (11) 99999-9999"
+                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-neutral-800/60 pb-1">
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-2 text-center">
+                      Qual Método de Acesso você deseja usar?
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setObAccessMethod('google');
+                          setObShowGoogleModal(true);
+                        }}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer text-left flex flex-col justify-between h-20 ${
+                          obAccessMethod === 'google'
+                            ? 'border-[#39FF14] bg-[#39FF14]/5 text-white'
+                            : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-700'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center w-full">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z" />
+                            <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z" />
+                            <path fill="#FBBC05" d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z" />
+                            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z" />
+                          </svg>
+                          {obAccessMethod === 'google' && <CheckSquare className="w-3.5 h-3.5 text-[#39FF14]" />}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold block leading-none">Login Google</span>
+                          <span className="text-[8px] text-neutral-400 mt-0.5">Sem precisar de senha</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setObAccessMethod('password')}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer text-left flex flex-col justify-between h-20 ${
+                          obAccessMethod === 'password'
+                            ? 'border-[#39FF14] bg-[#39FF14]/5 text-white'
+                            : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-700'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center w-full">
+                          🔒
+                          {obAccessMethod === 'password' && <CheckSquare className="w-3.5 h-3.5 text-[#39FF14]" />}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold block leading-none">E-mail e Senha</span>
+                          <span className="text-[8px] text-neutral-400 mt-0.5">Senha criada por você</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                      Endereço de E-mail
+                    </label>
+                    <input
+                      type="email"
+                      value={obEmail}
+                      onChange={(e) => setObEmail(e.target.value)}
+                      disabled={obAccessMethod === 'google'}
+                      placeholder="Seu e-mail cadastrado (Ex: lucas@gmail.com)"
+                      className={`w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border transition font-sans ${
+                        obAccessMethod === 'google' 
+                          ? 'border-[#39FF14]/40 bg-[#39FF14]/5 text-[#39FF14] cursor-not-allowed font-bold' 
+                          : 'border-neutral-800 focus:border-[#39FF14]'
+                      }`}
+                    />
+                    {obAccessMethod === 'google' && (
+                      <p className="text-[9px] text-[#39FF14] font-mono mt-1 uppercase tracking-wide">
+                        ✓ Vinculado com Google Account. ID: {obEmail}
+                      </p>
+                    )}
+                  </div>
+
+                  {obAccessMethod === 'password' ? (
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                        Definir Senha de Acesso
+                      </label>
+                      <input
+                        type="text"
+                        value={obPassword}
+                        onChange={(e) => setObPassword(e.target.value)}
+                        placeholder="Crie uma nova senha padrão"
+                        className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setObStep(0)}
+                    className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold text-xs py-3 rounded-xl cursor-pointer text-center"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveOnboardingSubmit}
+                    className="flex-1 bg-[#39FF14] hover:bg-green-400 text-black font-extrabold text-xs py-3 rounded-xl cursor-pointer text-center"
+                  >
+                    Próximo Passo: Biometria
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Medidas & Bio training goals */}
+            {obStep === 2 && (
+              <div className="space-y-5 animate-fade-in">
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">2. Seus Dados e Objetivos de Treino</h3>
+                  <p className="text-xs text-neutral-400">Insira suas métricas biológicas para que o Personal alinhe as cargas.</p>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
+                        Idade (Anos)
+                      </label>
+                      <input
+                        type="number"
+                        value={obAge}
+                        onChange={(e) => setObAge(Number(e.target.value))}
+                        className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 block">
+                        Peso Atual (kg)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={obWeight}
+                        onChange={(e) => setObWeight(Number(e.target.value))}
+                        className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 block">
+                        Altura (m)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={obHeight}
+                        onChange={(e) => setObHeight(Number(e.target.value))}
+                        className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                      Objetivo de Treino Principal
+                    </label>
+                    <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-1">
+                      <select
+                        value={obObjective}
+                        onChange={(e) => setObObjective(e.target.value as Objective)}
+                        className="w-full bg-transparent text-xs text-white py-2 px-3 border-none outline-none font-bold cursor-pointer font-sans"
+                      >
+                        <option value="Hipertrofia" className="text-neutral-900 bg-white dark:bg-neutral-950 font-sans">Hipertrofia Muscular</option>
+                        <option value="Emagrecimento" className="text-neutral-900 bg-white dark:bg-neutral-950 font-sans">Queima Calórica / Definição</option>
+                        <option value="Condicionamento" className="text-neutral-900 bg-white dark:bg-neutral-950 font-sans">Resistência Física</option>
+                        <option value="Reabilitação" className="text-neutral-900 bg-white dark:bg-neutral-950 font-sans">Melhora Clinica / Mobilidade</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                      Você possui dores, lesões ou restrições de saúde? (Se houver)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={obRestrictions}
+                      onChange={(e) => setObRestrictions(e.target.value)}
+                      placeholder="Ex: Nenhuma, dor ou incômodo no joelho, hérnia, labirintite..."
+                      className="w-full bg-neutral-950 text-xs text-white p-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setObStep(1)}
+                    className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold text-xs py-3 rounded-xl cursor-pointer text-center"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveOnboardingSubmit}
+                    className="flex-1 bg-[#39FF14] hover:bg-green-400 text-black font-extrabold text-xs py-3 rounded-xl cursor-pointer text-center"
+                  >
+                    Próximo Passo: Pagamento
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Payment details selection & confirmation */}
+            {obStep === 3 && (
+              <div className="space-y-5 animate-fade-in">
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">3. Adesão Financeira ao Plano</h3>
+                  <p className="text-xs text-neutral-400">Você foi adicionado no <strong className="text-white">{assignedPlan}</strong>. Confirme os valores de ativação.</p>
+                </div>
+
+                <div className="bg-[#0C0C0E] border border-neutral-800 p-4 rounded-2xl">
+                  <div className="flex items-center justify-between text-xs text-neutral-400">
+                    <span>Inscrição Recorrente:</span>
+                    <span>1 x Plano {assignedPlan}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-base text-white font-bold mt-1.5 pt-1.5 border-t border-neutral-800">
+                    <span className="text-sm font-medium">Valor Devido:</span>
+                    <span className="text-[#39FF14] font-mono">R$ {planPrice.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-2.5 text-center">
+                    Escolha de Fornecimento de Pagamento (Mock)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setObPaymentType('pix');
+                        setObErrorMsg('');
+                      }}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer text-left flex flex-col justify-between h-20 ${
+                        obPaymentType === 'pix'
+                          ? 'border-[#39FF14] bg-[#39FF14]/5 text-white'
+                          : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-700'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <span className="text-xs">⚡</span>
+                        {obPaymentType === 'pix' && <CheckSquare className="w-3.5 h-3.5 text-[#39FF14]" />}
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold block leading-none">PIX Dinâmico</span>
+                        <span className="text-[8px] text-neutral-400 mt-0.5">Liberação de acesso em tempo real</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setObPaymentType('card');
+                        setObErrorMsg('');
+                      }}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer text-left flex flex-col justify-between h-20 ${
+                        obPaymentType === 'card'
+                          ? 'border-[#39FF14] bg-[#39FF14]/5 text-white'
+                          : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-700'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <span className="text-xs">💳</span>
+                        {obPaymentType === 'card' && <CheckSquare className="w-3.5 h-3.5 text-[#39FF14]" />}
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold block leading-none">Cartão de Crédito</span>
+                        <span className="text-[8px] text-neutral-400 mt-0.5">Sincronização Stripe simulated</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {obPaymentType === 'pix' && (
+                  <div className="bg-[#0C0C0E] border border-neutral-800 p-4 rounded-2xl space-y-3.5 animate-fade-in text-center">
+                    <span className="block text-[10px] text-emerald-400 font-mono font-bold uppercase tracking-wider">
+                      CÓDIGO DE PAGAMENTO PIX
+                    </span>
+                    <div className="w-24 h-24 bg-white p-1 rounded-xl mx-auto shadow flex items-center justify-center">
+                      {/* Fake pixelated pattern */}
+                      <div className="grid grid-cols-6 gap-[1px] w-full h-full bg-black">
+                        {Array.from({length: 36}).map((_, i) => (
+                          <div key={i} className={`w-full h-full ${i % 3 === 0 || i % 5 === 0 ? 'bg-white' : 'bg-black'}`}></div>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-[10.5px] text-neutral-400 leading-normal px-2">
+                      Copie a chave Pix abaixo e pague no aplicativo do seu banco para habilitar sua assinatura imediatamente:
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value="00020101021126300014br.gov.bcb.pix011145628599908"
+                        className="flex-1 bg-neutral-950 text-[10px] px-2.5 py-1.5 rounded-lg border border-neutral-800/80 font-mono select-all text-neutral-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText("00020101021126300014br.gov.bcb.pix011145628599908");
+                          setObPixCopied(true);
+                          setTimeout(() => setObPixCopied(false), 2000);
+                        }}
+                        className="bg-neutral-800 border-none outline-none font-bold text-[10px] px-3.5 py-1.5 rounded-lg hover:bg-neutral-750 text-white cursor-pointer"
+                      >
+                        {obPixCopied ? 'Copiado!' : 'Copiar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {obPaymentType === 'card' && (
+                  <div className="bg-[#0C0C0E] border border-neutral-800 p-4 rounded-xl space-y-3 animate-fade-in">
+                    <div>
+                      <label className="block text-[9px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
+                        Nome Impresso no Cartão
+                      </label>
+                      <input
+                        type="text"
+                        value={obCardName}
+                        onChange={(e) => setObCardName(e.target.value)}
+                        placeholder="Ex: LUCAS N R SILVA"
+                        className="w-full bg-neutral-950 text-xs text-white px-3 py-2 rounded-lg border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
+                        Número do Cartão de Crédito
+                      </label>
+                      <input
+                        type="text"
+                        value={obCardNum}
+                        maxLength={19}
+                        onChange={(e) => setObCardNum(e.target.value)}
+                        placeholder="4532 1111 8888 9999"
+                        className="w-full bg-neutral-950 text-xs text-white px-3 py-2 rounded-lg border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[9px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 text-center">
+                          Vencimento (MM/AA)
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={5}
+                          value={obCardExpiry}
+                          onChange={(e) => setObCardExpiry(e.target.value)}
+                          placeholder="08/29"
+                          className="w-full bg-neutral-950 text-xs text-white px-3 py-2 rounded-lg border border-neutral-800 focus:outline-none text-center focus:border-[#39FF14] transition font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 text-center">
+                          CVV Seguro
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={4}
+                          value={obCardCvv}
+                          onChange={(e) => setObCardCvv(e.target.value)}
+                          placeholder="123"
+                          className="w-full bg-neutral-950 text-xs text-white px-3 py-2 rounded-lg border border-neutral-800 focus:outline-none text-center focus:border-[#39FF14] transition font-mono"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-neutral-500 font-mono uppercase text-center tracking-wide">
+                      🔒 Pagamento criptografado via Sandbox Stripe API.
+                    </p>
+                  </div>
+                )}
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setObStep(2)}
+                    className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold text-xs py-3 rounded-xl cursor-pointer text-center"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveOnboardingSubmit}
+                    disabled={obPayingStatus === 'processing'}
+                    className={`flex-1 bg-[#33FF11] hover:bg-[#39FF14] text-black font-extrabold text-xs py-3 rounded-xl cursor-pointer text-center ${
+                      obPayingStatus === 'processing' ? 'opacity-85 animate-pulse cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {obPayingStatus === 'processing' ? 'Processando Checkout Seguro...' : 'Finalizar Assinatura e Cadastro'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 4: Registration completed screen */}
+            {obStep === 4 && (
+              <div className="space-y-6 text-center animate-fade-in relative">
+                <div className="inline-flex items-center justify-center bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl animate-bounce">
+                  <CheckCircle2 size={32} className="text-[#39FF14]" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-bold tracking-tight text-white font-sans">
+                    Cadastro Revisado com Sucesso!
+                  </h2>
+                  <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed max-w-sm mx-auto">
+                    Parabéns, <strong className="text-[#39FF14]">{obName}</strong>! Seus dados pessoais, biometria e assinatura foram coletados e consolidados em nossa base em tempo real.
+                  </p>
+                </div>
+
+                <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-left text-[11px] text-neutral-300 max-w-sm mx-auto leading-normal">
+                  <p className="text-[#39FF14] font-bold uppercase font-mono tracking-wider text-[9px] mb-1">PROCESSO DE HOMOLOGAÇÃO</p>
+                  Suas informações foram transmitidas com sucesso para o painel de controle do seu Personal Trainer. Aguarde a confirmação técnica dele para iniciar sua rotina de treinos prescritos.
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Let the student navigate directly to the wait screen state
+                    window.location.reload();
+                  }}
+                  className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold text-xs py-3.5 rounded-xl transition duration-200 cursor-pointer text-center"
+                >
+                  Entrar no Portal Aluno Sincronizado
+                </button>
+              </div>
+            )}
+
+          </div>
+        </main>
+
+        {/* Global Footer info */}
+        <footer className="text-center text-[10px] text-neutral-500 font-mono py-4">
+          GymPulse Workspace • Sandbox Environment • Real Database Connected
+        </footer>
+
+        {/* 100% Mock Google Account chooser Modal overlay */}
+        {obShowGoogleModal && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative">
+              <button 
+                type="button"
+                onClick={() => setObShowGoogleModal(false)}
+                className="absolute top-4 right-4 text-neutral-400 hover:text-white cursor-pointer transition font-bold text-sm bg-neutral-950/60 w-8 h-8 rounded-full flex items-center justify-center border border-neutral-800"
+              >
+                ✕
+              </button>
+              <div className="p-6 space-y-4">
+                <div className="flex flex-col items-center text-center space-y-2">
+                  <svg className="w-8 h-8" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z" />
+                    <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z" />
+                    <path fill="#FBBC05" d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z" />
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z" />
+                  </svg>
+                  <h3 className="text-base font-bold text-white tracking-tight mt-1">Conectar com o Google</h3>
+                  <p className="text-xs text-neutral-400">Selecione uma de suas contas Google para efetuar o login por aprovação de convite:</p>
+                </div>
+
+                {!obShowGoogleCustomInput ? (
+                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1 text-left">
+                    <button
+                      type="button"
+                      onClick={() => handleObGoogleSelect(obName ? `${obName.toLowerCase().replace(/\s+/g, '')}@gmail.com` : 'lucas@gmail.com')}
+                      className="w-full text-left bg-neutral-950 border border-neutral-800 hover:border-[#39FF14] p-3 rounded-xl flex items-center gap-3 transition-all cursor-pointer group active:scale-98"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-emerald-600 text-white font-extrabold flex items-center justify-center text-xs select-none uppercase font-mono">
+                        {obName ? obName.charAt(0) : 'L'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-white leading-tight group-hover:text-[#39FF14] transition-colors">
+                          {obName || 'Lucas Silva'} (Conta Padrão)
+                        </p>
+                        <span className="text-[9px] text-neutral-400 truncate block mt-0.5">
+                          {obName ? `${obName.toLowerCase().replace(/\s+/g, '')}@gmail.com` : 'lucas@gmail.com'}
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleObGoogleSelect('michel.lima20000@gmail.com');
+                      }}
+                      className="w-full text-left bg-neutral-950 border border-neutral-800 hover:border-[#39FF14] p-3 rounded-xl flex items-center gap-3 transition-all cursor-pointer group active:scale-98"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-neutral-850 border border-neutral-700 text-white font-mono font-bold flex items-center justify-center text-xs">
+                        ML
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-white leading-tight group-hover:text-[#39FF14] transition-colors">Michel Lima</p>
+                        <span className="text-[9px] text-neutral-400 truncate block mt-0.5">michel.lima20000@gmail.com</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setObShowGoogleCustomInput(true)}
+                      className="w-full text-center py-2 text-[10px] text-neutral-400 hover:text-[#39FF14] underline font-mono cursor-pointer block bg-transparent border-[#39FF14]/15 mt-2"
+                    >
+                      + Usar outra conta de e-mail @gmail.com
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 bg-neutral-950 border border-neutral-800 p-4 rounded-xl animate-fade-in text-left">
+                    <label className="block text-[9.5px] text-[#39FF14] uppercase font-mono font-bold tracking-wider mb-1">
+                      Insira o seu E-mail do Gmail
+                    </label>
+                    <input
+                      type="email"
+                      value={obGoogleEmailInput}
+                      onChange={(e) => setObGoogleEmailInput(e.target.value)}
+                      placeholder="seu.nome@gmail.com"
+                      autoFocus
+                      className="w-full bg-neutral-900 text-xs text-white px-3 py-2.5 rounded-lg border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setObShowGoogleCustomInput(false)}
+                        className="flex-1 text-[10px] bg-neutral-900 text-neutral-400 font-bold py-2 rounded-lg cursor-pointer hover:bg-neutral-850"
+                      >
+                        Voltar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (obGoogleEmailInput.trim() && obGoogleEmailInput.includes('@')) {
+                            handleObGoogleSelect(obGoogleEmailInput.trim());
+                          } else {
+                            alert('Por favor, informe um endereço de gmail válido.');
+                          }
+                        }}
+                        className="flex-1 text-[10px] bg-[#39FF14] text-black font-extrabold py-2 rounded-lg cursor-pointer hover:bg-green-400"
+                      >
+                        Confirmar Conta
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[9px] text-neutral-500 text-center font-sans mt-2">
+                  Ao continuar, você autoriza o compartilhamento de suas informações de identificação com o portal do aluno da consultoria GymPulse.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // CHECKPOINT 2: Student completed the profile, but status is still 'Inativo' (Awaiting staff confirmation)
+  if (currentStudent && currentStudent.isProfileComplete && currentStudent.status === 'Inativo') {
+    return (
+      <div className="min-h-screen bg-[#070709] text-white flex flex-col justify-between p-4 sm:p-6 font-sans relative selection:bg-[#39FF14] selection:text-black">
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-[#39FF14]/5 rounded-full blur-[130px] pointer-events-none select-none"></div>
+
+        <header className="max-w-xl mx-auto w-full pt-4 pb-2 flex items-center justify-between border-b border-neutral-800/80 mb-6">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black uppercase tracking-widest text-[#39FF14] font-mono flex items-center gap-1.5">
+              GYMPULSE <span className="w-1 h-1 bg-[#39FF14] rounded-full"></span>
+            </span>
+            <span className="text-[9px] bg-neutral-800 px-2 py-0.5 rounded font-mono text-neutral-400">HOMOLOGAÇÃO PENDENTE</span>
+          </div>
+          <button 
+            type="button"
+            onClick={onLogout}
+            className="text-[10px] text-neutral-400 hover:text-white font-mono uppercase tracking-wider bg-transparent border-none cursor-pointer"
+          >
+            Sair
+          </button>
+        </header>
+
+        <main className="max-w-xl mx-auto w-full flex-1 flex flex-col justify-center py-4">
+          <div className="bg-[#121214]/65 border border-[#39FF14]/20 rounded-3xl p-6 sm:p-8 shadow-2xl relative text-center space-y-6">
+            <div className="absolute top-0 right-0 left-0 h-[2px] bg-gradient-to-r from-transparent via-amber-400/40 to-transparent"></div>
+
+            <div className="inline-flex items-center justify-center bg-amber-400/10 border border-amber-400/30 p-4 rounded-2xl animate-pulse">
+              <Clock size={32} className="text-amber-400" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold tracking-tight text-white font-sans">
+                Aguardando Liberação do Treinador...
+              </h2>
+              <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed max-w-sm mx-auto">
+                Olá, <strong className="text-white">{currentStudent.name}</strong>! Seus dados de convite foram preenchidos com sucesso e enviados ao seu Personal Trainer em tempo real.
+              </p>
+            </div>
+
+            <div className="bg-[#0C0C0E] border border-neutral-800 rounded-xl p-4 text-left space-y-2.5">
+              <div className="flex items-center justify-between text-[11px] text-neutral-400 border-b border-neutral-850 pb-1.5">
+                <span>Plano Validado:</span>
+                <strong className="text-white font-mono">{currentStudent.plan}</strong>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-neutral-400 border-b border-neutral-850 pb-1.5">
+                <span>Número de Celular:</span>
+                <strong className="text-white font-mono">{currentStudent.phoneWhatsApp || 'Não informado'}</strong>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-neutral-400">
+                <span>Método de Acesso:</span>
+                <strong className="text-[#39FF14] text-[10.5px] font-mono">
+                  {currentStudent.accessMethod === 'google' ? '⚡ Conta do Google (Gmail)' : '🔒 E-mail e Senha'}
+                </strong>
+              </div>
+            </div>
+
+            <div className="bg-[#39FF14]/5 border border-[#39FF14]/25 p-3 rounded-xl text-[10.5px] text-[#39FF14] leading-relaxed text-left flex items-start gap-2">
+              <span className="w-1.5 h-1.5 bg-[#39FF14] rounded-full mt-1.5 shrink-0 animate-ping"></span>
+              <p>
+                <strong>Status:</strong> O sistema está sincronizando em tempo real! Assim que o seu Personal Trainer validar e aprovar o seu perfil do outro lado, o seu portal de treino destravá em até 2 segundos.
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.reload();
+                }}
+                className="w-full bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-white font-extrabold text-xs py-3 rounded-xl transition duration-200 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw size={12} className="animate-spin text-[#39FF14]" />
+                Sincronizar Manualmente
+              </button>
+            </div>
+          </div>
+        </main>
+
+        <footer className="text-center text-[10px] text-neutral-500 font-mono py-4">
+          GymPulse Workspace • Real-Time Database Active
+        </footer>
+      </div>
+    );
+  }
+
   // Tabs: workout, performance, chat, subscript
   const [activeTab, setActiveTab] = useState<'treino' | 'evolucao' | 'chat' | 'plano'>('treino');
   const [activeLetter, setActiveLetter] = useState<'A' | 'B' | 'C' | 'D' | 'E'>('A');

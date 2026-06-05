@@ -25,6 +25,9 @@ export interface Student {
   email?: string;
   password?: string;
   phoneWhatsApp?: string;
+  isProfileComplete?: boolean;
+  accessMethod?: 'google' | 'password';
+  paymentDetailsConfirmed?: boolean;
 }
 
 export interface Exercise {

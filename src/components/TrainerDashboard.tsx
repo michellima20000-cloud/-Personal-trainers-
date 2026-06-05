@@ -388,13 +388,14 @@ export default function TrainerDashboard({
       restrictions: isRapido ? 'Nenhuma restrição (Cadastro Rápido).' : (newStudent.restrictions || 'Nenhuma restrição informada.'),
       history: isRapido ? 'Iniciante (Modo Pré-cadastro rápido).' : (newStudent.history || 'Iniciante.'),
       plan: (newStudent.plan as PlanType) || 'Mensal',
-      status: (newStudent.status as 'Ativo' | 'Inativo') || 'Ativo',
+      status: (newStudent.status as 'Ativo' | 'Inativo') || 'Inativo', // Default inativo until profile complete
       joinedAt: new Date().toLocaleDateString('pt-BR'),
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
       value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
       phoneWhatsApp: newStudent.phoneWhatsApp ? newStudent.phoneWhatsApp.trim() : undefined,
       email: newStudent.email ? newStudent.email.trim().toLowerCase() : '',
-      password: newStudent.password ? newStudent.password : '123456'
+      password: newStudent.password ? newStudent.password : '123456',
+      isProfileComplete: false
     };
 
     onAddStudent(createdStudent);
@@ -1332,6 +1333,92 @@ export default function TrainerDashboard({
                           <p className="text-[10px] text-neutral-500 font-mono uppercase text-red-400">Restrições Físicas / Lesões</p>
                           <p className="font-medium text-red-300 mt-1">{selectedStudent.restrictions || 'Sem limitações ou queixas.'}</p>
                         </div>
+                      </div>
+
+                      {/* BLASTRONIC CONFIRMATION & VERIFICATION CARD */}
+                      <div className="bg-[#121214]/90 p-4 rounded-xl border border-[#39FF14]/15 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider font-bold flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${selectedStudent.isProfileComplete ? 'bg-[#39FF14]' : 'bg-amber-400'}`}></span>
+                            Status do Convite / Cadastro Aluno
+                          </p>
+                          <span className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold uppercase ${selectedStudent.isProfileComplete ? 'bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/25' : 'bg-amber-400/10 text-amber-300 border border-amber-400/25'}`}>
+                            {selectedStudent.isProfileComplete ? 'CONCLUÍDO PELO ALUNO' : 'AGUARDANDO CADASTRO'}
+                          </span>
+                        </div>
+
+                        {!selectedStudent.isProfileComplete ? (
+                          <div className="text-xs text-neutral-400 space-y-2">
+                            <div className="bg-neutral-950 p-3 rounded-lg border border-neutral-800 space-y-1.5">
+                              <p className="text-white font-bold leading-tight flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-neutral-600 rounded-full"></span>
+                                Aguardando o preenchimento do aluno...
+                              </p>
+                              <p className="text-[11px] text-neutral-400">
+                                O Aluno receberá o link enviado e completará seus dados pessoais, e-mail/WhatsApp, senha e dados de pagamento.
+                              </p>
+                            </div>
+                            <p className="text-[9.5px] text-neutral-500 font-mono text-center">
+                              Assim que ele preencher, as informações preenchidas aparecerão aqui para sua confirmação imediata.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3 text-xs">
+                            <div className="bg-[#0C0C0E] p-3.5 rounded-xl border border-[#39FF14]/20 space-y-2">
+                              <p className="text-white font-extrabold flex items-center gap-1 text-[11px]">
+                                <span className="w-1.5 h-1.5 bg-[#39FF14] rounded-full animate-pulse"></span>
+                                Dados Recebidos pelo Link de Convite
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10.5px] text-neutral-300 leading-normal font-sans">
+                                <div>
+                                  <span className="text-neutral-500 font-mono text-[9px] block uppercase">Nome Completo:</span>
+                                  <strong className="text-white">{selectedStudent.name}</strong>
+                                </div>
+                                <div>
+                                  <span className="text-neutral-500 font-mono text-[9px] block uppercase">E-mail:</span>
+                                  <span className="text-neutral-200 select-all font-mono">{selectedStudent.email || '(Não informado)'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-neutral-500 font-mono text-[9px] block uppercase">WhatsApp:</span>
+                                  <span className="text-neutral-200 font-mono">{selectedStudent.phoneWhatsApp || '(Não informado)'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-neutral-500 font-mono text-[9px] block uppercase">Método de Acesso:</span>
+                                  <span className="text-[#39FF14] font-bold font-mono">
+                                    {selectedStudent.accessMethod === 'google' ? '⚡ Conta Google (Gmail)' : '🔒 Senha Criada'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-neutral-500 font-mono text-[9px] block uppercase">Medidas:</span>
+                                  <span>{selectedStudent.age} anos • {selectedStudent.weight}kg • {selectedStudent.height}m</span>
+                                </div>
+                                <div>
+                                  <span className="text-neutral-500 font-mono text-[9px] block uppercase">Adesão Financeira:</span>
+                                  <span className="text-emerald-400 font-extrabold">✓ Confirmado (Pix/Cartão)</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="bg-emerald-900/10 border border-emerald-500/20 p-2.5 rounded-xl text-neutral-300 text-[11px] leading-relaxed">
+                              O aluno preencheu todas as etapas delegadas! Por favor, confirme as informações do perfil abaixo para concluir o onboarding e liberar o acesso total aos treinos.
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onUpdateStudent(selectedStudent.id, {
+                                  status: 'Ativo',
+                                  history: `Cadastro via convite revisado e aprovado pelo Personal Trainer em ${new Date().toLocaleDateString('pt-BR')}. ` + (selectedStudent.history || '')
+                                });
+                                alert('Incrível! O perfil do aluno foi devidamente revisado, confirmado e liberado para uso imediato!');
+                              }}
+                              className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold py-2.5 rounded-xl font-sans transition-all active:scale-95 text-xs text-center flex items-center justify-center gap-1.5 shadow-md hover:shadow-[#39FF14]/15"
+                            >
+                              <Check size={14} className="stroke-[3]" />
+                              Confirmar Informações & Liberar Acesso Aluno
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {!editingStudentPlan ? (
