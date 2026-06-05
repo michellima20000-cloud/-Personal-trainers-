@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
   MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock,
-  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle
+  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -278,8 +278,11 @@ export default function TrainerDashboard({
 
   // States for forms and modal toggles
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [cadastroMode, setCadastroMode] = useState<'rapido' | 'completo'>('rapido');
   const [newStudent, setNewStudent] = useState<Partial<Student>>({
     name: '',
+    email: '',
+    password: '',
     age: 25,
     weight: 70,
     height: 1.75,
@@ -338,6 +341,16 @@ export default function TrainerDashboard({
   const [tempStudentPlan, setTempStudentPlan] = useState<PlanType>('Mensal');
   const [tempStudentValue, setTempStudentValue] = useState<number>(0);
   const [tempStudentStatus, setTempStudentStatus] = useState<'Ativo' | 'Inativo'>('Ativo');
+  const [tempStudentName, setTempStudentName] = useState('');
+  const [tempStudentPhone, setTempStudentPhone] = useState('');
+  const [tempStudentEmail, setTempStudentEmail] = useState('');
+  const [tempStudentPassword, setTempStudentPassword] = useState('');
+  const [tempStudentAge, setTempStudentAge] = useState(25);
+  const [tempStudentWeight, setTempStudentWeight] = useState(70);
+  const [tempStudentHeight, setTempStudentHeight] = useState(1.70);
+  const [tempStudentObjective, setTempStudentObjective] = useState<Objective>('Hipertrofia');
+  const [tempStudentRestrictions, setTempStudentRestrictions] = useState('');
+  const [tempStudentHistory, setTempStudentHistory] = useState('');
 
   // Computed Stats for Trainer Overview
   const totalStudents = students.length;
@@ -360,22 +373,28 @@ export default function TrainerDashboard({
     
     // Auto populate values
     const studentId = 's_' + Date.now();
+    
+    // Values based on rapid vs full mode
+    const isRapido = cadastroMode === 'rapido';
+    
     const createdStudent: Student = {
       id: studentId,
-      name: newStudent.name,
+      name: newStudent.name.trim(),
       avatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 900000)}?w=150&auto=format&fit=crop&q=80`,
-      age: Number(newStudent.age),
-      weight: Number(newStudent.weight),
-      height: Number(newStudent.height),
-      objective: (newStudent.objective as Objective) || 'Hipertrofia',
-      restrictions: newStudent.restrictions || 'Nenhuma restrição informada.',
-      history: newStudent.history || 'Iniciante.',
+      age: isRapido ? 25 : Number(newStudent.age || 25),
+      weight: isRapido ? 70 : Number(newStudent.weight || 70),
+      height: isRapido ? 1.70 : Number(newStudent.height || 1.70),
+      objective: isRapido ? 'Hipertrofia' : ((newStudent.objective as Objective) || 'Hipertrofia'),
+      restrictions: isRapido ? 'Nenhuma restrição (Cadastro Rápido).' : (newStudent.restrictions || 'Nenhuma restrição informada.'),
+      history: isRapido ? 'Iniciante (Modo Pré-cadastro rápido).' : (newStudent.history || 'Iniciante.'),
       plan: (newStudent.plan as PlanType) || 'Mensal',
       status: (newStudent.status as 'Ativo' | 'Inativo') || 'Ativo',
       joinedAt: new Date().toLocaleDateString('pt-BR'),
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
       value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
-      phoneWhatsApp: newStudent.phoneWhatsApp || undefined
+      phoneWhatsApp: newStudent.phoneWhatsApp ? newStudent.phoneWhatsApp.trim() : undefined,
+      email: newStudent.email ? newStudent.email.trim().toLowerCase() : '',
+      password: newStudent.password ? newStudent.password : '123456'
     };
 
     onAddStudent(createdStudent);
@@ -384,6 +403,8 @@ export default function TrainerDashboard({
     // reset form
     setNewStudent({
       name: '',
+      email: '',
+      password: '',
       age: 25,
       weight: 70,
       height: 1.75,
@@ -1328,68 +1349,202 @@ export default function TrainerDashboard({
                           </div>
                           <button
                             onClick={() => {
+                              setTempStudentName(selectedStudent.name || '');
+                              setTempStudentPhone(selectedStudent.phoneWhatsApp || '');
+                              setTempStudentEmail(selectedStudent.email || '');
+                              setTempStudentPassword(selectedStudent.password || '123456');
+                              setTempStudentAge(selectedStudent.age || 25);
+                              setTempStudentWeight(selectedStudent.weight || 70);
+                              setTempStudentHeight(selectedStudent.height || 1.70);
+                              setTempStudentObjective(selectedStudent.objective || 'Hipertrofia');
+                              setTempStudentRestrictions(selectedStudent.restrictions || '');
+                              setTempStudentHistory(selectedStudent.history || '');
                               setTempStudentPlan(selectedStudent.plan);
                               setTempStudentValue(selectedStudent.value);
                               setTempStudentStatus(selectedStudent.status || 'Ativo');
                               setEditingStudentPlan(true);
                             }}
-                            className="flex items-center gap-1.5 py-1 px-3 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 hover:bg-neutral-800 text-[10px] font-medium text-[#39FF14] transition-all cursor-pointer font-mono"
+                            className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 hover:bg-neutral-800 text-[10px] font-medium text-[#39FF14] transition-all cursor-pointer font-mono"
                           >
                             <Edit3 size={11} />
-                            EDITAR PLANO
+                            EDITAR DADOS E FICHA
                           </button>
                         </div>
                       ) : (
-                        <div className="bg-neutral-900 p-3 rounded-xl border border-neutral-800 space-y-3">
-                          <p className="text-[10px] text-neutral-400 uppercase font-mono">Editar Plano Individual de {selectedStudent.name}</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-sans">
-                            <div>
-                              <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Tipo de Plano</label>
-                              <select 
-                                value={tempStudentPlan}
-                                onChange={(e) => {
-                                  const selectType = e.target.value as PlanType;
-                                  setTempStudentPlan(selectType);
-                                  // Auto fill with the marketing standard price if the personal wishes so
-                                  const matchingMarketing = marketingPlans.find(p => p.id === selectType);
-                                  if (matchingMarketing) {
-                                    setTempStudentValue(matchingMarketing.price);
-                                  }
-                                }}
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer font-mono"
-                              >
-                                <option value="Mensal">Mensal</option>
-                                <option value="Trimestral">Trimestral</option>
-                                <option value="Anual">Anual</option>
-                              </select>
+                        <div className="bg-neutral-900 p-5 rounded-2xl border border-neutral-800 space-y-4 animate-fade-in text-xs">
+                          <p className="text-[10px] text-neutral-400 uppercase font-mono font-bold tracking-widest flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#39FF14]"></span>
+                            Editar Ficha Completa & Dados do Aluno: {selectedStudent.name}
+                          </p>
+
+                          {/* Section 1: Access Creds */}
+                          <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800/60 space-y-3">
+                            <p className="text-[9px] text-[#39FF14] uppercase font-mono">1. Dados de Identificação e Login</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Nome Completo</label>
+                                <input 
+                                  type="text" 
+                                  value={tempStudentName}
+                                  onChange={(e) => setTempStudentName(e.target.value)}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">E-mail / Conta Gmail (Acesso Rápido)</label>
+                                <input 
+                                  type="email" 
+                                  value={tempStudentEmail}
+                                  onChange={(e) => setTempStudentEmail(e.target.value)}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none"
+                                />
+                              </div>
                             </div>
-                            <div>
-                              <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Valor do Plano (R$)</label>
-                              <input 
-                                type="number" 
-                                min="1"
-                                value={tempStudentValue}
-                                onChange={(e) => setTempStudentValue(Number(e.target.value))}
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Estado de Acesso</label>
-                              <select 
-                                value={tempStudentStatus}
-                                onChange={(e) => setTempStudentStatus(e.target.value as 'Ativo' | 'Inativo')}
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer font-mono"
-                              >
-                                <option value="Ativo">Ativo (Acesso Liberado / Pago)</option>
-                                <option value="Inativo">Inativo (Aguardando Pagamento)</option>
-                              </select>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Senha de Acesso</label>
+                                <input 
+                                  type="text" 
+                                  value={tempStudentPassword}
+                                  onChange={(e) => setTempStudentPassword(e.target.value)}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">WhatsApp</label>
+                                <input 
+                                  type="text" 
+                                  value={tempStudentPhone}
+                                  onChange={(e) => setTempStudentPhone(e.target.value)}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none"
+                                />
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center justify-end gap-2 pt-1 font-mono">
+
+                          {/* Section 2: Plan and Contract */}
+                          <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800/60 space-y-3">
+                            <p className="text-[9px] text-[#39FF14] uppercase font-mono">2. Contrato e Status Administrativo</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Tipo de Plano</label>
+                                <select 
+                                  value={tempStudentPlan}
+                                  onChange={(e) => {
+                                    const selectType = e.target.value as PlanType;
+                                    setTempStudentPlan(selectType);
+                                    const matchingMarketing = marketingPlans.find(p => p.id === selectType);
+                                    if (matchingMarketing) {
+                                      setTempStudentValue(matchingMarketing.price);
+                                    }
+                                  }}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer font-monoSetting"
+                                >
+                                  <option value="Mensal">Mensal</option>
+                                  <option value="Trimestral">Trimestral</option>
+                                  <option value="Anual">Anual</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Valor Comercial (R$)</label>
+                                <input 
+                                  type="number" 
+                                  min="1"
+                                  value={tempStudentValue}
+                                  onChange={(e) => setTempStudentValue(Number(e.target.value))}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Acesso do Aluno</label>
+                                <select 
+                                  value={tempStudentStatus}
+                                  onChange={(e) => setTempStudentStatus(e.target.value as 'Ativo' | 'Inativo')}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer"
+                                >
+                                  <option value="Ativo">Ativo (Permitir Entrada)</option>
+                                  <option value="Inativo">Inativo (Bloqueado por Débito)</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Section 3: Physical Specs */}
+                          <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800/60 space-y-3">
+                            <p className="text-[9px] text-[#39FF14] uppercase font-mono">3. Ficha Física e Biotipo (Anamnese)</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Objetivo</label>
+                                <select 
+                                  value={tempStudentObjective}
+                                  onChange={(e) => setTempStudentObjective(e.target.value as Objective)}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer"
+                                >
+                                  <option value="Hipertrofia">Hipertrofia</option>
+                                  <option value="Emagrecimento">Emagrecimento</option>
+                                  <option value="Condicionamento">Condicionamento</option>
+                                  <option value="Definição">Definição</option>
+                                  <option value="Reabilitação">Reabilitação</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Idade (anos)</label>
+                                <input 
+                                  type="number" 
+                                  value={tempStudentAge}
+                                  onChange={(e) => setTempStudentAge(Number(e.target.value))}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Peso (kg)</label>
+                                <input 
+                                  type="number" 
+                                  step="0.1"
+                                  value={tempStudentWeight}
+                                  onChange={(e) => setTempStudentWeight(Number(e.target.value))}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Altura (m)</label>
+                                <input 
+                                  type="number" 
+                                  step="0.01"
+                                  value={tempStudentHeight}
+                                  onChange={(e) => setTempStudentHeight(Number(e.target.value))}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Histórico de Exercícios</label>
+                                <textarea 
+                                  rows={2}
+                                  value={tempStudentHistory}
+                                  onChange={(e) => setTempStudentHistory(e.target.value)}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none resize-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-red-400 uppercase font-mono mb-1">Restrições / Quadro Clínico</label>
+                                <textarea 
+                                  rows={2}
+                                  value={tempStudentRestrictions}
+                                  onChange={(e) => setTempStudentRestrictions(e.target.value)}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-red-200 outline-none resize-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800 font-mono">
                             <button 
                               type="button"
                               onClick={() => setEditingStudentPlan(false)}
-                              className="px-2.5 py-1 rounded bg-neutral-950 hover:bg-neutral-800 text-[10px] text-neutral-400 transition cursor-pointer"
+                              className="px-4 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-[10px] text-neutral-400 transition cursor-pointer font-bold"
                             >
                               Cancelar
                             </button>
@@ -1397,15 +1552,25 @@ export default function TrainerDashboard({
                               type="button"
                               onClick={() => {
                                 onUpdateStudent(selectedStudent.id, {
+                                  name: tempStudentName.trim(),
+                                  phoneWhatsApp: tempStudentPhone.trim(),
+                                  email: tempStudentEmail.trim().toLowerCase(),
+                                  password: tempStudentPassword,
+                                  age: Number(tempStudentAge),
+                                  weight: Number(tempStudentWeight),
+                                  height: Number(tempStudentHeight),
+                                  objective: tempStudentObjective,
+                                  restrictions: tempStudentRestrictions,
+                                  history: tempStudentHistory,
                                   plan: tempStudentPlan,
                                   value: tempStudentValue,
                                   status: tempStudentStatus
                                 });
                                 setEditingStudentPlan(false);
                               }}
-                              className="px-3 py-1 bg-[#39FF14] text-black hover:bg-green-400 rounded text-[10px] font-bold transition cursor-pointer"
+                              className="px-5 py-2 bg-[#39FF14] text-black hover:bg-green-400 rounded-xl text-[10px] font-bold transition cursor-pointer flex items-center gap-1.5"
                             >
-                              Salvar
+                              <Check size={12} /> Salvar Ficha Completa
                             </button>
                           </div>
                         </div>
@@ -1581,10 +1746,47 @@ export default function TrainerDashboard({
                   <Plus size={20} className="text-[#39FF14]" />
                   Cadastrar Novo Aluno no Sistema
                 </h2>
-                <p className="text-xs text-neutral-400">Abaixo, preencha a ficha esportiva administrativa e biotipo do aluno para gerar o convite de login imediato.</p>
+                <p className="text-xs text-neutral-400">Preencha o cadastro inicial do seu aluno. Ele poderá acessar o portal utilizando o Gmail cadastrado aqui ou um convite de 1 clique!</p>
+              </div>
+
+              {/* Mode Selection Toggles */}
+              <div className="flex bg-neutral-900/60 border border-neutral-800 p-1.5 rounded-2xl gap-2 max-w-md">
+                <button
+                  type="button"
+                  onClick={() => setCadastroMode('rapido')}
+                  className={`flex-1 text-xs font-bold py-2 px-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer ${
+                    cadastroMode === 'rapido' 
+                      ? 'bg-[#39FF14] text-black shadow-lg shadow-[#39FF14]/10' 
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800/40'
+                  }`}
+                >
+                  <Zap size={14} /> Pré-cadastro Rápido
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCadastroMode('completo')}
+                  className={`flex-1 text-xs font-bold py-2 px-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer ${
+                    cadastroMode === 'completo' 
+                      ? 'bg-[#39FF14] text-black shadow-lg shadow-[#39FF14]/10' 
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800/40'
+                  }`}
+                >
+                  <Clipboard size={14} /> Ficha Completa
+                </button>
               </div>
 
               <form onSubmit={handleCreateStudent} className="bg-[#121214]/60 border border-neutral-800 p-6 rounded-2xl space-y-5 animate-fade-in">
+                {/* Information Callout */}
+                {cadastroMode === 'rapido' ? (
+                  <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl p-3.5 text-xs">
+                    ⚡ <strong>Modo Pré-cadastro Rápido:</strong> Cadastre seu aluno instantaneamente informando apenas os dados básicos de identificação e plano. O sistema criará perfis padrão de avaliação física para que você preencha a ficha técnica e os treinos dele com calma no futuro!
+                  </div>
+                ) : (
+                  <div className="bg-[#39FF14]/5 border border-[#39FF14]/15 text-neutral-300 rounded-xl p-3.5 text-xs">
+                    📋 <strong>Modo Ficha de Anamnese Completa:</strong> Modifique todos os atributos de treinamento, biométricos e histórico desde o primeiro contato.
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Nome Completo do Aluno</label>
@@ -1599,57 +1801,42 @@ export default function TrainerDashboard({
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Objetivo Físico</label>
-                    <select 
-                      value={newStudent.objective} 
-                      onChange={(e) => setNewStudent({...newStudent, objective: e.target.value as Objective})}
-                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
-                    >
-                      <option value="Hipertrofia">Ganho de Massa (Hipertrofia)</option>
-                      <option value="Emagrecimento">Perda de Peso (Emagrecimento)</option>
-                      <option value="Condicionamento">Resistência (Condicionamento)</option>
-                      <option value="Definição">Definição Muscular</option>
-                      <option value="Reabilitação">Tratamento Físico (Reabilitação)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Idade (Anos)</label>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">E-mail de Acesso / Conta Gmail</label>
                     <input 
-                      type="number" 
-                      required 
-                      value={newStudent.age}
-                      onChange={(e) => setNewStudent({...newStudent, age: Number(e.target.value)})}
-                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Peso Inicial (kg)</label>
-                    <input 
-                      type="number" 
-                      step="0.1" 
-                      required 
-                      value={newStudent.weight}
-                      onChange={(e) => setNewStudent({...newStudent, weight: Number(e.target.value)})}
-                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Altura Inicial (m)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      required 
-                      value={newStudent.height}
-                      onChange={(e) => setNewStudent({...newStudent, height: Number(e.target.value)})}
-                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
+                      type="email" 
+                      required
+                      value={newStudent.email || ''}
+                      onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
+                      placeholder="Ex: ana.silva@gmail.com" 
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">WhatsApp do Aluno</label>
+                    <input 
+                      type="tel"
+                      required
+                      value={newStudent.phoneWhatsApp || ''}
+                      onChange={(e) => setNewStudent({...newStudent, phoneWhatsApp: e.target.value})}
+                      placeholder="Ex: +5511999999999"
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Definir Senha de Acesso</label>
+                    <input 
+                      type="text"
+                      value={newStudent.password || ''}
+                      onChange={(e) => setNewStudent({...newStudent, password: e.target.value})}
+                      placeholder="Padrão: 123456"
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Plano Inicial de Cobrança</label>
                     <select 
@@ -1662,7 +1849,9 @@ export default function TrainerDashboard({
                       <option value="Anual">Anual (R$ 90/mês)</option>
                     </select>
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Estado de Acesso Inicial</label>
                     <select 
@@ -1670,52 +1859,96 @@ export default function TrainerDashboard({
                       onChange={(e) => setNewStudent({...newStudent, status: e.target.value as 'Ativo' | 'Inativo'})}
                       className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
                     >
-                      <option value="Ativo">Ativo (Cadastro Manual / Pagamento Liberado)</option>
-                      <option value="Inativo">Inativo (Aguardar Aluno Pagar Plano no App)</option>
+                      <option value="Ativo">Ativo (Acesso Liberado / Pagamento Confirmado)</option>
+                      <option value="Inativo">Inativo (Aguardando Pagamento do Aluno)</option>
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">WhatsApp do Aluno</label>
-                    <input 
-                      type="tel"
-                      required
-                      value={newStudent.phoneWhatsApp || ''}
-                      onChange={(e) => setNewStudent({...newStudent, phoneWhatsApp: e.target.value})}
-                      placeholder="Ex: +5511999999999"
-                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans font-mono"
-                    />
-                  </div>
+                  {cadastroMode === 'completo' && (
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Objetivo Físico</label>
+                      <select 
+                        value={newStudent.objective} 
+                        onChange={(e) => setNewStudent({...newStudent, objective: e.target.value as Objective})}
+                        className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
+                      >
+                        <option value="Hipertrofia">Ganho de Massa (Hipertrofia)</option>
+                        <option value="Emagrecimento">Perda de Peso (Emagrecimento)</option>
+                        <option value="Condicionamento">Resistência (Condicionamento)</option>
+                        <option value="Definição">Definição Muscular</option>
+                        <option value="Reabilitação">Tratamento Físico (Reabilitação)</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Histórico de Atividade Física (Breve relato)</label>
-                  <textarea 
-                    rows={3}
-                    value={newStudent.history}
-                    onChange={(e) => setNewStudent({...newStudent, history: e.target.value})}
-                    placeholder="Ex: Pratica corrida 3x por semana, já treinou musculação antes..." 
-                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition resize-none"
-                  />
-                </div>
+                {cadastroMode === 'completo' && (
+                  <>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Idade (Anos)</label>
+                        <input 
+                          type="number" 
+                          required 
+                          value={newStudent.age}
+                          onChange={(e) => setNewStudent({...newStudent, age: Number(e.target.value)})}
+                          className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Peso Inicial (kg)</label>
+                        <input 
+                          type="number" 
+                          step="0.1" 
+                          required 
+                          value={newStudent.weight}
+                          onChange={(e) => setNewStudent({...newStudent, weight: Number(e.target.value)})}
+                          className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Altura Inicial (m)</label>
+                        <input 
+                          type="number" 
+                          step="0.01" 
+                          required 
+                          value={newStudent.height}
+                          onChange={(e) => setNewStudent({...newStudent, height: Number(e.target.value)})}
+                          className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono" 
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block text-[10px] text-red-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Limitações Ortopédicas / Restrições Médicas</label>
-                  <textarea 
-                    rows={3}
-                    value={newStudent.restrictions}
-                    onChange={(e) => setNewStudent({...newStudent, restrictions: e.target.value})}
-                    placeholder="Ex: Leve dor na lombar ao agachar, hérnia L4-L5, cirurgia prévia joelho..." 
-                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition resize-none"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Histórico de Atividade Física (Breve relato)</label>
+                      <textarea 
+                        rows={3}
+                        value={newStudent.history}
+                        onChange={(e) => setNewStudent({...newStudent, history: e.target.value})}
+                        placeholder="Ex: Pratica corrida 3x por semana, já treinou musculação antes..." 
+                        className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-red-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Limitações Ortopédicas / Restrições Médicas</label>
+                      <textarea 
+                        rows={3}
+                        value={newStudent.restrictions}
+                        onChange={(e) => setNewStudent({...newStudent, restrictions: e.target.value})}
+                        placeholder="Ex: Leve dor na lombar ao agachar, hérnia L4-L5, cirurgia prévia joelho..." 
+                        className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition resize-none"
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="pt-4 border-t border-neutral-800/80 flex justify-end">
                   <button 
                     type="submit"
-                    className="bg-[#39FF14] text-black hover:bg-green-400 px-8 py-3.5 rounded-xl text-xs font-bold font-sans transition-all active:scale-95 cursor-pointer shadow-lg shadow-[#39FF14]/10"
+                    className="bg-[#39FF14] text-black hover:bg-green-400 px-8 py-3.5 rounded-xl text-xs font-bold font-sans transition-all active:scale-95 cursor-pointer shadow-lg shadow-[#39FF14]/10 flex items-center gap-2"
                   >
-                    Confirmar Cadastro e Gerar Acesso
+                    <Plus size={14} /> Confirmar Pré-cadastro do Aluno
                   </button>
                 </div>
               </form>
