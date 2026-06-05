@@ -337,10 +337,10 @@ export default function StudentDashboard({
                   <Sparkles size={24} className="text-[#39FF14]" />
                 </div>
                 <h2 className="text-xl font-bold tracking-tight text-white font-sans my-0">
-                  Seja Bem-vindo ao GymPulse!
+                  Seja bem-vindo, {obName}!
                 </h2>
                 <p className="text-xs text-neutral-400 leading-relaxed max-w-sm mx-auto">
-                  Seu Personal Trainer / Recepção preparou seu pré-cadastro. Confirme abaixo para ativar e liberar sua planilha de treinos!
+                  Seu Personal Trainer / Recepção já preparou o seu pré-cadastro. Ative seu acesso agora para visualizar sua planilha de treinos!
                 </p>
               </div>
 
@@ -352,154 +352,130 @@ export default function StudentDashboard({
                 </div>
               )}
 
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                    Nome Completo do Aluno
-                  </label>
-                  <input
-                    type="text"
-                    value={obName}
-                    onChange={(e) => setObName(e.target.value)}
-                    placeholder="Seu nome completo"
-                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                    WhatsApp do Aluno
-                  </label>
-                  <input
-                    type="text"
-                    value={obPhone}
-                    onChange={(e) => setObPhone(e.target.value)}
-                    placeholder="Seu WhatsApp (Ex: 11 99999-9999)"
-                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
-                  />
-                </div>
-
-                {/* Simplified Google Sign In preference clicker */}
-                <div className="pt-2 border-t border-neutral-800/60">
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-2 text-center">
-                    Método de Acesso Preferido
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setObAccessMethod('google');
-                        setObShowGoogleModal(true);
-                      }}
-                      className={`p-2.5 rounded-xl border transition-all cursor-pointer text-left flex flex-col justify-between h-18 ${
-                        obAccessMethod === 'google'
-                          ? 'border-[#39FF14] bg-[#39FF14]/5 text-white'
-                          : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-700'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center w-full">
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z" />
-                          <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z" />
-                          <path fill="#FBBC05" d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z" />
-                          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z" />
-                        </svg>
-                        {obAccessMethod === 'google' && <CheckSquare className="w-3 h-3 text-[#39FF14]" />}
-                      </div>
-                      <div>
-                        <span className="text-[9.5px] font-bold block leading-none">Login Google</span>
-                        <span className="text-[7.5px] text-neutral-400">Acesso via Gmail</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setObAccessMethod('password')}
-                      className={`p-2.5 rounded-xl border transition-all cursor-pointer text-left flex flex-col justify-between h-18 ${
-                        obAccessMethod === 'password'
-                          ? 'border-[#39FF14] bg-[#39FF14]/5 text-white'
-                          : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-700'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center w-full">
-                        🔒
-                        {obAccessMethod === 'password' && <CheckSquare className="w-3 h-3 text-[#39FF14]" />}
-                      </div>
-                      <div>
-                        <span className="text-[9.5px] font-bold block leading-none">E-mail e Senha</span>
-                        <span className="text-[7.5px] text-neutral-400">Senha Padrão</span>
-                      </div>
-                    </button>
+              {/* Resumo de Dados Cadastrados */}
+              <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800/80 space-y-2.5">
+                <p className="text-[10px] text-[#39FF14] font-mono font-bold uppercase tracking-widest text-center border-b border-neutral-900 pb-1.5 mb-1.5">
+                  ✓ Seus Dados Pré-Cadastrados
+                </p>
+                
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-[8.5px] text-neutral-500 font-mono uppercase font-bold">Nome do Aluno</label>
+                    <input
+                      type="text"
+                      value={obName}
+                      onChange={(e) => setObName(e.target.value)}
+                      className="w-full bg-neutral-900 text-xs text-white px-2.5 py-1.5 rounded-lg border border-neutral-800 mt-1 font-sans focus:border-[#39FF14] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[8.5px] text-neutral-500 font-mono uppercase font-bold">WhatsApp / Telefone</label>
+                    <input
+                      type="text"
+                      value={obPhone}
+                      onChange={(e) => setObPhone(e.target.value)}
+                      className="w-full bg-neutral-900 text-xs text-white px-2.5 py-1.5 rounded-lg border border-neutral-800 mt-1 font-sans font-mono focus:border-[#39FF14] focus:outline-none"
+                    />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                    Nome da sua Conta Google ou E-mail
-                  </label>
-                  <input
-                    type="email"
-                    value={obEmail}
-                    onChange={(e) => setObEmail(e.target.value)}
-                    disabled={obAccessMethod === 'google'}
-                    placeholder="seu.email@gmail.com"
-                    className={`w-full bg-neutral-950 text-xs px-3.5 py-2.5 rounded-xl border transition font-sans ${
-                      obAccessMethod === 'google' 
-                        ? 'border-[#39FF14]/30 bg-[#39FF14]/5 text-[#39FF14] cursor-not-allowed font-bold' 
-                        : 'border-neutral-800 focus:border-[#39FF14] text-white'
-                    }`}
-                  />
-                  {obAccessMethod === 'google' && (
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-[8.5px] text-[#39FF14] font-mono uppercase tracking-wide">
-                        ✓ Conta vinculada: {obEmail}
-                      </span>
-                      <button 
-                        type="button" 
-                        onClick={() => setObShowGoogleModal(true)}
-                        className="text-[8.5px] text-neutral-400 hover:text-white underline bg-transparent border-none cursor-pointer"
-                      >
-                        (Alterar Gmail)
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {obAccessMethod === 'password' && (
+                <div className="grid grid-cols-2 gap-3 text-xs pt-1">
                   <div>
-                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                      Confirme sua Senha de Acesso
-                    </label>
+                    <label className="block text-[8.5px] text-neutral-500 font-mono uppercase font-bold">E-mail Cadastrado</label>
+                    <input
+                      type="text"
+                      value={obEmail}
+                      onChange={(e) => setObEmail(e.target.value)}
+                      className="w-full bg-neutral-900 text-xs text-white px-2.5 py-1.5 rounded-lg border border-neutral-800 mt-1 font-sans focus:border-[#39FF14] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[8.5px] text-neutral-500 font-mono uppercase font-bold">Senha de Login</label>
                     <input
                       type="text"
                       value={obPassword}
                       onChange={(e) => setObPassword(e.target.value)}
-                      placeholder="Crie uma nova senha de login"
-                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                      className="w-full bg-neutral-900 text-xs text-white px-2.5 py-1.5 rounded-lg border border-neutral-800 mt-1 font-sans font-mono focus:border-[#39FF14] focus:outline-none"
                     />
                   </div>
-                )}
+                </div>
               </div>
 
-              <div className="pt-3">
+              {/* Action Choices */}
+              <div className="space-y-2.5 pt-1">
+                {/* Opção 1: Gmail (Principal, Recomendada) - 1 Clique */}
                 <button
                   type="button"
-                  onClick={handleInstantActivate}
+                  onClick={() => {
+                    setObAccessMethod('google');
+                    setObPayingStatus('processing');
+                    setTimeout(() => {
+                      onUpdateStudent?.(currentStudent.id, {
+                        name: obName.trim(),
+                        email: obEmail.trim().toLowerCase(),
+                        phoneWhatsApp: obPhone.trim(),
+                        password: obPassword,
+                        accessMethod: 'google',
+                        isProfileComplete: true,
+                        status: 'Ativo' // Instantly activate!
+                      });
+                      setObPayingStatus('idle');
+                    }, 1000);
+                  }}
                   disabled={obPayingStatus === 'processing'}
-                  className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold text-xs py-3.5 rounded-xl transition duration-200 cursor-pointer active:scale-95 shadow-lg shadow-[#39FF14]/10 hover:shadow-[#39FF14]/20 flex items-center justify-center gap-1.5"
+                  className="w-full bg-white hover:bg-neutral-100 text-neutral-950 font-black py-3.5 px-4 rounded-xl transition duration-200 cursor-pointer active:scale-95 shadow-md flex items-center justify-center gap-3 border border-transparent"
+                >
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z" />
+                    <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z" />
+                    <path fill="#FBBC05" d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z" />
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z" />
+                  </svg>
+                  <div className="text-left leading-normal">
+                    <span className="block text-xs font-extrabold font-sans text-neutral-900">Acessar e Ativar via Gmail</span>
+                    <span className="block text-[8.5px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Botão de 1-Clique • Recomendado</span>
+                  </div>
+                </button>
+
+                {/* Opção 2: Senha de Acesso */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setObAccessMethod('password');
+                    setObPayingStatus('processing');
+                    setTimeout(() => {
+                      onUpdateStudent?.(currentStudent.id, {
+                        name: obName.trim(),
+                        email: obEmail.trim().toLowerCase(),
+                        phoneWhatsApp: obPhone.trim(),
+                        password: obPassword,
+                        accessMethod: 'password',
+                        isProfileComplete: true,
+                        status: 'Ativo' // Instantly activate!
+                      });
+                      setObPayingStatus('idle');
+                    }, 1000);
+                  }}
+                  disabled={obPayingStatus === 'processing'}
+                  className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold py-3 rounded-xl transition duration-200 cursor-pointer active:scale-[0.98] shadow-lg shadow-[#39FF14]/10 hover:shadow-[#39FF14]/20 flex items-center justify-center gap-1.5 border-none outline-none text-xs"
                 >
                   {obPayingStatus === 'processing' ? (
                     <>
-                      <RefreshCw size={14} className="animate-spin" />
-                      <span>Ativando Seu Acesso Rápido...</span>
+                      <RefreshCw size={13} className="animate-spin" />
+                      <span>Ativando seu acesso seguro...</span>
                     </>
                   ) : (
                     <>
-                      <span>⚡ Concluir Ativação e Entrar no Portal</span>
+                      <CheckSquare size={13} className="stroke-[3]" />
+                      <span>Ativar & Entrar com E-mail e Senha</span>
                     </>
                   )}
                 </button>
               </div>
+
+              <p className="text-[9.5px] text-neutral-400 text-center leading-normal mb-0">
+                🔒 O administrador ou recepção cuidará de todo o seu cadastro financeiro e faturamento. Após clicar, seu painel de exercícios estará 100% liberado!
+              </p>
             </div>
           </div>
         </main>

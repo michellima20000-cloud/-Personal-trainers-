@@ -480,8 +480,51 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }, 1000);
       }, 1200);
     } else {
-      setErrorMsg(`Conta do Gmail (${emailClean}) não encontrada! Certifique-se de que o profissional fez seu pré-cadastro com este e-mail.`);
-      setShowGoogleModal(false);
+      // Auto-register student on-the-fly dynamically so student can complete quick registration
+      // This makes Gmail entry 100% fluent and easier as the trainer can simply configure the rest on the coach panel
+      setLoading(true);
+      const guestNameParts = emailClean.split('@')[0].replace(/[^a-zA-Z]/g, ' ').split(' ').filter(Boolean);
+      const generatedName = guestNameParts.length > 0 
+        ? guestNameParts.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+        : 'Aluno Convidado';
+      
+      const newStudentId = 'st_g_' + Date.now().toString();
+      const newStudent: Student = {
+        id: newStudentId,
+        name: generatedName,
+        email: emailClean,
+        phoneWhatsApp: '',
+        status: 'Ativo',
+        joinedAt: new Date().toLocaleDateString('pt-BR'),
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        isProfileComplete: true, // mark complete so they enter portal immediately (bypass blocking onboarding screens)
+        plan: 'Mensal',
+        objective: 'Hipertrofia',
+        restrictions: '',
+        weight: 70,
+        height: 1.70,
+        age: 25,
+        accessMethod: 'google',
+        password: '123456',
+        history: 'Cadastro instantâneo via Google Account.',
+        nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+        value: 120
+      };
+
+      setTimeout(async () => {
+        try {
+          await onAddStudent?.(newStudent);
+          setLoading(false);
+          setSuccessMsg(`Bem-vindo ao GymPulse! Criamos seu portal de acesso rápido para ${generatedName}.`);
+          setShowGoogleModal(false);
+          setTimeout(() => {
+            onLoginSuccess('student', newStudentId);
+          }, 1000);
+        } catch (err) {
+          setLoading(false);
+          setErrorMsg('Falha ao inicializar acesso via Gmail. Tente de novo.');
+        }
+      }, 1200);
     }
   };
 
@@ -1656,38 +1699,46 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                   </div>
 
                   {/* Gmail Integration Mock Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setErrorMsg('');
-                      setSuccessMsg('');
-                      setShowGoogleModal(true);
-                      setShowGoogleCustomEmailInput(false);
-                      setGoogleCustomEmail('');
-                    }}
-                    disabled={loading}
-                    className="w-full bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-300 font-bold text-xs py-3 rounded-xl transition duration-200 flex items-center justify-center gap-2 cursor-pointer shadow active:scale-95"
-                  >
-                    <svg className="w-4 h-4 mr-0.5" viewBox="0 0 24 24">
-                      <path
-                        fill="#4285F4"
-                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z"
-                      />
-                      <path
-                        fill="#EA4335"
-                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z"
-                      />
-                    </svg>
-                    Acessar pela Conta do Gmail
-                  </button>
+                  <div className="space-y-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setErrorMsg('');
+                        setSuccessMsg('');
+                        setShowGoogleModal(true);
+                        setShowGoogleCustomEmailInput(false);
+                        setGoogleCustomEmail('');
+                      }}
+                      disabled={loading}
+                      className="w-full bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-300 font-black text-xs py-3.5 rounded-xl transition duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95"
+                    >
+                      <svg className="w-5 h-5 mr-0.5" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z"
+                        />
+                      </svg>
+                      Acessar de Forma Fácil com Gmail
+                    </button>
+                    <p className="text-[10px] text-center text-[#39FF14] font-mono font-bold uppercase tracking-wider block mt-2">
+                      ★ NOVO: Cadastro Automático via Gmail Ativado!
+                    </p>
+                    <p className="text-[9.5px] text-center text-neutral-400 font-sans block leading-normal px-2">
+                      Se você é um novo aluno, entre direto pela sua Conta do Google. Seu Personal Trainer e o caixa cuidarão de toda a sua ficha de treino e cadastro depois!
+                    </p>
+                  </div>
                 </div>
 
                 {/* Divider */}
@@ -2177,7 +2228,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                   <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z" />
                 </svg>
                 <h3 className="text-base font-bold text-white tracking-tight mt-1">Fazer login com o Google</h3>
-                <p className="text-xs text-neutral-400">Escolha uma conta de Gmail pré-cadastrada pelo seu Personal Trainer para acessar o portal:</p>
+                <p className="text-xs text-neutral-400">Escolha um dos e-mails cadastrados ou use qualquer e-mail do Gmail para acessar direto. Se for sua primeira vez, criaremos sua conta na hora!</p>
               </div>
 
               {!showGoogleCustomEmailInput ? (
