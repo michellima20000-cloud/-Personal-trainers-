@@ -1702,7 +1702,7 @@ export default function TrainerDashboard({
                             type="button"
                             onClick={() => {
                               const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
-                              const message = `Olá, *${selectedStudent.name}*! 💪🏋️‍♂️ Aqui está o seu link de convite exclusivo para acessar o seu aplicativo de treinos no *GymPulse*: ${inviteUrl}`;
+                              const message = `Olá, *${selectedStudent.name}*! Seu acesso ao aplicativo de treinos *GymPulse* foi liberado. Toque no link abaixo e entre direto usando sua Conta do Google:\n\n👉 ${inviteUrl}`;
                               const encodedText = encodeURIComponent(message);
                               const dest = selectedStudent.phoneWhatsApp ? selectedStudent.phoneWhatsApp.replace(/[^0-9]/g, '') : '';
                               window.open(`https://api.whatsapp.com/send?phone=${dest}&text=${encodedText}`, '_blank');
@@ -1710,7 +1710,7 @@ export default function TrainerDashboard({
                             className="bg-[#25D366] hover:bg-[#128C7E] text-white font-extrabold text-xs py-2 w-full rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer font-sans shadow-lg shadow-green-500/10 hover:scale-[1.01]"
                           >
                             <Phone size={13} />
-                            <span>Enviar via WhatsApp</span>
+                            <span>Enviar Convite WhatsApp Rápido</span>
                           </button>
                         </div>
                       </div>
