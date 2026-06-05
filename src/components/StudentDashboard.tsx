@@ -194,6 +194,10 @@ export default function StudentDashboard({
   // Student chat input
   const [chatDraft, setChatDraft] = useState('');
 
+  // Integrated WhatsApp and Connection Dialog states for student contacting trainer
+  const [waModalOpen, setWaModalOpen] = useState(false);
+  const [waCustomMessage, setWaCustomMessage] = useState('');
+
   // Editing Pix details state on student side
   const [isEditingPix, setIsEditingPix] = useState(false);
   const [editPixKeyType, setEditPixKeyType] = useState<'CNPJ' | 'CPF' | 'Telefone' | 'E-mail' | 'Chave Aleatória'>('Chave Aleatória');
@@ -1553,31 +1557,26 @@ export default function StudentDashboard({
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => {
-                    const phoneDigits = studentTrainer?.phoneWhatsApp ? studentTrainer.phoneWhatsApp.replace(/\D/g, '') : '';
-                    if (phoneDigits) {
-                      window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=Ol%C3%A1%20Coach!%20Estou%2520te%20chamando%20aqui%20para%20tirar%20algumas%20d%C3%BAvidas%20sobre%20meu%20treino.`, '_blank');
-                    } else {
-                      alert('O Personal Trainer não cadastrou nenhum WhatsApp de contato.');
-                    }
+                    setWaCustomMessage(`Olá Coach! Estou te chamando aqui para tirar algumas dúvidas sobre meu plano de treino.`);
+                    setWaModalOpen(true);
                   }}
                   className="bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700/80 px-3 py-1.5 rounded-xl transition-all font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-neutral-700 font-bold"
-                  title="Chamar no WhatsApp"
+                  title="Opções de Conexão Integrada WhatsApp"
                 >
                   <Phone size={12} className="text-[#39FF14]" />
-                  <span>WhatsApp</span>
+                  <span>WhatsApp / Contato</span>
                 </button>
 
                 <button 
                   onClick={() => {
-                    const roomUrl = `https://meet.jit.si/GymPulse-Call-${currentStudent.id}-${studentTrainer?.id || 'default'}`;
-                    onSendMessage(currentStudent.id, `🎥 Aluno iniciou uma chamada de vídeo de treino online! Entre na sala ao vivo:\n${roomUrl}`);
-                    window.open(roomUrl, '_blank');
+                    setWaCustomMessage(`Olá Coach! Estou te convidando para nossa chamada de vídeo de consultoria ao vivo no GymPulse. Acesse a sala por aqui:`);
+                    setWaModalOpen(true);
                   }}
                   className="bg-[#39FF14]/15 text-[#39FF14] hover:bg-[#39FF14]/25 px-3 py-1.5 rounded-xl transition-all font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-[#39FF14]/30 font-bold"
-                  title="Iniciar chamada de Vídeo"
+                  title="Fazer chamada de Vídeo ou Convidar por WhatsApp"
                 >
                   <Video size={12} />
-                  <span>Vídeo Chamada</span>
+                  <span>Vídeo Chamada / Conectar</span>
                 </button>
               </div>
             </div>
@@ -2406,6 +2405,151 @@ export default function StudentDashboard({
             setIsStripeProcessing(false);
           }}
         />
+      )}
+
+      {/* Integrated WhatsApp Connection Dialog for student */}
+      {waModalOpen && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0c0c0e] border border-neutral-800 rounded-2xl w-full max-w-md p-6 relative animate-scale-up shadow-2xl">
+            <button
+              onClick={() => {
+                setWaModalOpen(false);
+              }}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white transition cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="text-center space-y-2 mb-6">
+              <div className="inline-flex p-3 rounded-full bg-[#25D366]/10 border border-[#25D366]/25 text-[#25D366]">
+                <MessageSquare size={24} className="animate-pulse" />
+              </div>
+              <h3 className="text-lg font-black text-white uppercase tracking-tight font-mono">Central WhatsApp & Alinhamento</h3>
+              <p className="text-[11px] text-neutral-400">
+                Selecione como quer interagir com seu Personal Trainer <strong className="text-[#39FF14]">{studentTrainer?.name || 'Daniel Personal'}</strong>:
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Opção 1: Mensagem de Texto */}
+              <div className="bg-neutral-900/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white font-mono flex items-center gap-1.5 uppercase">
+                    <MessageCircle size={14} className="text-[#25D366]" /> 1. Enviar Mensagem de Texto
+                  </span>
+                  <span className="text-[9px] bg-neutral-800 px-2 py-0.5 rounded text-neutral-400 font-mono">WhatsApp Web/App</span>
+                </div>
+                
+                <textarea
+                  value={waCustomMessage}
+                  onChange={(e) => setWaCustomMessage(e.target.value)}
+                  placeholder="Escreva sua dúvida ou mensagem personalizada..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2.5 text-xs text-white outline-none focus:border-[#39FF14] transition-all resize-none h-16 font-sans"
+                />
+
+                <button
+                  onClick={() => {
+                    const phoneDigits = studentTrainer?.phoneWhatsApp ? studentTrainer.phoneWhatsApp.replace(/\D/g, '') : '';
+                    if (phoneDigits) {
+                      window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=${encodeURIComponent(waCustomMessage)}`, '_blank');
+                    } else {
+                      alert('Seu Personal Trainer não tem WhatsApp de contato registrado no perfil.');
+                    }
+                  }}
+                  className="w-full bg-[#25D366] hover:bg-[#25D366]/90 text-black font-extrabold text-[11px] py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Send size={12} />
+                  <span>Enviar Mensagem ao Coach via WhatsApp</span>
+                </button>
+              </div>
+
+              {/* Opção 2: Ligação Telefônica / Voz */}
+              <div className="bg-neutral-900/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <span className="text-xs font-bold text-white font-mono flex items-center gap-1.5 uppercase">
+                  <Phone size={14} className="text-[#39FF14]" /> 2. Fazer Chamada / Ligação
+                </span>
+                
+                <p className="text-[10px] text-neutral-400">
+                  Inicie uma ligação de voz padrão ou use o WhatsApp padrão para contatar seu treinador.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={`tel:${studentTrainer?.phoneWhatsApp?.replace(/\D/g, '') || ''}`}
+                    className="bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-[10px] py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 border border-neutral-700"
+                  >
+                    <Smartphone size={12} />
+                    <span>Ligação Celular</span>
+                  </a>
+                  <button
+                    onClick={() => {
+                      const phoneDigits = studentTrainer?.phoneWhatsApp ? studentTrainer.phoneWhatsApp.replace(/\D/g, '') : '';
+                      if (phoneDigits) {
+                        window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=Olá%20Coach!%2520Estou%2520te%2520chamando%2520para%2520tirar%2520alguma%2520dúvida.%2520Podemos%2520fazer%2520uma%2520ligação%2520rápida%2520pelo%2520WhatsApp%3F`, '_blank');
+                      } else {
+                        alert('Seu Personal Trainer não tem WhatsApp cadastrado.');
+                      }
+                    }}
+                    className="bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-[#25D366] font-extrabold text-[10px] py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <MessageSquare size={12} fill="#25D366" className="text-[#25D366]" />
+                    <span>Ligar no WhatsApp</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Opção 3: Iniciar Chamada de Vídeo */}
+              <div className="bg-neutral-900/60 p-4 rounded-xl border border-[#39FF14]/20 space-y-3 shadow-md shadow-[#39FF14]/5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#39FF14] font-mono flex items-center gap-1.5 uppercase">
+                    <Video size={14} /> 3. Vídeo Chamada de Treino Online
+                  </span>
+                  <span className="text-[8px] bg-[#39FF14]/15 border border-[#39FF14]/30 px-1.5 py-0.5 rounded text-[#39FF14] font-mono font-black animate-pulse">Entrar ao vivo</span>
+                </div>
+
+                <p className="text-[10px] text-neutral-400">
+                  Entre na sala de transmissão ao vivo securitária via Jitsi ou convide o coach enviando o link no WhatsApp dele.
+                </p>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      const roomUrl = `https://meet.jit.si/GymPulse-Call-${currentStudent.id}-${studentTrainer?.id || 'default'}`;
+                      
+                      // 1. Send internal chat message
+                      onSendMessage(currentStudent.id, `🎥 Aluno iniciou uma chamada de vídeo de treino online! Entre na sala ao vivo:\n${roomUrl}`);
+                      
+                      // 2. Open room
+                      window.open(roomUrl, '_blank');
+                    }}
+                    className="w-full bg-[#39FF14] text-black font-extrabold text-[11px] py-2.5 rounded-lg transition-all hover:bg-[#39FF14]/90 cursor-pointer flex items-center justify-center gap-1.5 group"
+                  >
+                    <Video size={13} className="group-hover:scale-110 transition-transform" />
+                    <span>Entrar na Sala de Aula ao Vivo</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const phoneDigits = studentTrainer?.phoneWhatsApp ? studentTrainer.phoneWhatsApp.replace(/\D/g, '') : '';
+                      const roomUrl = `https://meet.jit.si/GymPulse-Call-${currentStudent.id}-${studentTrainer?.id || 'default'}`;
+                      const videoCallMessage = `Olá Coach! Vou iniciar minha sessão de treino online guiada agora e estou te aguardando na nossa sala de vídeo ao vivo do GymPulse. Acesse a aula por aqui: ${roomUrl}`;
+                      
+                      if (phoneDigits) {
+                        window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=${encodeURIComponent(videoCallMessage)}`, '_blank');
+                      } else {
+                        alert('Seu Personal Trainer não tem WhatsApp cadastrado no perfil.');
+                      }
+                    }}
+                    className="w-full bg-transparent hover:bg-neutral-800 text-neutral-300 font-extrabold text-[10px] py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 border border-neutral-800"
+                  >
+                    <MessageSquare size={12} className="text-[#25D366]" />
+                    <span>Enviar Link do Vídeo via WhatsApp</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

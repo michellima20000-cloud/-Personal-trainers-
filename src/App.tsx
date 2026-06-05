@@ -94,7 +94,7 @@ const loadCachedOrSeed = () => {
       if (parsed && typeof parsed === 'object') {
         return {
           role: parsed.role || 'trainer',
-          isLoggedIn: parsed.isLoggedIn !== undefined ? parsed.isLoggedIn : true,
+          isLoggedIn: parsed.isLoggedIn !== undefined ? parsed.isLoggedIn : false,
           students: parsed.students || INITIAL_STUDENTS,
           sheets: parsed.sheets || INITIAL_SHEETS,
           evolution: parsed.evolution || INITIAL_EVOLUTION_RECORDS,
@@ -104,9 +104,9 @@ const loadCachedOrSeed = () => {
           revenueLogs: parsed.revenueLogs || REVENUE_LOGS,
           accessLogs: parsed.accessLogs || INITIAL_ACCESS_LOGS,
           marketingPlans: (parsed.marketingPlans || INITIAL_MARKETING_PLANS).filter((p: any) => p.id !== 'Semestral'),
-          trainers: parsed.trainers || [DEFAULT_TRAINER],
-          activeTrainer: parsed.activeTrainer || DEFAULT_TRAINER,
-          activeStudentId: parsed.activeStudentId || (parsed.students && parsed.students[0] && parsed.students[0].id) || 's1'
+          trainers: parsed.trainers || [],
+          activeTrainer: parsed.activeTrainer || null,
+          activeStudentId: parsed.activeStudentId || (parsed.students && parsed.students[0] && parsed.students[0].id) || ''
         };
       }
     } catch (e) {
@@ -117,7 +117,7 @@ const loadCachedOrSeed = () => {
   // Fallback to defaults
   return {
     role: 'trainer',
-    isLoggedIn: true,
+    isLoggedIn: false,
     students: INITIAL_STUDENTS,
     sheets: INITIAL_SHEETS,
     evolution: INITIAL_EVOLUTION_RECORDS,
@@ -127,9 +127,9 @@ const loadCachedOrSeed = () => {
     revenueLogs: REVENUE_LOGS,
     accessLogs: INITIAL_ACCESS_LOGS,
     marketingPlans: INITIAL_MARKETING_PLANS,
-    trainers: [DEFAULT_TRAINER],
-    activeTrainer: DEFAULT_TRAINER,
-    activeStudentId: 's1'
+    trainers: [],
+    activeTrainer: null,
+    activeStudentId: ''
   };
 };
 
@@ -250,148 +250,54 @@ export default function App() {
         let remoteEvolution: Record<string, EvolutionRecord[]> = {};
         let remoteChats: Record<string, ChatMessage[]> = {};
 
-        // If completely empty database, bootstrap standard seeding dynamically!
-        if (remoteStudents.length === 0) {
-          addSyncLog("Banco Firebase vazio detectado! Realizando seeding de demonstração...");
-          
-          const seedPromise = (async () => {
-            // Seed Students
-            for (const s of INITIAL_STUDENTS) {
-              await saveStudent(s);
-            }
-            // Seed Sheets
-            for (const [sid, sheet] of Object.entries(INITIAL_SHEETS)) {
-              await saveSheet(sid, sheet);
-            }
-            // Seed Evolution
-            for (const [sid, records] of Object.entries(INITIAL_EVOLUTION_RECORDS)) {
-              for (const r of records) {
-                await saveEvolutionRecord(sid, r);
-              }
-            }
-            // Seed Chat Logs
-            for (const [sid, msgs] of Object.entries(INITIAL_CHATS)) {
-              for (const m of msgs) {
-                await saveChatMessage(sid, m);
-              }
-            }
-            // Seed Agenda Schedules
-            for (const event of INITIAL_AGENDA) {
-              await saveAgendaEvent(event);
-            }
-            // Seed App Notifications logs
-            for (const notif of INITIAL_NOTIFICATIONS) {
-              await saveNotification(notif);
-            }
-            // Seed Revenues metrics
-            for (const r of REVENUE_LOGS) {
-              await saveRevenueLog(r);
-            }
-            // Seed AccessLogs auditing
-            for (const log of INITIAL_ACCESS_LOGS) {
-              await saveAccessLog(log);
-            }
-            // Seed Marketing Plans
-            for (const plan of INITIAL_MARKETING_PLANS) {
-              await saveMarketingPlan(plan);
-            }
+        // Firebase already populated or starting from clean state, synchronize biometric/chat subcollections for any existing students
+        addSyncLog("Sincronizando biometria e chats de cada aluno...");
+        const evPromises: Promise<EvolutionRecord[]>[] = [];
+        const chatPromises: Promise<ChatMessage[]>[] = [];
+        const sIds: string[] = [];
 
-            const defaultTrainer: Trainer = {
-              id: 't_default',
-              name: 'Daniel Personal Coach',
-              email: 'personal@gympulse.com.br',
-              password: 'personal123',
-              selectedPlan: 'Trimestral',
-              trialStartDate: new Date().toLocaleDateString('pt-BR'),
-              trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-              subscriptionStatus: 'paid',
-              customIdLink: 'daniel-personal',
-              pixKeyType: 'Chave Aleatória',
-              pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-              phoneWhatsApp: '+5511999999999',
-              stripeEnabled: true,
-              stripePublishableKey: 'pk_test_sample_key',
-              stripeSecretKey: ''
-            };
-            await saveTrainer(defaultTrainer);
-            return defaultTrainer;
-          })();
+        for (const s of remoteStudents) {
+          sIds.push(s.id);
+          evPromises.push(fetchAllEvolutionRecords(s.id));
+          chatPromises.push(fetchAllChatMessages(s.id));
+        }
 
-          const defaultTrainer = await Promise.race([seedPromise, timeoutPromise]);
+        const [evs, chatsData] = await Promise.all([
+          Promise.all(evPromises),
+          Promise.all(chatPromises)
+        ]);
 
-          addSyncLog("Seeding concluído! Todos os dados integrados em nuvem.");
-          remoteStudents = INITIAL_STUDENTS;
-          remoteSheets = INITIAL_SHEETS;
-          remoteEvolution = INITIAL_EVOLUTION_RECORDS;
-          remoteChats = INITIAL_CHATS;
-          remoteAgenda = INITIAL_AGENDA;
-          remoteNotifications = INITIAL_NOTIFICATIONS;
-          remoteRevenueLogs = REVENUE_LOGS;
-          remoteAccessLogs = INITIAL_ACCESS_LOGS;
-          remoteMarketingPlans = INITIAL_MARKETING_PLANS;
-          remoteTrainers = [defaultTrainer];
-        } else {
-          // Firebase already populated, verify subcollection data in parallel
-          addSyncLog("Sincronizando biometria e chats de cada aluno...");
-          const evPromises: Promise<EvolutionRecord[]>[] = [];
-          const chatPromises: Promise<ChatMessage[]>[] = [];
-          const sIds: string[] = [];
+        sIds.forEach((sid, idx) => {
+          remoteEvolution[sid] = evs[idx] || [];
+          remoteChats[sid] = chatsData[idx] || [];
+        });
 
-          for (const s of remoteStudents) {
-            sIds.push(s.id);
-            evPromises.push(fetchAllEvolutionRecords(s.id));
-            chatPromises.push(fetchAllChatMessages(s.id));
-          }
+        // Ensure Semestral is removed and Anual is added to plans list
+        remoteMarketingPlans = (remoteMarketingPlans || []).filter(p => p.id !== 'Semestral');
+        const hasAnual = remoteMarketingPlans.some(p => p.id === 'Anual');
+        if (!hasAnual) {
+          const anualDefault = {
+            id: 'Anual',
+            title: 'Plano Anual',
+            price: 90,
+            period: '/m',
+            features: ['Planilha Treino A-E', 'Suporte Conversa e Áudio', 'Avaliação Física Completa', 'Acompanhamento de Metas & Peso', 'Acesso 12 Meses Premium'],
+            recommended: false
+          };
+          remoteMarketingPlans = [...remoteMarketingPlans, anualDefault];
+          saveMarketingPlan(anualDefault).catch(err => console.error("Error saving Anual fallback:", err));
+        }
+        // Guarantee 'Semestral' doc is deleted from Firebase to keep database pristine
+        deleteMarketingPlan('Semestral').catch(() => {});
 
-          const [evs, chatsData] = await Promise.all([
-            Promise.all(evPromises),
-            Promise.all(chatPromises)
-          ]);
-
-          sIds.forEach((sid, idx) => {
-            remoteEvolution[sid] = evs[idx] || [];
-            remoteChats[sid] = chatsData[idx] || [];
-          });
-
-          // Ensure Semestral is removed and Anual is added
-          remoteMarketingPlans = (remoteMarketingPlans || []).filter(p => p.id !== 'Semestral');
-          const hasAnual = remoteMarketingPlans.some(p => p.id === 'Anual');
-          if (!hasAnual) {
-            const anualDefault = {
-              id: 'Anual',
-              title: 'Plano Anual',
-              price: 90,
-              period: '/m',
-              features: ['Planilha Treino A-E', 'Suporte Conversa e Áudio', 'Avaliação Física Completa', 'Acompanhamento de Metas & Peso', 'Acesso 12 Meses Premium'],
-              recommended: false
-            };
-            remoteMarketingPlans = [...remoteMarketingPlans, anualDefault];
-            saveMarketingPlan(anualDefault).catch(err => console.error("Error saving Anual fallback:", err));
-          }
-          // Guarantee 'Semestral' doc is deleted from Firebase to keep database pristine
-          deleteMarketingPlan('Semestral').catch(() => {});
-          
-          if (remoteTrainers.length === 0) {
-            const defaultTrainer: Trainer = {
-              id: 't_default',
-              name: 'Daniel Personal Coach',
-              email: 'personal@gympulse.com.br',
-              password: 'personal123',
-              selectedPlan: 'Trimestral',
-              trialStartDate: new Date().toLocaleDateString('pt-BR'),
-              trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-              subscriptionStatus: 'paid',
-              customIdLink: 'daniel-personal',
-              pixKeyType: 'Chave Aleatória',
-              pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-              phoneWhatsApp: '+5511999999999',
-              stripeEnabled: true,
-              stripePublishableKey: 'pk_test_sample_key',
-              stripeSecretKey: ''
-            };
-            await saveTrainer(defaultTrainer);
-            remoteTrainers = [defaultTrainer];
-          }
+        // Synchronously determine the actual active trainer log state
+        let finalActiveTrainer: Trainer | null = null;
+        if (preloadedState.activeTrainer) {
+          finalActiveTrainer = remoteTrainers.find(t => t.id === preloadedState.activeTrainer.id) || null;
+        }
+        // Fallback to first available trainer in database if none selected
+        if (!finalActiveTrainer && remoteTrainers.length > 0) {
+          finalActiveTrainer = remoteTrainers[0];
         }
 
         // Apply state updates to React
@@ -405,17 +311,7 @@ export default function App() {
         setAccessLogs(remoteAccessLogs);
         setMarketingPlans(remoteMarketingPlans);
         setTrainers(remoteTrainers);
-
-        // Ensure default active trainer is set in success path!
-        const defaultMatch = remoteTrainers.find(t => t.email === 'personal@gympulse.com.br') || remoteTrainers[0];
-        if (defaultMatch) {
-          setActiveTrainer(prev => {
-            if (prev && remoteTrainers.some(t => t.id === prev.id)) {
-              return remoteTrainers.find(t => t.id === prev.id) || prev;
-            }
-            return defaultMatch;
-          });
-        }
+        setActiveTrainer(finalActiveTrainer);
 
         // Parse URL parameters for invitation links
         const params = new URLSearchParams(window.location.search);
@@ -462,7 +358,7 @@ export default function App() {
           finalIsLoggedIn,
           finalRole,
           remoteMarketingPlans,
-          defaultMatch || preloadedState.activeTrainer,
+          finalActiveTrainer,
           remoteTrainers
         );
 

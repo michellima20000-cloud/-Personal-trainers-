@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
   MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock,
-  Upload, Image, Eye, EyeOff
+  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -98,6 +98,11 @@ export default function TrainerDashboard({
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [copiedDashboardPix, setCopiedDashboardPix] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  
+  // Integrated WhatsApp and Connection Dialog states
+  const [waModalOpen, setWaModalOpen] = useState(false);
+  const [waActiveStudent, setWaActiveStudent] = useState<Student | null>(null);
+  const [waCustomMessage, setWaCustomMessage] = useState('');
   
   // SaaS payment states
   const [licensePaymentMethod, setLicensePaymentMethod] = useState<'pix' | 'stripe'>('pix');
@@ -1278,15 +1283,18 @@ export default function TrainerDashboard({
                               {selectedStudent.status === 'Inativo' ? 'INATIVO (BLOQUEADO)' : 'ATIVO (LIBERADO)'}
                             </span>
                             {selectedStudent.phoneWhatsApp ? (
-                              <a
-                                href={`https://api.whatsapp.com/send?phone=${selectedStudent.phoneWhatsApp.replace(/[^0-9+]/g, '')}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[10px] bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-[#25D366] px-1.5 py-0.5 rounded-md font-mono hover:underline transition-all"
+                              <button
+                                onClick={() => {
+                                  setWaActiveStudent(selectedStudent);
+                                  setWaCustomMessage(`Olá ${selectedStudent.name}, aqui é seu Personal Trainer! Passando para ver como estão indo os treinos.`);
+                                  setWaModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-[#25D366] px-1.5 py-0.5 rounded-md font-mono transition-all cursor-pointer"
+                                title="Abrir Central ODS de Conectividade WhatsApp"
                               >
                                 <Phone size={10} className="shrink-0" />
                                 <span>{selectedStudent.phoneWhatsApp}</span>
-                              </a>
+                              </button>
                             ) : (
                               <span className="text-[9px] text-neutral-500 font-mono italic">(Sem WhatsApp cadastrado)</span>
                             )}
@@ -1372,8 +1380,8 @@ export default function TrainerDashboard({
                                 onChange={(e) => setTempStudentStatus(e.target.value as 'Ativo' | 'Inativo')}
                                 className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer font-mono"
                               >
-                                <option value="Ativo">Ativo (Liberado)</option>
-                                <option value="Inativo">Inativo (Bloqueado)</option>
+                                <option value="Ativo">Ativo (Acesso Liberado / Pago)</option>
+                                <option value="Inativo">Inativo (Aguardando Pagamento)</option>
                               </select>
                             </div>
                           </div>
@@ -1662,8 +1670,8 @@ export default function TrainerDashboard({
                       onChange={(e) => setNewStudent({...newStudent, status: e.target.value as 'Ativo' | 'Inativo'})}
                       className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
                     >
-                      <option value="Ativo">Ativo (Acesso Liberado Fichas)</option>
-                      <option value="Inativo">Inativo (Acesso Suspenso)</option>
+                      <option value="Ativo">Ativo (Cadastro Manual / Pagamento Liberado)</option>
+                      <option value="Inativo">Inativo (Aguardar Aluno Pagar Plano no App)</option>
                     </select>
                   </div>
 
@@ -2069,34 +2077,30 @@ export default function TrainerDashboard({
                           onClick={() => {
                             const student = students.find(s => s.id === chatStudentId);
                             if (!student) return;
-                            const phoneDigits = student.phoneWhatsApp ? student.phoneWhatsApp.replace(/\D/g, '') : '';
-                            if (phoneDigits) {
-                              window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=Ol%C3%A1%20${encodeURIComponent(student.name)}%2C%20aqui%20%C3%A9%20seu%20Personal%20Trainer!%20Como%20est%C3%A3o%20os%20treinos%3F`, '_blank');
-                            } else {
-                              alert('Este aluno ainda não cadastrou o número de WhatsApp.');
-                            }
+                            setWaActiveStudent(student);
+                            setWaCustomMessage(`Olá ${student.name}, aqui é seu Personal Trainer! Passando para ver como estão indo os treinos.`);
+                            setWaModalOpen(true);
                           }}
                           className="bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700/80 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer border border-neutral-700 text-[10px] font-mono font-bold"
-                          title="Chamar aluno no WhatsApp"
+                          title="Opções de Conexão Integrada WhatsApp"
                         >
                           <Phone size={11} className="text-[#39FF14]" />
-                          <span className="hidden sm:inline">WhatsApp</span>
+                          <span className="hidden sm:inline">WhatsApp / Contato</span>
                         </button>
 
                         <button 
                           onClick={() => {
                             const student = students.find(s => s.id === chatStudentId);
                             if (!student) return;
-                            const trainerId = activeTrainer?.id || 'trainer';
-                            const roomUrl = `https://meet.jit.si/GymPulse-Call-${student.id}-${trainerId}`;
-                            onSendMessage(chatStudentId, `🎥 Profissional iniciou uma chamada de vídeo de treino online! Entre na sala ao vivo:\n${roomUrl}`);
-                            window.open(roomUrl, '_blank');
+                            setWaActiveStudent(student);
+                            setWaCustomMessage(`Olá ${student.name}! Iniciei nossa sala de vídeo chamada ao vivo de consultoria esportiva no GymPulse. Acesse a sala pelo link:`);
+                            setWaModalOpen(true);
                           }}
                           className="bg-[#39FF14]/15 text-[#39FF14] hover:bg-[#39FF14]/25 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer border border-[#39FF14]/30 text-[10px] font-mono font-bold"
-                          title="Fazer chamada de Vídeo"
+                          title="Fazer chamada de Vídeo ou Convidar por WhatsApp"
                         >
                           <Video size={11} />
-                          <span className="hidden sm:inline">Vídeo Chamada</span>
+                          <span className="hidden sm:inline">Vídeo Chamada / Conectar</span>
                         </button>
                       </div>
                     </div>
@@ -2968,6 +2972,154 @@ export default function TrainerDashboard({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Integrated WhatsApp Connection Dialog */}
+      {waModalOpen && waActiveStudent && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0c0c0e] border border-neutral-800 rounded-2xl w-full max-w-md p-6 relative animate-scale-up shadow-2xl">
+            <button
+              onClick={() => {
+                setWaModalOpen(false);
+                setWaActiveStudent(null);
+              }}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white transition cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="text-center space-y-2 mb-6">
+              <div className="inline-flex p-3 rounded-full bg-[#25D366]/10 border border-[#25D366]/25 text-[#25D366]">
+                <MessageSquare size={24} className="animate-pulse" />
+              </div>
+              <h3 className="text-lg font-black text-white uppercase tracking-tight font-mono">Central WhatsApp & Conexão</h3>
+              <p className="text-[11px] text-neutral-400">
+                Selecione como quer interagir com seu aluno <strong className="text-[#39FF14]">{waActiveStudent.name}</strong> por canais de comunicação direta:
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Opção 1: Mensagem de Texto */}
+              <div className="bg-neutral-900/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white font-mono flex items-center gap-1.5 uppercase">
+                    <MessageCircle size={14} className="text-[#25D366]" /> 1. Enviar Mensagem de Texto
+                  </span>
+                  <span className="text-[9px] bg-neutral-800 px-2 py-0.5 rounded text-neutral-400 font-mono">WhatsApp Web/App</span>
+                </div>
+                
+                <textarea
+                  value={waCustomMessage}
+                  onChange={(e) => setWaCustomMessage(e.target.value)}
+                  placeholder="Escreva sua mensagem personalizada..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2.5 text-xs text-white outline-none focus:border-[#39FF14] transition-all resize-none h-16 font-sans"
+                />
+
+                <button
+                  onClick={() => {
+                    const phoneDigits = waActiveStudent.phoneWhatsApp ? waActiveStudent.phoneWhatsApp.replace(/\D/g, '') : '';
+                    if (phoneDigits) {
+                      window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=${encodeURIComponent(waCustomMessage)}`, '_blank');
+                    } else {
+                      alert('Este aluno ainda não cadastrou o número de WhatsApp.');
+                    }
+                  }}
+                  className="w-full bg-[#25D366] hover:bg-[#25D366]/90 text-black font-extrabold text-[11px] py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Send size={12} />
+                  <span>Enviar Mensagem via WhatsApp</span>
+                </button>
+              </div>
+
+              {/* Opção 2: Ligação Telefônica / Voz */}
+              <div className="bg-neutral-900/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <span className="text-xs font-bold text-white font-mono flex items-center gap-1.5 uppercase">
+                  <Phone size={14} className="text-[#39FF14]" /> 2. Fazer Chamada / Ligação
+                </span>
+                
+                <p className="text-[10px] text-neutral-400">
+                  Inicie uma ligação de voz padrão no celular ou use o WhatsApp padrão para contatar rápido.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={`tel:${waActiveStudent.phoneWhatsApp?.replace(/\D/g, '') || ''}`}
+                    className="bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-[10px] py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 border border-neutral-700"
+                  >
+                    <Smartphone size={12} />
+                    <span>Ligação Celular</span>
+                  </a>
+                  <button
+                    onClick={() => {
+                      const phoneDigits = waActiveStudent.phoneWhatsApp ? waActiveStudent.phoneWhatsApp.replace(/\D/g, '') : '';
+                      if (phoneDigits) {
+                        window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=Olá%20${encodeURIComponent(waActiveStudent.name)}%2C%20podemos%20fazer%20uma%20ligaçao%20de%20voz%20rápida%20pelo%20WhatsApp%3F`, '_blank');
+                      } else {
+                        alert('Este aluno ainda não cadastrou o número de WhatsApp.');
+                      }
+                    }}
+                    className="bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-[#25D366] font-extrabold text-[10px] py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <MessageSquare size={12} fill="#25D366" className="text-[#25D366]" />
+                    <span>Ligar no WhatsApp</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Opção 3: Iniciar Chamada de Vídeo */}
+              <div className="bg-neutral-900/60 p-4 rounded-xl border border-[#39FF14]/20 space-y-3 shadow-md shadow-[#39FF14]/5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#39FF14] font-mono flex items-center gap-1.5 uppercase">
+                    <Video size={14} /> 3. Vídeo Chamada de Treino ao Vivo
+                  </span>
+                  <span className="text-[8px] bg-[#39FF14]/15 border border-[#39FF14]/30 px-1.5 py-0.5 rounded text-[#39FF14] font-mono font-black animate-pulse">Recomendado</span>
+                </div>
+
+                <p className="text-[10px] text-neutral-400">
+                  Geramos uma sala de vídeo-conferência ultra-veloz e segura via Jitsi Meet, e oferecemos para enviar o link direto no WhatsApp dele!
+                </p>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      const trainerId = activeTrainer?.id || 'trainer';
+                      const roomUrl = `https://meet.jit.si/GymPulse-Call-${waActiveStudent.id}-${trainerId}`;
+                      
+                      // 1. Send internal chat message
+                      onSendMessage(waActiveStudent.id, `🎥 Profissional iniciou uma chamada de vídeo de treino online! Entre na sala ao vivo:\n${roomUrl}`);
+                      
+                      // 2. Open room
+                      window.open(roomUrl, '_blank');
+                    }}
+                    className="w-full bg-[#39FF14] text-black font-extrabold text-[11px] py-2.5 rounded-lg transition-all hover:bg-[#39FF14]/90 cursor-pointer flex items-center justify-center gap-1.5 group"
+                  >
+                    <Video size={13} className="group-hover:scale-110 transition-transform" />
+                    <span>Abrir Sala de Aula ao Vivo</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const phoneDigits = waActiveStudent.phoneWhatsApp ? waActiveStudent.phoneWhatsApp.replace(/\D/g, '') : '';
+                      const trainerId = activeTrainer?.id || 'trainer';
+                      const roomUrl = `https://meet.jit.si/GymPulse-Call-${waActiveStudent.id}-${trainerId}`;
+                      const videoCallMessage = `Olá ${waActiveStudent.name}! Escrevi seus novos treinos e estou te convidando para nossa vídeo-chamada de treino ao vivo no GymPulse. Acesse a sala por aqui: ${roomUrl}`;
+                      
+                      if (phoneDigits) {
+                        window.open(`https://api.whatsapp.com/send?phone=${phoneDigits}&text=${encodeURIComponent(videoCallMessage)}`, '_blank');
+                      } else {
+                        alert('Este aluno ainda não cadastrou o número de WhatsApp.');
+                      }
+                    }}
+                    className="w-full bg-transparent hover:bg-neutral-800 text-neutral-300 font-extrabold text-[10px] py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 border border-neutral-800"
+                  >
+                    <MessageSquare size={12} className="text-[#25D366]" />
+                    <span>Convidar Aluno via WhatsApp</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

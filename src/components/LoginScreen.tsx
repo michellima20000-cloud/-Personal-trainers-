@@ -28,15 +28,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   });
   
   // Trainer Auth Form State
-  const [trainerEmail, setTrainerEmail] = useState('personal@gympulse.com.br');
-  const [trainerPassword, setTrainerPassword] = useState('personal123');
+  const [trainerEmail, setTrainerEmail] = useState('');
+  const [trainerPassword, setTrainerPassword] = useState('');
   const [showTrainerPass, setShowTrainerPass] = useState(false);
   const [trainerLoginMode, setTrainerLoginMode] = useState<'credentials' | 'demo'>('credentials');
-  const [selectedTrainerId, setSelectedTrainerId] = useState(trainers[0]?.id || 't_default');
+  const [selectedTrainerId, setSelectedTrainerId] = useState(trainers[0]?.id || '');
   
   // Student Auth Form State
   const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || '');
-  const [studentPassword, setStudentPassword] = useState('123456');
+  const [studentPassword, setStudentPassword] = useState('');
   const [showStudentPass, setShowStudentPass] = useState(false);
 
   // New Student Credentials Login States
@@ -66,6 +66,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [regStudentPassword, setRegStudentPassword] = useState('');
   const [regStudentTrainerId, setRegStudentTrainerId] = useState(trainers[0]?.id || '');
   const [regPhone, setRegPhone] = useState('');
+  const [regStudentTrainerNameInput, setRegStudentTrainerNameInput] = useState('');
 
   // Trainer Self-Registration and Checkout States
   const [isRegisteringTrainer, setIsRegisteringTrainer] = useState(false);
@@ -511,11 +512,30 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setTimeout(() => {
       const studentId = 's_' + Date.now();
       
-      // Select the linked trainer: either the referredTrainer from invitation link, or selected trainer from dropdown list
-      const finalTrainerId = referredTrainer ? referredTrainer.id : (regStudentTrainerId || undefined);
-      const chosenTrainerName = referredTrainer 
-        ? referredTrainer.name 
-        : (trainers.find(t => t.id === finalTrainerId)?.name || 'Consultoria Geral');
+      // Select the linked trainer: either the referredTrainer from invitation link, or matched by typed name, or first/general
+      let finalTrainerId: string | undefined = undefined;
+      let chosenTrainerName = 'Consultoria Geral';
+
+      if (referredTrainer) {
+        finalTrainerId = referredTrainer.id;
+        chosenTrainerName = referredTrainer.name;
+      } else if (regStudentTrainerNameInput.trim()) {
+        const typedClean = regStudentTrainerNameInput.trim().toLowerCase();
+        const matchedTrainer = trainers.find(
+          t => t.name.toLowerCase().includes(typedClean) || typedClean.includes(t.name.toLowerCase())
+        );
+        if (matchedTrainer) {
+          finalTrainerId = matchedTrainer.id;
+          chosenTrainerName = matchedTrainer.name;
+        } else {
+          // If typed name doesn't match a stored trainer, associate with first trainer but record the trainer name
+          finalTrainerId = trainers[0]?.id || 't_default';
+          chosenTrainerName = regStudentTrainerNameInput.trim();
+        }
+      } else {
+        finalTrainerId = trainers[0]?.id || 't_default';
+        chosenTrainerName = trainers[0]?.name || 'Consultoria Geral';
+      }
 
       const createdStudent: Student = {
         id: studentId,
@@ -1801,39 +1821,39 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                   </div>
                 </div>
 
-                {/* Trainer Link and Association Selection */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest">
-                      Personal Trainer Associado
-                    </label>
-                    {referredTrainer && (
-                      <span className="text-[8px] bg-[#39FF14]/10 border border-[#39FF14]/30 text-[#39FF14] px-1.5 py-0.5 rounded font-extrabold font-sans uppercase tracking-wider animate-pulse">
-                        ✓ Vínculo Ativo via Link/Convite
-                      </span>
-                    )}
-                  </div>
-                  <div className={`rounded-xl p-1 transition-all duration-300 ${referredTrainer ? 'bg-[#121214] border border-[#39FF14]/30 shadow-md shadow-[#39FF14]/5' : 'bg-neutral-950 border border-neutral-800'}`}>
-                    <select
-                      value={regStudentTrainerId}
-                      onChange={(e) => setRegStudentTrainerId(e.target.value)}
-                      className="w-full bg-transparent text-xs text-white py-2 px-3 border-none outline-none font-bold cursor-pointer font-sans"
-                      required
-                      disabled={loading}
-                    >
-                      <option value="" disabled className="text-neutral-500 bg-white dark:bg-neutral-950 font-sans">Selecione seu Personal Trainer</option>
-                      {trainers.map((t) => (
-                        <option 
-                          key={t.id} 
-                          value={t.id} 
-                          className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans font-bold"
-                        >
-                          {t.name} ({t.selectedPlan} Plan)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                 {/* Trainer Link and Association Selection */}
+                 <div>
+                   <div className="flex items-center justify-between mb-1">
+                     <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest">
+                       Personal Trainer Associado
+                     </label>
+                     {referredTrainer && (
+                       <span className="text-[8px] bg-[#39FF14]/15 border border-[#39FF14]/40 text-[#39FF14] px-1.5 py-0.5 rounded font-extrabold font-sans uppercase tracking-wider animate-pulse">
+                         ✓ Vínculo Ativo via Link/Convite
+                       </span>
+                     )}
+                   </div>
+                   {referredTrainer ? (
+                     <div className="rounded-xl p-3 bg-neutral-900 border border-[#39FF14]/30 text-xs text-white font-bold font-sans flex items-center justify-between shadow-inner">
+                       <span className="text-white select-none">{referredTrainer.name}</span>
+                       <span className="text-[9px] text-[#39FF14] bg-[#39FF14]/10 px-2 py-0.5 rounded uppercase font-black font-mono tracking-wider">
+                         {referredTrainer.selectedPlan} Plan
+                       </span>
+                     </div>
+                   ) : (
+                     <div className="bg-neutral-950 rounded-xl p-1 border border-neutral-800">
+                       <input
+                         type="text"
+                         value={regStudentTrainerNameInput}
+                         onChange={(e) => setRegStudentTrainerNameInput(e.target.value)}
+                         placeholder="Digite o nome do seu Personal Trainer"
+                         className="w-full bg-transparent text-xs text-white py-2 px-3 border-none outline-none font-bold font-sans focus:outline-none placeholder-neutral-600"
+                         required
+                         disabled={loading}
+                       />
+                     </div>
+                   )}
+                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1959,30 +1979,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           <p className="text-neutral-400 text-[10px]">Acompanhe todo o projeto do GymPulse, visualize todos os personais, alunos e histórico de acessos em tempo real!</p>
         </div>
 
-        <h4 className="text-[10px] text-neutral-400 font-mono uppercase tracking-widest font-black flex items-center gap-1.5 pt-1">
-          <Key size={13} className="text-[#39FF14]" /> Outros Acessos de Simulação
-        </h4>
-        <p className="text-[11px] text-neutral-400 leading-relaxed font-sans mt-1">
-          Use as credenciais abaixo para testar as frentes de personal trainer ou aluno individual:
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono text-[10px] pt-1">
-          <div className="bg-neutral-950/85 p-2.5 rounded-lg border border-neutral-800">
-            <p className="font-bold text-[#39FF14] flex items-center gap-1">
-              <Laptop size={11} /> Personal Trainer:
-            </p>
-            <p className="text-neutral-300 mt-1">Email: <span className="text-white font-extrabold">personal@gympulse.com.br</span></p>
-            <p className="text-neutral-300">Senha: <span className="text-white font-extrabold">personal123</span></p>
-          </div>
-          
-          <div className="bg-neutral-950/85 p-2.5 rounded-lg border border-neutral-800">
-            <p className="font-bold text-[#39FF14] flex items-center gap-1">
-              <Smartphone size={11} /> Alunos (Pre-cadastrados):
-            </p>
-            <p className="text-neutral-300 mt-1">E-mail: <span className="text-white font-extrabold select-all">ana@gympulse.com.br</span></p>
-            <p className="text-neutral-300">Ou use a conta que você criar!</p>
-            <p className="text-neutral-300">Senha padrão: <span className="text-white font-extrabold">123456</span></p>
-          </div>
-        </div>
+
       </div>
 
       {showSimulatedStripe && (
