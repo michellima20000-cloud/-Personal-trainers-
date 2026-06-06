@@ -1220,8 +1220,163 @@ export default function App() {
   };
 
 
+  // Find customizable theme color based on role or URL parameters
+  const getActiveThemeColor = () => {
+    // 1. If trainer is logged in
+    if (isLoggedIn && role === 'trainer' && activeTrainer) {
+      return activeTrainer.themeColor || '#39FF14';
+    }
+    
+    // 2. If student is logged in
+    if (isLoggedIn && role === 'student' && activeStudentId) {
+      const activeStudent = students.find(s => s.id === activeStudentId);
+      if (activeStudent?.trainerId) {
+        const studentTrainer = trainers.find(t => t.id === activeStudent.trainerId);
+        if (studentTrainer?.themeColor) {
+          return studentTrainer.themeColor;
+        }
+      }
+    }
+    
+    // 3. If nobody is logged in, check URL ?trainerId=
+    if (!isLoggedIn && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlTrainerId = params.get('trainerId');
+      if (urlTrainerId) {
+        // Find by customIdLink or id
+        const matchedTrainer = trainers.find(t => 
+          t.customIdLink?.toLowerCase() === urlTrainerId.toLowerCase() || 
+          t.id === urlTrainerId
+        );
+        if (matchedTrainer?.themeColor) {
+          return matchedTrainer.themeColor;
+        }
+      }
+    }
+    
+    // Fallback: If we have an activeTrainer set in preloadedState or default state
+    if (activeTrainer?.themeColor) {
+      return activeTrainer.themeColor;
+    }
+    
+    return '#39FF14'; // original neon green pulse
+  };
+
+  const hexToRgb = (hex: string): string => {
+    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    const fullHex = hex.replace(shorthandRegex, (_, r, g, b) => r + r + g + g + b + b);
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+    return result
+      ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+      : '57, 255, 20';
+  };
+
+  const themeColor = getActiveThemeColor();
+  const themeColorRgb = hexToRgb(themeColor);
+
   return (
     <div className="bg-[#09090b] min-h-screen text-neutral-100 flex flex-col antialiased selection:bg-[#39FF14] selection:text-black">
+      
+      {/* Dynamic Style Theme Injector */}
+      <style>{`
+        :root {
+          --brand-color: ${themeColor};
+          --brand-color-rgb: ${themeColorRgb};
+        }
+        
+        ::selection {
+          background-color: var(--brand-color) !important;
+          color: #000000 !important;
+        }
+
+        /* Override exact Tailwind utility classes for dynamic theme mapping */
+        .text-\\[\\#39FF14\\] {
+          color: ${themeColor} !important;
+        }
+        .bg-\\[\\#39FF14\\] {
+          background-color: ${themeColor} !important;
+        }
+        .border-\\[\\#39FF14\\] {
+          border-color: ${themeColor} !important;
+        }
+        .border-\\[\\#39FF14\\]\\/20 {
+          border-color: rgba(${themeColorRgb}, 0.2) !important;
+        }
+        .border-\\[\\#39FF14\\]\\/25 {
+          border-color: rgba(${themeColorRgb}, 0.25) !important;
+        }
+        .border-\\[\\#39FF14\\]\\/30 {
+          border-color: rgba(${themeColorRgb}, 0.3) !important;
+        }
+        .border-\\[\\#39FF14\\]\\/40 {
+          border-color: rgba(${themeColorRgb}, 0.4) !important;
+        }
+        .border-\\[\\#39FF14\\]\\/50 {
+          border-color: rgba(${themeColorRgb}, 0.5) !important;
+        }
+        .bg-\\[\\#39FF14\\]\\/10 {
+          background-color: rgba(${themeColorRgb}, 0.1) !important;
+        }
+        .bg-\\[\\#39FF14\\]\\/15 {
+          background-color: rgba(${themeColorRgb}, 0.15) !important;
+        }
+        .bg-\\[\\#39FF14\\]\\/20 {
+          background-color: rgba(${themeColorRgb}, 0.2) !important;
+        }
+        .shadow-\\[\\#39FF14\\]\\/10 {
+          --tw-shadow-color: rgba(${themeColorRgb}, 0.1) !important;
+          box-shadow: 0 4px 6px -1px rgba(${themeColorRgb}, 0.1), 0 2px 4px -1px rgba(${themeColorRgb}, 0.06) !important;
+        }
+        .shadow-\\[\\#39FF14\\]\\/25 {
+          --tw-shadow-color: rgba(${themeColorRgb}, 0.25) !important;
+          box-shadow: 0 10px 15px -3px rgba(${themeColorRgb}, 0.25), 0 4px 6px -2px rgba(${themeColorRgb}, 0.05) !important;
+        }
+        .hover\\:shadow-\\[\\#39FF14\\]\\/25:hover {
+          --tw-shadow-color: rgba(${themeColorRgb}, 0.25) !important;
+          box-shadow: 0 10px 15px -3px rgba(${themeColorRgb}, 0.25), 0 4px 6px -2px rgba(${themeColorRgb}, 0.05) !important;
+        }
+        .hover\\:bg-green-400:hover {
+          background-color: ${themeColor} !important;
+          filter: brightness(1.1) !important;
+        }
+        .hover\\:border-\\[\\#39FF14\\]:hover {
+          border-color: ${themeColor} !important;
+        }
+        .from-\\[\\#39FF14\\]\\/10 {
+          --tw-gradient-from: rgba(${themeColorRgb}, 0.1) !important;
+          --tw-gradient-to: rgba(${themeColorRgb}, 0) !important;
+          --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+        }
+        .from-\\[\\#39FF14\\]\\/20 {
+          --tw-gradient-from: rgba(${themeColorRgb}, 0.2) !important;
+          --tw-gradient-to: rgba(${themeColorRgb}, 0) !important;
+          --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+        }
+        .to-\\[\\#39FF14\\]\\/5 {
+          --tw-gradient-to: rgba(${themeColorRgb}, 0.05) !important;
+        }
+        .to-\\[\\#39FF14\\]\\/10 {
+          --tw-gradient-to: rgba(${themeColorRgb}, 0.1) !important;
+        }
+        .from-\\[\\#39FF14\\] {
+          --tw-gradient-from: ${themeColor} !important;
+        }
+        .to-\\[\\#39FF14\\] {
+          --tw-gradient-to: ${themeColor} !important;
+        }
+        
+        /* General custom indicator colors */
+        .text-green-400 {
+          color: ${themeColor} !important;
+        }
+        .bg-green-500 {
+          background-color: ${themeColor} !important;
+        }
+        .bg-green-600 {
+          background-color: ${themeColor} !important;
+          filter: brightness(0.9) !important;
+        }
+      `}</style>
       
       {originalAdminSession && role !== 'admin' && (
         <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-amber-600 px-4 py-2 flex items-center justify-between gap-3 text-xs text-white font-bold tracking-tight shadow-md z-50 animate-slideDown">

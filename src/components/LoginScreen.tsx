@@ -395,58 +395,33 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setErrorMsg('');
     setSuccessMsg('');
     
-    if (studentLoginMode === 'credentials') {
-      if (!studentLoginEmail.trim()) {
-        setErrorMsg('Por favor, informe seu e-mail de acesso cadastrado.');
-        return;
-      }
-      if (!studentLoginPassword) {
-        setErrorMsg('Por favor, insira sua senha de acesso.');
-        return;
-      }
+    if (!studentLoginEmail.trim()) {
+      setErrorMsg('Por favor, informe seu e-mail de acesso cadastrado.');
+      return;
+    }
+    if (!studentLoginPassword) {
+      setErrorMsg('Por favor, insira sua senha de acesso.');
+      return;
+    }
 
-      const emailClean = studentLoginEmail.trim().toLowerCase();
-      const matchedStudent = students.find(s => {
-        const sEmail = getStudentEmail(s).toLowerCase();
-        const sPass = getStudentPassword(s);
-        return sEmail === emailClean && sPass === studentLoginPassword;
-      });
+    const emailClean = studentLoginEmail.trim().toLowerCase();
+    const matchedStudent = students.find(s => {
+      const sEmail = getStudentEmail(s).toLowerCase();
+      const sPass = getStudentPassword(s);
+      return sEmail === emailClean && sPass === studentLoginPassword;
+    });
 
-      if (matchedStudent) {
-        setLoading(true);
+    if (matchedStudent) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
         setTimeout(() => {
-          setLoading(false);
-          setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
-          setTimeout(() => {
-            onLoginSuccess('student', matchedStudent.id);
-          }, 1200);
-        }, 1000);
-      } else {
-        setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha criados na sua conta.');
-      }
+          onLoginSuccess('student', matchedStudent.id);
+        }, 1200);
+      }, 1000);
     } else {
-      if (!selectedStudentId) {
-        setErrorMsg('Por favor, selecione um perfil de aluno cadastrado.');
-        return;
-      }
-      
-      const currentSelectedStudent = students.find(s => s.id === selectedStudentId);
-      if (!currentSelectedStudent) return;
-      
-      const expectedPass = getStudentPassword(currentSelectedStudent);
-      
-      if (studentPassword === expectedPass) {
-        setLoading(true);
-        setTimeout(() => {
-          setLoading(false);
-          setSuccessMsg(`Sucesso! Carregando treino de demonstração de ${currentSelectedStudent.name}...`);
-          setTimeout(() => {
-            onLoginSuccess('student', selectedStudentId);
-          }, 1200);
-        }, 1000);
-      } else {
-        setErrorMsg(`Senha incorreta! Use "${expectedPass}" para esta conta de demonstração.`);
-      }
+      setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha criados na sua conta.');
     }
   };
 
@@ -1634,211 +1609,67 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
             <div className="text-center space-y-1.5 py-2">
               <h2 className="text-base font-extrabold text-white tracking-tight">Portal do Aluno</h2>
               <p className="text-xs text-neutral-400">
-                Acesse instantaneamente sua ficha de treinos de forma simplificada.
+                Acesse sua ficha de treinos de forma simplificada com o e-mail cadastrado pelo seu Personal Trainer.
               </p>
             </div>
 
-            {/* Prominent, clean Google Access Button */}
-            <div className="space-y-3.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMsg('');
-                  setSuccessMsg('');
-                  setShowGoogleModal(true);
-                  setShowGoogleCustomEmailInput(false);
-                  setGoogleCustomEmail('');
-                }}
-                disabled={loading}
-                className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold text-xs py-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 uppercase tracking-wider font-sans"
-              >
-                <svg className="w-5 h-5 mr-0.5" viewBox="0 0 24 24">
-                  <path
-                    fill="#000000"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z"
+            <form onSubmit={handleStudentLogin} className="space-y-4 pt-1">
+              <div className="space-y-3.5">
+                <div>
+                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                    E-mail de Acesso do Aluno
+                  </label>
+                  <input
+                    type="email"
+                    value={studentLoginEmail}
+                    onChange={(e) => setStudentLoginEmail(e.target.value)}
+                    placeholder="Seu e-mail (Ex: aluno@gympulse.com)"
+                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                    required
+                    disabled={loading}
                   />
-                  <path
-                    fill="#000000"
-                    d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z"
-                  />
-                  <path
-                    fill="#000000"
-                    d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z"
-                  />
-                  <path
-                    fill="#000000"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z"
-                  />
-                </svg>
-                Conectar com Conta Google / Gmail
-              </button>
-              
-              <p className="text-[11px] text-center text-neutral-400 font-sans block leading-relaxed px-1">
-                🔒 <strong>Entrada rápida automatizada:</strong> Acesse diretamente usando seu Gmail. Se for sua primeira vez, sua conta será criada na hora de forma automática, e o seu Personal Trainer configurará seus treinos no painel dele!
-              </p>
-            </div>
+                </div>
 
-            {/* Divider */}
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-neutral-800"></div>
-              <span className="flex-shrink mx-3 text-neutral-500 text-[9px] uppercase font-mono tracking-widest text-[#39FF14]/60">ou login com senha tradicional</span>
-              <div className="flex-grow border-t border-neutral-800"></div>
-            </div>
-
-            {/* Collapsible Credentials Form Toggle */}
-            <div className="flex justify-center mb-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCredentialsForm(!showCredentialsForm);
-                  setErrorMsg('');
-                }}
-                className="text-[10px] text-neutral-400 hover:text-white font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-transparent border-none outline-none"
-              >
-                {showCredentialsForm ? '▲ Ocultar Formulário Tradicional' : '▼ Mostrar Login por E-mail e Senha / Demo'}
-              </button>
-            </div>
-
-                {showCredentialsForm && (
-                  <form onSubmit={handleStudentLogin} className="space-y-4 pt-1 animate-fade-in">
-                    <div className="flex justify-end mb-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setStudentLoginMode(studentLoginMode === 'credentials' ? 'demo' : 'credentials');
-                          setErrorMsg('');
-                        }}
-                        className="text-[9px] text-[#39FF14] hover:underline font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-transparent border-none"
-                      >
-                        {studentLoginMode === 'credentials' ? '⚡ Ver Contas de Teste / Demo' : '🔒 Login Seguro (E-mail e Senha)'}
-                      </button>
-                    </div>
-
-                    {studentLoginMode === 'credentials' ? (
-                      <div className="space-y-3.5">
-                        <div>
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            E-mail de Acesso do Aluno
-                          </label>
-                          <input
-                            type="email"
-                            value={studentLoginEmail}
-                            onChange={(e) => setStudentLoginEmail(e.target.value)}
-                            placeholder="Seu e-mail (Ex: michel@gympulse.com)"
-                            className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
-                            required
-                            disabled={loading}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            Sua Senha de Acesso
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showStudentPass ? 'text' : 'password'}
-                              value={studentLoginPassword}
-                              onChange={(e) => setStudentLoginPassword(e.target.value)}
-                              placeholder="Sua senha criada"
-                              className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                              required
-                              disabled={loading}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowStudentPass(!showStudentPass)}
-                              className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
-                            >
-                              {showStudentPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-3.5">
-                        <div>
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            Escolha seu Perfil de Aluno
-                          </label>
-                          <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-1">
-                            <select
-                              value={selectedStudentId}
-                              onChange={(e) => setSelectedStudentId(e.target.value)}
-                              className="w-full bg-transparent text-xs text-white py-2.5 px-3 border-none outline-none font-bold cursor-pointer font-sans"
-                              disabled={loading}
-                            >
-                              <option value="" disabled className="text-neutral-500 bg-white dark:bg-neutral-950 font-sans">Selecione seu nome</option>
-                              {students.map((student) => {
-                                const customMail = getStudentEmail(student);
-                                return (
-                                  <option 
-                                    key={student.id} 
-                                    value={student.id} 
-                                    className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans"
-                                  >
-                                    {student.name} ({customMail})
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          </div>
-                          
-                          {currentSelectedStudent && (
-                            <div className="mt-3 bg-neutral-950/60 p-3 rounded-xl border border-neutral-800 flex items-center gap-3 animate-fade-in">
-                              <img 
-                                src={currentSelectedStudent.avatar} 
-                                alt={currentSelectedStudent.name} 
-                                className="w-9 h-9 rounded-full object-cover border border-neutral-700 pointer-events-none"
-                                referrerPolicy="no-referrer"
-                              />
-                              <div>
-                                <p className="text-[11px] font-extrabold text-white leading-tight">{currentSelectedStudent.name}</p>
-                                <p className="text-[9px] font-mono text-neutral-400 mt-0.5 uppercase tracking-wide leading-none">{getStudentEmail(currentSelectedStudent)}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            Senha / Código de Acesso do Aluno
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showStudentPass ? 'text' : 'password'}
-                              value={studentPassword}
-                              onChange={(e) => setStudentPassword(e.target.value)}
-                              placeholder="Digite sua senha padrão (Ex: 123456)"
-                              maxLength={12}
-                              className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                              required
-                              disabled={loading}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowStudentPass(!showStudentPass)}
-                              className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
-                            >
-                              {showStudentPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
+                <div>
+                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                    Sua Senha de Acesso
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showStudentPass ? 'text' : 'password'}
+                      value={studentLoginPassword}
+                      onChange={(e) => setStudentLoginPassword(e.target.value)}
+                      placeholder="Sua senha de acesso"
+                      className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
+                      required
                       disabled={loading}
-                      className={`w-full mt-4 bg-[#39FF14] text-black font-extrabold text-xs py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-[#39FF14]/10 hover:shadow-[#39FF14]/25 cursor-pointer active:scale-95 ${
-                        loading ? 'opacity-80 cursor-not-allowed animate-pulse' : ''
-                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStudentPass(!showStudentPass)}
+                      className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
                     >
-                      <span>{loading ? 'Sincronizando Sessão...' : 'Entrar no Portal Aluno'}</span>
-                      <ArrowRight size={14} className="shrink-0" />
+                      {showStudentPass ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
-                  </form>
-                )}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[9.5px] text-neutral-500 text-center uppercase tracking-wider block font-sans pt-1 leading-relaxed">
+                🔒 O seu Personal Trainer cria e gerencia seu e-mail e senha diretamente no painel do sistema durante o pré-cadastro.
+              </p>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full mt-2 bg-[#39FF14] text-black font-extrabold text-xs py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-[#39FF14]/10 hover:shadow-[#39FF14]/25 cursor-pointer active:scale-95 ${
+                  loading ? 'opacity-80 cursor-not-allowed animate-pulse' : ''
+                }`}
+              >
+                <span>{loading ? 'Acessando Portal...' : 'Entrar no Portal Aluno'}</span>
+                <ArrowRight size={14} className="shrink-0" />
+              </button>
+            </form>
           </div>
         )}
 

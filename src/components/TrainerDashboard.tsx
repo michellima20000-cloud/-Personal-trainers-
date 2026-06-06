@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
   MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock,
-  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard
+  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard, Settings
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -59,7 +59,7 @@ export default function TrainerDashboard({
   onLogout,
   onUpdateMarketingPlan
 }: TrainerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'alunos' | 'cadastrar_aluno' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs'>('alunos');
+  const [activeTab, setActiveTab] = useState<'alunos' | 'cadastrar_aluno' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs' | 'configuracoes'>('alunos');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
@@ -127,6 +127,32 @@ export default function TrainerDashboard({
   const [profileStripePublishableKey, setProfileStripePublishableKey] = useState(activeTrainer?.stripePublishableKey || 'pk_test_sample_key');
   const [profileStripeSecretKey, setProfileStripeSecretKey] = useState(activeTrainer?.stripeSecretKey || '');
   const [showSecretKeyField, setShowSecretKeyField] = useState(false);
+  const [profileThemeColor, setProfileThemeColor] = useState(activeTrainer?.themeColor || '#39FF14');
+  const [settingsSavedFeedback, setSettingsSavedFeedback] = useState<string | null>(null);
+
+  const handleSaveGlobalSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateTrainer && activeTrainer) {
+      const updated: Trainer = {
+        ...activeTrainer,
+        name: profileTrainerName.trim(),
+        customIdLink: profileTrainerLink.trim().toLowerCase().replace(/\s+/g, '-'),
+        selectedPlan: profileTrainerPlan,
+        pixKeyType: profilePixKeyType,
+        pixKey: profilePixKey.trim(),
+        phoneWhatsApp: profilePhoneWhatsApp.trim(),
+        stripeEnabled: profileStripeEnabled,
+        stripePublishableKey: profileStripePublishableKey.trim(),
+        stripeSecretKey: profileStripeSecretKey.trim(),
+        themeColor: profileThemeColor
+      };
+      onUpdateTrainer(updated);
+      setSettingsSavedFeedback("Configurações atualizadas com sucesso e salvas na nuvem Firebase!");
+      setTimeout(() => {
+        setSettingsSavedFeedback(null);
+      }, 5000);
+    }
+  };
 
   const handleStripeCheckoutSaaS = async () => {
     setLicensePaymentLoadingStep(1); // 1 = Connecting to Stripe API
@@ -270,6 +296,7 @@ export default function TrainerDashboard({
       setProfileStripePublishableKey(activeTrainer.stripePublishableKey || '');
       setProfileStripeSecretKey(activeTrainer.stripeSecretKey || '');
       setLicenseSelectedPlan(activeTrainer.selectedPlan || 'Trimestral');
+      setProfileThemeColor(activeTrainer.themeColor || '#39FF14');
     }
   }, [activeTrainer]);
 
@@ -1015,6 +1042,16 @@ export default function TrainerDashboard({
               <span>Histórico de Acessos</span>
             </div>
             <span className="text-xs bg-neutral-800 text-neutral-300 font-mono px-2 py-0.5 rounded-full select-none">{accessLogs.length}</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('configuracoes')}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition duration-200 text-left ${activeTab === 'configuracoes' ? 'bg-[#18181b] border-l-4 border-[#39FF14] text-white font-semibold' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}`}
+          >
+            <div className="flex items-center gap-3">
+              <Settings size={18} className={activeTab === 'configuracoes' ? 'text-[#39FF14]' : ''} />
+              <span>Personalizar & Configurações</span>
+            </div>
           </button>
 
           {onLogout && (
@@ -3062,6 +3099,350 @@ export default function TrainerDashboard({
             </div>
           )}
 
+          {/* TAB 8: PERSONALIZAR & CONFIGURAÇÕES */}
+          {activeTab === 'configuracoes' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Settings size={20} className="text-[#39FF14]" style={{ color: profileThemeColor }} />
+                    Configurações & Personalização do Sistema
+                  </h2>
+                  <p className="text-xs text-neutral-400">Customize a identidade visual, configure seus links integrados, métodos de pagamento e chaves de API.</p>
+                </div>
+                
+                {settingsSavedFeedback && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-xs flex items-center gap-2 animate-pulse">
+                    <CheckCircle size={15} />
+                    <span>{settingsSavedFeedback}</span>
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={handleSaveGlobalSettings} className="space-y-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  
+                  {/* CARD 1: PERSONALIZAÇÃO VISUAL (COLOR PICKER) */}
+                  <div className="bg-[#121214]/60 p-6 rounded-2xl border border-neutral-800 space-y-5 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 border-b border-neutral-800/60 pb-3 mb-4">
+                        <span className="p-1.5 rounded-lg bg-[#39FF14]/15 border border-[#39FF14]/30" style={{ backgroundColor: `${profileThemeColor}1A`, borderColor: `${profileThemeColor}4D` }}>
+                          <span className="block w-4 h-4 rounded-full" style={{ backgroundColor: profileThemeColor }} />
+                        </span>
+                        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-200 font-mono">🎨 Identidade Visual (Cor Primária)</h3>
+                      </div>
+
+                      <div className="space-y-4">
+                        <p className="text-xs text-neutral-400 leading-relaxed">
+                          Selecione o tom de cor principal que define a sua marca de assessoria esportiva. Essa cor se aplica dinamicamente em botões, bordas acesas, efeitos de seleção, cronômetros de treino e no portal de acesso dos alunos!
+                        </p>
+
+                        <div>
+                          <label className="block text-[10px] text-neutral-500 uppercase font-mono tracking-widest font-bold mb-2">Paleta de Cores Recomendadas</label>
+                          <div className="flex flex-wrap gap-2.5">
+                            {[
+                              { name: 'Limão Cyber (Padrão)', value: '#39FF14' },
+                              { name: 'Azul Elétrico', value: '#00E5FF' },
+                              { name: 'Teal Fit', value: '#00F5D4' },
+                              { name: 'Roxo Força', value: '#B026FF' },
+                              { name: 'Orquídea', value: '#FF007F' },
+                              { name: 'Fúcsia', value: '#E91E63' },
+                              { name: 'Vermelho Fênix', value: '#FF4D4D' },
+                              { name: 'Laranja Energético', value: '#FFA500' },
+                              { name: 'Sol de Ouro', value: '#FFEE00' }
+                            ].map((preset) => (
+                              <button
+                                key={preset.value}
+                                type="button"
+                                onClick={() => setProfileThemeColor(preset.value)}
+                                className={`w-8 h-8 rounded-full border-2 transition relative ${
+                                  profileThemeColor === preset.value 
+                                    ? 'border-white scale-110 shadow-md shadow-white/20' 
+                                    : 'border-transparent hover:scale-105 hover:border-neutral-700'
+                                }`}
+                                style={{ backgroundColor: preset.value }}
+                                title={preset.name}
+                              >
+                                {profileThemeColor === preset.value && (
+                                  <span className="absolute inset-0 flex items-center justify-center text-black text-xs font-black">
+                                    ✓
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Inline color picker inputs */}
+                        <div className="pt-2">
+                          <label className="block text-[10px] text-neutral-500 uppercase font-mono tracking-widest font-bold mb-2">Seletor de Cor Livre (Color Picker)</label>
+                          <div className="flex items-center gap-4 bg-neutral-950 p-3 rounded-xl border border-neutral-800">
+                            <input
+                              type="color"
+                              value={profileThemeColor}
+                              onChange={(e) => setProfileThemeColor(e.target.value)}
+                              className="w-12 h-8 bg-transparent border-none cursor-pointer rounded-lg overflow-hidden shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] text-neutral-400 font-mono">Código hexadecimal:</p>
+                              <p className="text-xs font-mono font-bold text-white uppercase">{profileThemeColor}</p>
+                            </div>
+                            <span 
+                              className="text-[9px] px-2 py-1 font-mono font-bold rounded"
+                              style={{ backgroundColor: `${profileThemeColor}20`, color: profileThemeColor, border: `1px solid ${profileThemeColor}40` }}
+                            >
+                              COR SELECIONADA
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* LIVE VIEW DEMO PREVIEW IN REAL TIME */}
+                    <div className="mt-6 pt-5 border-t border-neutral-900 space-y-3">
+                      <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-widest font-bold">Visualização do Tema Instalado (Tempo Real)</p>
+                      
+                      <div className="bg-neutral-950 border p-4 rounded-xl space-y-3" style={{ borderColor: `${profileThemeColor}33` }}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-mono text-neutral-500 uppercase bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded">Sessão Demo</span>
+                          <span className="w-2.5 h-2.5 rounded-full animate-ping" style={{ backgroundColor: profileThemeColor }} />
+                        </div>
+                        <p className="text-xs text-neutral-300 font-semibold truncate">Treino do Aluno: Full Body Especial</p>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="flex-1 text-black font-extrabold text-[10px] py-1.5 px-3 rounded-lg transition"
+                            style={{ backgroundColor: profileThemeColor }}
+                          >
+                            Iniciar Cronômetro
+                          </button>
+                          <button
+                            type="button"
+                            className="flex-1 font-bold text-[10px] py-1.5 px-3 rounded-lg border transition text-white"
+                            style={{ borderColor: `${profileThemeColor}50`, backgroundColor: `${profileThemeColor}0A` }}
+                          >
+                            Feedback
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CARD 2: DADOS PÚBLICOS & CANAL DE ACESSO */}
+                  <div className="bg-[#121214]/60 p-6 rounded-2xl border border-neutral-800 space-y-4">
+                    <div className="flex items-center gap-2 border-b border-neutral-800/60 pb-3 mb-2">
+                      <span className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                        <Users size={16} />
+                      </span>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-neutral-200 font-mono font-bold">👤 Configuração do Canal & Identidade</h3>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                          Nome de Apresentação / Marca
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={profileTrainerName}
+                          onChange={(e) => setProfileTrainerName(e.target.value)}
+                          className="w-full bg-[#0a0a0c] border border-neutral-800 focus:border-neutral-700 focus:ring-1 focus:ring-neutral-700 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none transition"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                          Prefixo Personalizado do seu Link Único
+                        </label>
+                        <div className="flex items-center bg-[#0a0a0c] border border-neutral-800 rounded-xl px-3 py-2.5 focus-within:border-neutral-700">
+                          <span className="text-[10px] font-mono text-neutral-500 select-none">/?trainerId=</span>
+                          <input
+                            type="text"
+                            required
+                            value={profileTrainerLink}
+                            onChange={(e) => setProfileTrainerLink(e.target.value)}
+                            className="flex-1 bg-transparent text-xs text-white ml-1 focus:outline-none"
+                          />
+                        </div>
+                        <p className="text-[9px] font-mono text-neutral-500 mt-1">
+                          Link definitivo: <span className="underline" style={{ color: profileThemeColor }}>{window.location.origin}/?trainerId={profileTrainerLink}</span>
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                          Telefone Comercial (WhatsApp de Suporte)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={profilePhoneWhatsApp}
+                          onChange={(e) => setProfilePhoneWhatsApp(e.target.value)}
+                          className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none transition"
+                          placeholder="+5511999999999"
+                        />
+                        <p className="text-[9px] text-neutral-500 mt-1">Insira com DDI (+55), código de área e o número completo para os chats integrados.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* CARD 3: FINANCEIRO & COBRANÇA PIX */}
+                  <div className="bg-[#121214]/60 p-6 rounded-2xl border border-neutral-800 space-y-4">
+                    <div className="flex items-center gap-2 border-b border-neutral-800/60 pb-3 mb-2">
+                      <span className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <DollarSign size={16} />
+                      </span>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-neutral-200 font-mono">🔑 Informações para Faturamento de Alunos</h3>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-1">
+                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                            Tipo de Chave
+                          </label>
+                          <select
+                            value={profilePixKeyType}
+                            onChange={(e) => setProfilePixKeyType(e.target.value as any)}
+                            className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-2 py-2.5 rounded-xl focus:outline-none transition font-sans"
+                          >
+                            <option value="CPF">CPF</option>
+                            <option value="CNPJ">CNPJ</option>
+                            <option value="Telefone">Telefone</option>
+                            <option value="E-mail">E-mail</option>
+                            <option value="Chave Aleatória">Aleatória</option>
+                          </select>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                            Sua Chave Pix para Recebimento direto
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={profilePixKey}
+                            onChange={(e) => setProfilePixKey(e.target.value)}
+                            className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-[#39FF14] px-3 py-2.5 rounded-xl font-mono focus:outline-none transition"
+                            style={{ color: profileThemeColor }}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                          Link QR Code Estático (Opcional)
+                        </label>
+                        <input
+                          type="url"
+                          value={profilePixQrCode}
+                          onChange={(e) => setProfilePixQrCode(e.target.value)}
+                          className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none transition"
+                          placeholder="Ex: https://image-url-for-your-qr-code.png"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CARD 4: INTEGRAÇÃO STRIPE SAAS */}
+                  <div className="bg-[#121214]/60 p-6 rounded-2xl border border-neutral-800 space-y-4">
+                    <div className="flex items-center justify-between border-b border-neutral-800/60 pb-3 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                          <CreditCard size={16} />
+                        </span>
+                        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-200 font-mono font-bold">💳 Integração Stripe SaaS</h3>
+                      </div>
+
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={profileStripeEnabled}
+                          onChange={(e) => setProfileStripeEnabled(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-[11px] text-neutral-400 leading-normal">
+                        Ao ligar a opção acima, os alunos poderão comprar acessos e planos via Cartão de Crédito internacional utilizando a infraestrutura oficial do Stripe.
+                      </p>
+
+                      {profileStripeEnabled && (
+                        <div className="space-y-3 animate-slideDown">
+                          <div>
+                            <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
+                              Chave Pública (Publishable Key)
+                            </label>
+                            <input
+                              type="text"
+                              required={profileStripeEnabled}
+                              value={profileStripePublishableKey}
+                              onChange={(e) => setProfileStripePublishableKey(e.target.value)}
+                              className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-3 py-2 rounded-xl font-mono focus:outline-none transition"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest">
+                                Chave Secreta (Secret Key)
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setShowSecretKeyField(!showSecretKeyField)}
+                                className="text-[9px] font-mono hover:underline uppercase text-neutral-400"
+                              >
+                                {showSecretKeyField ? 'Ocultar' : 'Exibir Chave'}
+                              </button>
+                            </div>
+                            <input
+                              type={showSecretKeyField ? 'text' : 'password'}
+                              required={profileStripeEnabled}
+                              value={profileStripeSecretKey}
+                              onChange={(e) => setProfileStripeSecretKey(e.target.value)}
+                              className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-3 py-2 rounded-xl font-mono focus:outline-none transition"
+                              placeholder="sk_test_..."
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* BOTTOM COMPOSITE ACTION PANEL */}
+                <div className="bg-[#121214] p-4.5 rounded-2xl border border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 rounded-xl">
+                      <Zap size={18} className="animate-pulse" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-white uppercase tracking-tight">Sincronização Nuvens Firebase</p>
+                      <p className="text-[10px] text-neutral-400 font-mono">Ao clicar em Salvar, todas as definições serão instantaneamente aplicadas na sua conta GymPulse.</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full sm:w-auto text-black font-extrabold text-xs px-8 py-3 rounded-xl transition duration-300 hover:scale-[1.02] active:scale-95 cursor-pointer shadow-lg"
+                    style={{ backgroundColor: profileThemeColor }}
+                  >
+                    Salvar Todas as Configurações
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
         </div>
 
       </div>
@@ -3796,7 +4177,8 @@ export default function TrainerDashboard({
                     phoneWhatsApp: profilePhoneWhatsApp.trim(),
                     stripeEnabled: profileStripeEnabled,
                     stripePublishableKey: profileStripePublishableKey.trim(),
-                    stripeSecretKey: profileStripeSecretKey.trim()
+                    stripeSecretKey: profileStripeSecretKey.trim(),
+                    themeColor: profileThemeColor
                   };
                   onUpdateTrainer(updated);
                   setShowProfileModal(false);
@@ -3831,9 +4213,65 @@ export default function TrainerDashboard({
                     className="flex-1 bg-transparent text-xs text-white ml-1 focus:outline-none"
                   />
                 </div>
-                <p className="text-[9px] font-mono text-neutral-550 mt-1">
+                <p className="text-[9px] font-mono text-neutral-500 mt-1">
                   Seu link definitivo será: <span className="text-[#39FF14]">{window.location.origin}/?trainerId={profileTrainerLink}</span>
                 </p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                  🎨 Cor do Sistema (Personalização Visual)
+                </label>
+                <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3.5 space-y-3">
+                  <p className="text-[10px] text-neutral-400 leading-normal">
+                    Selecione a cor de destaque principal para a sua consultoria (botoes, bordas, indicadores de treino dos seus alunos):
+                  </p>
+                  
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {[
+                      { name: 'Limão (Padrão)', value: '#39FF14' },
+                      { name: 'Azul Cyber', value: '#00E5FF' },
+                      { name: 'Teal Fit', value: '#00F5D4' },
+                      { name: 'Roxo Força', value: '#B026FF' },
+                      { name: 'Fúcsia', value: '#FF007F' },
+                      { name: 'Vermelho', value: '#FF4D4D' },
+                      { name: 'Laranja', value: '#FFA500' },
+                      { name: 'Ouro', value: '#FFEE00' }
+                    ].map((pst) => (
+                      <button
+                        key={pst.value}
+                        type="button"
+                        onClick={() => setProfileThemeColor(pst.value)}
+                        className={`w-7 h-7 rounded-full border-2 transition relative ${
+                          profileThemeColor === pst.value 
+                            ? 'border-white scale-110 shadow-md shadow-white/10' 
+                            : 'border-transparent hover:scale-105 hover:border-neutral-700'
+                        }`}
+                        style={{ backgroundColor: pst.value }}
+                        title={pst.name}
+                      >
+                        {profileThemeColor === pst.value && (
+                          <span className="absolute inset-0 flex items-center justify-center text-black text-[9px] font-extrabold">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2 border-t border-neutral-900">
+                    <span className="text-[9px] text-neutral-500 uppercase tracking-wider font-mono font-bold">Ou escolha livremente:</span>
+                    <input
+                      type="color"
+                      value={profileThemeColor}
+                      onChange={(e) => setProfileThemeColor(e.target.value)}
+                      className="w-8 h-6 bg-transparent border-none cursor-pointer rounded overflow-hidden"
+                    />
+                    <span className="text-[10px] font-mono text-neutral-300 font-bold uppercase bg-neutral-900 px-2 py-1 rounded border border-neutral-800">
+                      {profileThemeColor}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div>

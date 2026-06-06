@@ -155,5 +155,6 @@ export interface Trainer {
   stripeEnabled?: boolean;
   stripePublishableKey?: string;
   stripeSecretKey?: string;
+  themeColor?: string;
 }
 
