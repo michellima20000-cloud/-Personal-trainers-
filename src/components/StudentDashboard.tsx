@@ -1467,7 +1467,12 @@ export default function StudentDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col font-sans pb-16">
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col font-sans pb-16"
+    >
       
       {/* Student App Header bar / Sandbox controller */}
       <div className="bg-gradient-to-r from-neutral-900 to-neutral-950 border-b border-neutral-800 py-5 px-4 md:px-8">
@@ -3074,6 +3079,6 @@ export default function StudentDashboard({
         </div>
       )}
 
-    </div>
+    </motion.div>
   );
 }

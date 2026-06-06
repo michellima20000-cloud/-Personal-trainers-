@@ -9,6 +9,7 @@ import {
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
+import { motion } from 'motion/react';
 
 interface TrainerDashboardProps {
   students: Student[];
@@ -874,7 +875,12 @@ export default function TrainerDashboard({
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col font-sans pb-16">
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col font-sans pb-16"
+    >
       
       {/* Upper Stats bar */}
       <div className="bg-[#121214] border-b border-neutral-800 py-6 px-4 md:px-8">
@@ -3197,35 +3203,6 @@ export default function TrainerDashboard({
                         </div>
                       </div>
                     </div>
-
-                    {/* LIVE VIEW DEMO PREVIEW IN REAL TIME */}
-                    <div className="mt-6 pt-5 border-t border-neutral-900 space-y-3">
-                      <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-widest font-bold">Visualização do Tema Instalado (Tempo Real)</p>
-                      
-                      <div className="bg-neutral-950 border p-4 rounded-xl space-y-3" style={{ borderColor: `${profileThemeColor}33` }}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-mono text-neutral-500 uppercase bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded">Sessão Demo</span>
-                          <span className="w-2.5 h-2.5 rounded-full animate-ping" style={{ backgroundColor: profileThemeColor }} />
-                        </div>
-                        <p className="text-xs text-neutral-300 font-semibold truncate">Treino do Aluno: Full Body Especial</p>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className="flex-1 text-black font-extrabold text-[10px] py-1.5 px-3 rounded-lg transition"
-                            style={{ backgroundColor: profileThemeColor }}
-                          >
-                            Iniciar Cronômetro
-                          </button>
-                          <button
-                            type="button"
-                            className="flex-1 font-bold text-[10px] py-1.5 px-3 rounded-lg border transition text-white"
-                            style={{ borderColor: `${profileThemeColor}50`, backgroundColor: `${profileThemeColor}0A` }}
-                          >
-                            Feedback
-                          </button>
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
                   {/* CARD 2: DADOS PÚBLICOS & CANAL DE ACESSO */}
@@ -3289,148 +3266,8 @@ export default function TrainerDashboard({
 
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                  {/* CARD 3: FINANCEIRO & COBRANÇA PIX */}
-                  <div className="bg-[#121214]/60 p-6 rounded-2xl border border-neutral-800 space-y-4">
-                    <div className="flex items-center gap-2 border-b border-neutral-800/60 pb-3 mb-2">
-                      <span className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                        <DollarSign size={16} />
-                      </span>
-                      <h3 className="text-xs font-black uppercase tracking-wider text-neutral-200 font-mono">🔑 Informações para Faturamento de Alunos</h3>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="sm:col-span-1">
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            Tipo de Chave
-                          </label>
-                          <select
-                            value={profilePixKeyType}
-                            onChange={(e) => setProfilePixKeyType(e.target.value as any)}
-                            className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-2 py-2.5 rounded-xl focus:outline-none transition font-sans"
-                          >
-                            <option value="CPF">CPF</option>
-                            <option value="CNPJ">CNPJ</option>
-                            <option value="Telefone">Telefone</option>
-                            <option value="E-mail">E-mail</option>
-                            <option value="Chave Aleatória">Aleatória</option>
-                          </select>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                            Sua Chave Pix para Recebimento direto
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={profilePixKey}
-                            onChange={(e) => setProfilePixKey(e.target.value)}
-                            className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-[#39FF14] px-3 py-2.5 rounded-xl font-mono focus:outline-none transition"
-                            style={{ color: profileThemeColor }}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                          Link QR Code Estático (Opcional)
-                        </label>
-                        <input
-                          type="url"
-                          value={profilePixQrCode}
-                          onChange={(e) => setProfilePixQrCode(e.target.value)}
-                          className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-3 py-2.5 rounded-xl focus:outline-none transition"
-                          placeholder="Ex: https://image-url-for-your-qr-code.png"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CARD 4: INTEGRAÇÃO STRIPE SAAS */}
-                  <div className="bg-[#121214]/60 p-6 rounded-2xl border border-neutral-800 space-y-4">
-                    <div className="flex items-center justify-between border-b border-neutral-800/60 pb-3 mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                          <CreditCard size={16} />
-                        </span>
-                        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-200 font-mono font-bold">💳 Integração Stripe SaaS</h3>
-                      </div>
-
-                      <label className="relative inline-flex items-center cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={profileStripeEnabled}
-                          onChange={(e) => setProfileStripeEnabled(e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-8 h-4 bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-indigo-600"></div>
-                      </label>
-                    </div>
-
-                    <div className="space-y-4">
-                      <p className="text-[11px] text-neutral-400 leading-normal">
-                        Ao ligar a opção acima, os alunos poderão comprar acessos e planos via Cartão de Crédito internacional utilizando a infraestrutura oficial do Stripe.
-                      </p>
-
-                      {profileStripeEnabled && (
-                        <div className="space-y-3 animate-slideDown">
-                          <div>
-                            <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
-                              Chave Pública (Publishable Key)
-                            </label>
-                            <input
-                              type="text"
-                              required={profileStripeEnabled}
-                              value={profileStripePublishableKey}
-                              onChange={(e) => setProfileStripePublishableKey(e.target.value)}
-                              className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-3 py-2 rounded-xl font-mono focus:outline-none transition"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest">
-                                Chave Secreta (Secret Key)
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => setShowSecretKeyField(!showSecretKeyField)}
-                                className="text-[9px] font-mono hover:underline uppercase text-neutral-400"
-                              >
-                                {showSecretKeyField ? 'Ocultar' : 'Exibir Chave'}
-                              </button>
-                            </div>
-                            <input
-                              type={showSecretKeyField ? 'text' : 'password'}
-                              required={profileStripeEnabled}
-                              value={profileStripeSecretKey}
-                              onChange={(e) => setProfileStripeSecretKey(e.target.value)}
-                              className="w-full bg-[#0a0a0c] border border-neutral-800 text-xs text-white px-3 py-2 rounded-xl font-mono focus:outline-none transition"
-                              placeholder="sk_test_..."
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-
                 {/* BOTTOM COMPOSITE ACTION PANEL */}
-                <div className="bg-[#121214] p-4.5 rounded-2xl border border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <span className="p-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 rounded-xl">
-                      <Zap size={18} className="animate-pulse" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-white uppercase tracking-tight">Sincronização Nuvens Firebase</p>
-                      <p className="text-[10px] text-neutral-400 font-mono">Ao clicar em Salvar, todas as definições serão instantaneamente aplicadas na sua conta GymPulse.</p>
-                    </div>
-                  </div>
-
+                <div className="flex justify-end">
                   <button
                     type="submit"
                     className="w-full sm:w-auto text-black font-extrabold text-xs px-8 py-3 rounded-xl transition duration-300 hover:scale-[1.02] active:scale-95 cursor-pointer shadow-lg"
@@ -4359,6 +4196,6 @@ export default function TrainerDashboard({
         />
       )}
 
-    </div>
+    </motion.div>
   );
 }

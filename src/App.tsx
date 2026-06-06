@@ -251,30 +251,6 @@ export default function App() {
         let remoteAccessLogs = dbData.accessLogs;
         let remoteMarketingPlans = dbData.marketingPlans;
         let remoteTrainers = dbData.trainers;
-        let remoteEvolution: Record<string, EvolutionRecord[]> = {};
-        let remoteChats: Record<string, ChatMessage[]> = {};
-
-        // Firebase already populated or starting from clean state, synchronize biometric/chat subcollections for any existing students
-        addSyncLog("Sincronizando biometria e chats de cada aluno...");
-        const evPromises: Promise<EvolutionRecord[]>[] = [];
-        const chatPromises: Promise<ChatMessage[]>[] = [];
-        const sIds: string[] = [];
-
-        for (const s of remoteStudents) {
-          sIds.push(s.id);
-          evPromises.push(fetchAllEvolutionRecords(s.id));
-          chatPromises.push(fetchAllChatMessages(s.id));
-        }
-
-        const [evs, chatsData] = await Promise.all([
-          Promise.all(evPromises),
-          Promise.all(chatPromises)
-        ]);
-
-        sIds.forEach((sid, idx) => {
-          remoteEvolution[sid] = evs[idx] || [];
-          remoteChats[sid] = chatsData[idx] || [];
-        });
 
         // Ensure Semestral is removed and Anual is added to plans list
         remoteMarketingPlans = (remoteMarketingPlans || []).filter(p => p.id !== 'Semestral');
@@ -307,9 +283,7 @@ export default function App() {
         // Apply state updates to React
         setStudents(remoteStudents);
         setSheets(remoteSheets);
-        setEvolution(remoteEvolution);
         setAgenda(remoteAgenda);
-        setChats(remoteChats);
         setNotifications(remoteNotifications);
         setRevenueLogs(remoteRevenueLogs);
         setAccessLogs(remoteAccessLogs);
@@ -357,13 +331,13 @@ export default function App() {
           addSyncLog(`Link administrativo consultor detectado.`);
         }
 
-        // Cache the latest synchronized cloud data
+        // Cache the latest synchronized cloud data (with existing cache for evolution & chats temporarily)
         saveState(
           remoteStudents,
           remoteSheets,
-          remoteEvolution,
+          preloadedState.evolution,
           remoteAgenda,
-          remoteChats,
+          preloadedState.chats,
           remoteNotifications,
           remoteRevenueLogs,
           remoteAccessLogs,
@@ -374,9 +348,59 @@ export default function App() {
           remoteTrainers
         );
 
-        addSyncLog("Ambiente real do Firebase totalmente sincronizado.");
+        addSyncLog("Conexão real ao Firebase estabelecida com sucesso!");
         setSyncingStatus('synced');
         setLoadingFirebase(false);
+
+        // Background synchronization of subcollections (biometrics/chats) to guarantee instantaneous loading
+        (async () => {
+          try {
+            const evPromises: Promise<EvolutionRecord[]>[] = [];
+            const chatPromises: Promise<ChatMessage[]>[] = [];
+            const sIds: string[] = [];
+
+            for (const s of remoteStudents) {
+              sIds.push(s.id);
+              evPromises.push(fetchAllEvolutionRecords(s.id));
+              chatPromises.push(fetchAllChatMessages(s.id));
+            }
+
+            const [evs, chatsData] = await Promise.all([
+              Promise.all(evPromises),
+              Promise.all(chatPromises)
+            ]);
+
+            const remoteEvolution: Record<string, EvolutionRecord[]> = {};
+            const remoteChats: Record<string, ChatMessage[]> = {};
+            sIds.forEach((sid, idx) => {
+              remoteEvolution[sid] = evs[idx] || [];
+              remoteChats[sid] = chatsData[idx] || [];
+            });
+
+            // Hydrate states asynchronously and write back updated cache
+            setEvolution(remoteEvolution);
+            setChats(remoteChats);
+
+            saveState(
+              remoteStudents,
+              remoteSheets,
+              remoteEvolution,
+              remoteAgenda,
+              remoteChats,
+              remoteNotifications,
+              remoteRevenueLogs,
+              remoteAccessLogs,
+              finalIsLoggedIn,
+              finalRole,
+              remoteMarketingPlans,
+              finalActiveTrainer,
+              remoteTrainers
+            );
+            addSyncLog("Sincronização de biometria e chats concluída em segundo plano.");
+          } catch (bgErr) {
+            console.warn("Background subcollection sync fallback failed:", bgErr);
+          }
+        })();
       } catch (err) {
         clearTimeout(timeoutId);
         console.log("Firebase sync system warning:", err);
