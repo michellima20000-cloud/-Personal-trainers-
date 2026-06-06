@@ -14,9 +14,10 @@ interface LoginScreenProps {
   onLoginSuccess: (role: 'trainer' | 'student' | 'admin', studentId?: string, loggedInTrainer?: Trainer) => void;
   onAddStudent: (student: Student) => void;
   onAddTrainer: (trainer: Trainer) => void;
+  onUpdateStudent?: (id: string, data: Partial<Student>) => void;
 }
 
-export default function LoginScreen({ students, trainers, onLoginSuccess, onAddStudent, onAddTrainer }: LoginScreenProps) {
+export default function LoginScreen({ students, trainers, onLoginSuccess, onAddStudent, onAddTrainer, onUpdateStudent }: LoginScreenProps) {
   const [activeTab, setActiveTab] = useState<'trainer' | 'student'>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -44,23 +45,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [studentLoginEmail, setStudentLoginEmail] = useState('');
   const [studentLoginPassword, setStudentLoginPassword] = useState('');
   
-  // Custom Invite and Google Auth mock states
-  const [inviteLinkOrCode, setInviteLinkOrCode] = useState('');
+  // Custom Google Auth mock states
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleCustomEmail, setGoogleCustomEmail] = useState('');
   const [showGoogleCustomEmailInput, setShowGoogleCustomEmailInput] = useState(false);
   const [showCredentialsForm, setShowCredentialsForm] = useState(false);
-
-  // Student Self-Registration State
-  const [isRegisteringStudent, setIsRegisteringStudent] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('trainerId')) {
-        return true;
-      }
-    }
-    return false;
-  });
   const [regName, setRegName] = useState('');
   const [regObjective, setRegObjective] = useState<'Hipertrofia' | 'Emagrecimento' | 'Condicionamento' | 'Definição' | 'Reabilitação'>('Hipertrofia');
   const [regAge, setRegAge] = useState<number>(25);
@@ -114,7 +103,6 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         setReferredTrainer(match);
         setRegStudentTrainerId(match.id);
         setActiveTab('student');
-        setIsRegisteringStudent(true);
       }
     }
   }, [trainers]);
@@ -467,21 +455,20 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setSuccessMsg('');
     const emailClean = email.trim().toLowerCase();
     
-    // Find matching student by email (Gmail)
+    // 1. Look up matching student by email (Gmail)
     const matched = students.find(s => getStudentEmail(s).toLowerCase() === emailClean);
     if (matched) {
       setLoading(true);
       setTimeout(() => {
         setLoading(false);
-        setSuccessMsg(`Sucesso! Conectado via Google. Bem-vindo, ${matched.name}!`);
+        setSuccessMsg(`Sucesso! Conectado via Google. Bem-vindo de volta, ${matched.name}!`);
         setShowGoogleModal(false);
         setTimeout(() => {
           onLoginSuccess('student', matched.id);
         }, 1000);
       }, 1200);
     } else {
-      // Auto-register student on-the-fly dynamically so student can complete quick registration
-      // This makes Gmail entry 100% fluent and easier as the trainer can simply configure the rest on the coach panel
+      // 2. Auto-register student on-the-fly dynamically so student can complete quick registration
       setLoading(true);
       const guestNameParts = emailClean.split('@')[0].replace(/[^a-zA-Z]/g, ' ').split(' ').filter(Boolean);
       const generatedName = guestNameParts.length > 0 
@@ -508,12 +495,16 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         password: '123456',
         history: 'Cadastro instantâneo via Google Account.',
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-        value: 120
+        value: 120,
+        // Auto-link to the referred trainer if present:
+        trainerId: referredTrainer ? referredTrainer.id : (trainers && trainers.length > 0 ? trainers[0].id : undefined)
       };
 
       setTimeout(async () => {
         try {
-          await onAddStudent?.(newStudent);
+          if (onAddStudent) {
+            await onAddStudent(newStudent);
+          }
           setLoading(false);
           setSuccessMsg(`Bem-vindo ao GymPulse! Criamos seu portal de acesso rápido para ${generatedName}.`);
           setShowGoogleModal(false);
@@ -1638,129 +1629,75 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
         {/* Student Auth Form */}
         {activeTab === 'student' && (
-          <div className="space-y-4">
-            {/* Student Sub-Tabs for Entry selection */}
-            <div className="flex border-b border-neutral-800 pb-2 mb-2 gap-4 justify-center">
-              <button
-                type="button"
-                onClick={() => setIsRegisteringStudent(false)}
-                className={`text-xs font-mono pb-1 border-b-2 transition ${
-                  !isRegisteringStudent 
-                    ? 'border-[#39FF14] text-white font-extrabold' 
-                    : 'border-transparent text-neutral-500 hover:text-neutral-300'
-                }`}
-              >
-                Acesso por Convite
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsRegisteringStudent(true)}
-                className={`text-xs font-mono pb-1 border-b-2 transition ${
-                  isRegisteringStudent 
-                    ? 'border-[#39FF14] text-white font-extrabold' 
-                    : 'border-transparent text-neutral-500 hover:text-neutral-300'
-                }`}
-              >
-                Quero me Cadastrar
-              </button>
+          <div className="space-y-5 animate-fade-in">
+            {/* Super simple, welcoming greeting for the Student */}
+            <div className="text-center space-y-1.5 py-2">
+              <h2 className="text-base font-extrabold text-white tracking-tight">Portal do Aluno</h2>
+              <p className="text-xs text-neutral-400">
+                Acesse instantaneamente sua ficha de treinos de forma simplificada.
+              </p>
             </div>
 
-            {!isRegisteringStudent ? (
-              <div className="space-y-4 animate-fade-in text-xs">
-                {/* Simulated Google Login & Code flow */}
-                <div className="space-y-3.5">
-                  <div className="bg-[#121214]/60 p-4 rounded-xl border border-[#39FF14]/15 space-y-3">
-                    <p className="text-[10px] text-[#39FF14] uppercase tracking-wider font-mono font-bold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-[#39FF14] rounded-full animate-pulse"></span>
-                      Opção Rápida: Acessar pelo Convite
-                    </p>
-                    <p className="text-[11px] text-neutral-400">
-                      Insira o código do convite, e-mail ou WhatsApp que recebeu do seu Personal Trainer:
-                    </p>
+            {/* Prominent, clean Google Access Button */}
+            <div className="space-y-3.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                  setShowGoogleModal(true);
+                  setShowGoogleCustomEmailInput(false);
+                  setGoogleCustomEmail('');
+                }}
+                disabled={loading}
+                className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold text-xs py-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 uppercase tracking-wider font-sans"
+              >
+                <svg className="w-5 h-5 mr-0.5" viewBox="0 0 24 24">
+                  <path
+                    fill="#000000"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z"
+                  />
+                  <path
+                    fill="#000000"
+                    d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z"
+                  />
+                  <path
+                    fill="#000000"
+                    d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z"
+                  />
+                  <path
+                    fill="#000000"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z"
+                  />
+                </svg>
+                Conectar com Conta Google / Gmail
+              </button>
+              
+              <p className="text-[11px] text-center text-neutral-400 font-sans block leading-relaxed px-1">
+                🔒 <strong>Entrada rápida automatizada:</strong> Acesse diretamente usando seu Gmail. Se for sua primeira vez, sua conta será criada na hora de forma automática, e o seu Personal Trainer configurará seus treinos no painel dele!
+              </p>
+            </div>
 
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={inviteLinkOrCode}
-                        onChange={(e) => setInviteLinkOrCode(e.target.value)}
-                        placeholder="Ex: Aluno ID, E-mail ou WhatsApp..."
-                        className="flex-1 bg-neutral-950 text-xs text-white px-3 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                        disabled={loading}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleInviteCodeLogin(inviteLinkOrCode)}
-                        disabled={loading}
-                        className="bg-[#39FF14] text-black hover:bg-green-400 px-4 py-2.5 rounded-xl font-bold font-sans transition-all active:scale-95 text-xs text-center"
-                      >
-                        Entrar
-                      </button>
-                    </div>
-                  </div>
+            {/* Divider */}
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-neutral-800"></div>
+              <span className="flex-shrink mx-3 text-neutral-500 text-[9px] uppercase font-mono tracking-widest text-[#39FF14]/60">ou login com senha tradicional</span>
+              <div className="flex-grow border-t border-neutral-800"></div>
+            </div>
 
-                  {/* Gmail Integration Mock Button */}
-                  <div className="space-y-1.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setErrorMsg('');
-                        setSuccessMsg('');
-                        setShowGoogleModal(true);
-                        setShowGoogleCustomEmailInput(false);
-                        setGoogleCustomEmail('');
-                      }}
-                      disabled={loading}
-                      className="w-full bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-300 font-black text-xs py-3.5 rounded-xl transition duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95"
-                    >
-                      <svg className="w-5 h-5 mr-0.5" viewBox="0 0 24 24">
-                        <path
-                          fill="#4285F4"
-                          d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z"
-                        />
-                      </svg>
-                      Acessar de Forma Fácil com Gmail
-                    </button>
-                    <p className="text-[10px] text-center text-[#39FF14] font-mono font-bold uppercase tracking-wider block mt-2">
-                      ★ NOVO: Cadastro Automático via Gmail Ativado!
-                    </p>
-                    <p className="text-[9.5px] text-center text-neutral-400 font-sans block leading-normal px-2">
-                      Se você é um novo aluno, entre direto pela sua Conta do Google. Seu Personal Trainer e o caixa cuidarão de toda a sua ficha de treino e cadastro depois!
-                    </p>
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="relative flex py-2 items-center">
-                  <div className="flex-grow border-t border-neutral-800"></div>
-                  <span className="flex-shrink mx-3 text-neutral-500 text-[10px] uppercase font-mono tracking-widest">ou login com senha</span>
-                  <div className="flex-grow border-t border-neutral-800"></div>
-                </div>
-
-                {/* Collapsible Credentials Form Toggle */}
-                <div className="flex justify-center mb-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCredentialsForm(!showCredentialsForm);
-                      setErrorMsg('');
-                    }}
-                    className="text-[10px] text-neutral-400 hover:text-white font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-transparent border-none outline-none"
-                  >
-                    {showCredentialsForm ? '▲ Ocultar Formulário Tradicional' : '▼ Mostrar Login por E-mail e Senha / Demo'}
-                  </button>
-                </div>
+            {/* Collapsible Credentials Form Toggle */}
+            <div className="flex justify-center mb-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCredentialsForm(!showCredentialsForm);
+                  setErrorMsg('');
+                }}
+                className="text-[10px] text-neutral-400 hover:text-white font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-transparent border-none outline-none"
+              >
+                {showCredentialsForm ? '▲ Ocultar Formulário Tradicional' : '▼ Mostrar Login por E-mail e Senha / Demo'}
+              </button>
+            </div>
 
                 {showCredentialsForm && (
                   <form onSubmit={handleStudentLogin} className="space-y-4 pt-1 animate-fade-in">
@@ -1902,264 +1839,6 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                     </button>
                   </form>
                 )}
-              </div>
-            ) : (
-              <form onSubmit={handleStudentSelfRegistration} className="space-y-3.5">
-                {/* Custom Interactive Avatar Upload */}
-                <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-neutral-950 border border-neutral-800/80 mb-2">
-                  <span className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-2 text-center w-full">
-                    Sua Foto de Perfil
-                  </span>
-                  
-                  <div className="relative group">
-                    <div 
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      className={`relative w-20 h-20 rounded-full border-2 border-dashed flex items-center justify-center overflow-hidden transition-all duration-300 ${
-                        isDragging 
-                          ? 'border-[#39FF14] bg-[#39FF14]/10 scale-105' 
-                          : regAvatar 
-                            ? 'border-neutral-700 hover:border-[#39FF14]' 
-                            : 'border-neutral-800 hover:border-[#39FF14]/50 bg-neutral-900/60'
-                      }`}
-                    >
-                      {/* Visual Layer - pointer-events-none prevents blocking inputs below it on touch screens */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10 w-full h-full">
-                        {regAvatar ? (
-                          <>
-                            <img 
-                              src={regAvatar} 
-                              alt="Avatar Preview" 
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all duration-200">
-                              <Camera className="w-5 h-5 text-white" />
-                              <span className="text-[8px] text-white font-sans mt-1">Alterar</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center p-2 text-center">
-                            <Upload className="w-5 h-5 text-neutral-500 group-hover:text-[#39FF14] transition" />
-                            <span className="text-[8px] text-neutral-400 font-sans mt-1 group-hover:text-white transition">Enviar Foto</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actual native file input overlay. Fully interactive on all mobile devices and webviews */}
-                      <input 
-                        id="student-avatar-input" 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleRegAvatarChange}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
-                        disabled={loading}
-                      />
-                    </div>
-
-                    {regAvatar && (
-                      <button
-                        type="button"
-                        onClick={() => setRegAvatar('')}
-                        className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-500 text-white rounded-full p-1 text-[8px] transition shadow-md z-30 font-bold border border-neutral-800"
-                        title="Remover foto"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  
-                  <p className="text-[9px] text-neutral-500 font-sans mt-2 text-center">
-                    Arraste sua imagem ou clique para selecionar. (Opcional)
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
-                    Nome Completo
-                  </label>
-                  <input
-                    type="text"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                    placeholder="Seu nome"
-                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 block">
-                      E-mail para Login
-                    </label>
-                    <input
-                      type="email"
-                      value={regStudentEmail}
-                      onChange={(e) => setRegStudentEmail(e.target.value)}
-                      placeholder="Ex: joao@gmail.com"
-                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1 block">
-                      Senha de Acesso
-                    </label>
-                    <input
-                      type="password"
-                      value={regStudentPassword}
-                      onChange={(e) => setRegStudentPassword(e.target.value)}
-                      placeholder="Crie uma senha"
-                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-
-                 {/* Trainer Link and Association Selection */}
-                 <div>
-                   <div className="flex items-center justify-between mb-1">
-                     <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest">
-                       Personal Trainer Associado
-                     </label>
-                     {referredTrainer && (
-                       <span className="text-[8px] bg-[#39FF14]/15 border border-[#39FF14]/40 text-[#39FF14] px-1.5 py-0.5 rounded font-extrabold font-sans uppercase tracking-wider animate-pulse">
-                         ✓ Vínculo Ativo via Link/Convite
-                       </span>
-                     )}
-                   </div>
-                   {referredTrainer ? (
-                     <div className="rounded-xl p-3 bg-neutral-900 border border-[#39FF14]/30 text-xs text-white font-bold font-sans flex items-center justify-between shadow-inner">
-                       <span className="text-white select-none">{referredTrainer.name}</span>
-                       <span className="text-[9px] text-[#39FF14] bg-[#39FF14]/10 px-2 py-0.5 rounded uppercase font-black font-mono tracking-wider">
-                         {referredTrainer.selectedPlan} Plan
-                       </span>
-                     </div>
-                   ) : (
-                     <div className="bg-neutral-950 rounded-xl p-1 border border-neutral-800">
-                       <input
-                         type="text"
-                         value={regStudentTrainerNameInput}
-                         onChange={(e) => setRegStudentTrainerNameInput(e.target.value)}
-                         placeholder="Digite o nome do seu Personal Trainer"
-                         className="w-full bg-transparent text-xs text-white py-2 px-3 border-none outline-none font-bold font-sans focus:outline-none placeholder-neutral-600"
-                         required
-                         disabled={loading}
-                       />
-                     </div>
-                   )}
-                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
-                      Idade (Anos)
-                    </label>
-                    <input
-                      type="number"
-                      value={regAge}
-                      onChange={(e) => setRegAge(Number(e.target.value))}
-                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
-                      Objetivo Principal
-                    </label>
-                    <select
-                      value={regObjective}
-                      onChange={(e) => setRegObjective(e.target.value as any)}
-                      className="w-full bg-neutral-950 text-xs text-white px-2 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition cursor-pointer"
-                      required
-                      disabled={loading}
-                    >
-                      <option value="Hipertrofia" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Hipertrofia</option>
-                      <option value="Emagrecimento" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Emagrecimento</option>
-                      <option value="Condicionamento" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Resistência</option>
-                      <option value="Definição" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Definição</option>
-                      <option value="Reabilitação" className="text-neutral-900 bg-white dark:bg-neutral-950 dark:text-neutral-200 font-sans">Reabilitação</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
-                      Peso Atual (kg)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={regWeight}
-                      onChange={(e) => setRegWeight(Number(e.target.value))}
-                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
-                      Altura (m)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={regHeight}
-                      onChange={(e) => setRegHeight(Number(e.target.value))}
-                      className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
-                    Restrições de saúde ou patologia (se houver)
-                  </label>
-                  <input
-                    type="text"
-                    value={regRestrictions}
-                    onChange={(e) => setRegRestrictions(e.target.value)}
-                    placeholder="Ex: Nenhuma, dor joelho..."
-                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
-                    disabled={loading}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1">
-                    Número de WhatsApp (Celular com DDD)
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="Ex: +5511999999999"
-                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans font-mono"
-                    disabled={loading}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className={`w-full mt-4 bg-[#39FF14] text-black font-extrabold text-xs py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-[#39FF14]/10 hover:shadow-[#39FF14]/25 cursor-pointer active:scale-95 ${
-                    loading ? 'opacity-80 cursor-not-allowed animate-pulse' : ''
-                  }`}
-                >
-                  <span>{loading ? 'Cadastrando Perfil...' : 'Criar Conta e Entrar'}</span>
-                  <ArrowRight size={14} className="shrink-0" />
-                </button>
-              </form>
-            )}
           </div>
         )}
 
