@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
   MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock,
-  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard, Settings
+  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard, Settings, Mail
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -1780,7 +1780,7 @@ export default function TrainerDashboard({
                           </button>
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => {
@@ -1793,7 +1793,21 @@ export default function TrainerDashboard({
                             className="bg-[#25D366] hover:bg-[#128C7E] text-white font-extrabold text-xs py-2 w-full rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer font-sans shadow-lg shadow-green-500/10 hover:scale-[1.01]"
                           >
                             <Phone size={13} />
-                            <span>Enviar Convite WhatsApp Rápido</span>
+                            <span>Enviar WhatsApp</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
+                              const emailSubject = encodeURIComponent(`Acesso Liberado - Portal do Aluno GymPulse`);
+                              const emailBody = encodeURIComponent(`Olá, ${selectedStudent.name}!\n\nSeu acesso ao seu aplicativo de treinos GymPulse foi liberado pelo seu Personal Trainer.\n\nPara acessar seu portal de treinos diretamente sem precisar digitar nada (seus dados serão preenchidos automaticamente), toque no link abaixo:\n👉 ${inviteUrl}\n\nCaso prefira entrar manualmente, seus dados de acesso são:\nE-mail: ${selectedStudent.email}\nSenha: ${selectedStudent.password || '123456'}\n\nFoco nos treinos!\n\nAtenciosamente,\n${activeTrainer?.name || 'Daniel Personal Coach'}`);
+                              window.open(`mailto:${selectedStudent.email}?subject=${emailSubject}&body=${emailBody}`, '_blank');
+                            }}
+                            className="bg-[#2B85E4] hover:bg-[#1A6BB8] text-white font-extrabold text-xs py-2 w-full rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer font-sans shadow-lg shadow-blue-500/10 hover:scale-[1.01]"
+                          >
+                            <Mail size={13} />
+                            <span>Enviar por E-mail</span>
                           </button>
                         </div>
                       </div>

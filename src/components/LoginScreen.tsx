@@ -21,7 +21,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [activeTab, setActiveTab] = useState<'trainer' | 'student'>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('trainerId')) {
+      if (params.get('trainerId') || params.get('role') === 'student' || params.get('studentId')) {
         return 'student';
       }
     }
@@ -106,6 +106,27 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       }
     }
   }, [trainers]);
+
+  // Pre-fill student login details from URL invitation link when students database is loaded
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlRole = params.get('role');
+      const urlStudentId = params.get('studentId');
+      
+      if (urlRole === 'student' || urlStudentId) {
+        setActiveTab('student');
+        if (urlStudentId && students && students.length > 0) {
+          const matched = students.find(s => s.id === urlStudentId);
+          if (matched) {
+            setStudentLoginEmail(matched.email || '');
+            setStudentLoginPassword(matched.password || '123456');
+            setSuccessMsg(`Pré-cadastro de ${matched.name} reconhecido com sucesso! Seus dados de acesso foram preenchidos.`);
+          }
+        }
+      }
+    }
+  }, [students]);
 
   useEffect(() => {
     if (!regStudentTrainerId && trainers && trainers.length > 0) {
