@@ -147,7 +147,7 @@ const getInitialStates = () => {
       initial.role = 'student';
     } else if (urlRole === 'student' && urlStudentId) {
       initial.role = 'student';
-      initial.isLoggedIn = false;
+      initial.isLoggedIn = true;
       initial.activeStudentId = urlStudentId;
     } else if (urlRole === 'student' || urlRole === 'trainer') {
       initial.role = urlRole as any;
@@ -312,10 +312,10 @@ export default function App() {
         } else if (urlRole === 'student') {
           if (urlStudentId) {
             setRole('student');
-            setIsLoggedIn(false);
+            setIsLoggedIn(true);
             finalRole = 'student';
-            finalIsLoggedIn = false;
-            addSyncLog(`Convite de aluno reconhecido. Prossiga com o login via Gmail.`);
+            finalIsLoggedIn = true;
+            addSyncLog(`Convite de aluno reconhecido. Redirecionando direto para o seu Portal Aluno.`);
           } else {
             setRole('student');
             setIsLoggedIn(true);
@@ -1090,6 +1090,18 @@ export default function App() {
     setIsLoggedIn(false);
     setActiveTrainer(null);
     addSyncLog(`Logout concluído para: ${uName}.`);
+
+    if (typeof window !== 'undefined' && window.history && window.history.pushState) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('role');
+        url.searchParams.delete('studentId');
+        url.searchParams.delete('trainerId');
+        window.history.pushState({}, '', url.pathname + url.search);
+      } catch (e) {
+        console.warn('Could not clear URL parameters on logout', e);
+      }
+    }
     
     saveState(
       students,
