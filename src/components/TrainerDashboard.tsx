@@ -34,6 +34,7 @@ interface TrainerDashboardProps {
   onTriggerAutoResponse: (studentId: string) => void;
   onLogout?: () => void;
   onUpdateMarketingPlan?: (plan: MarketingPlan) => void;
+  onPurgeTestAccounts?: () => Promise<void>;
 }
 
 export default function TrainerDashboard({
@@ -58,7 +59,8 @@ export default function TrainerDashboard({
   onSendNotification,
   onTriggerAutoResponse,
   onLogout,
-  onUpdateMarketingPlan
+  onUpdateMarketingPlan,
+  onPurgeTestAccounts
 }: TrainerDashboardProps) {
   const [activeTab, setActiveTab] = useState<'alunos' | 'cadastrar_aluno' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs' | 'configuracoes'>('alunos');
   const [copiedLink, setCopiedLink] = useState(false);
@@ -1088,7 +1090,7 @@ export default function TrainerDashboard({
               </div>
 
               {/* Twin Widget SaaS & Recruitment Link */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* 1. SEU LINK DE RECRUTAMENTO DE ALUNOS */}
                 <div className="bg-[#121214] border border-neutral-800 p-4 rounded-xl flex flex-col justify-between relative overflow-hidden group">
                   <div className="absolute top-0 right-0 h-20 w-20 bg-emerald-500/5 blur-xl rounded-full" />
@@ -1196,6 +1198,44 @@ export default function TrainerDashboard({
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* 3. LIMPEZA DE DEMONSTRAÇÃO (REMOVER ALUNOS DE TESTES) */}
+                <div className="bg-[#121214] border border-neutral-800 p-4 rounded-xl flex flex-col justify-between relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 h-20 w-20 bg-amber-500/5 blur-xl rounded-full" />
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                        <Trash2 size={16} />
+                      </span>
+                      <h3 className="text-xs font-black tracking-wider uppercase text-neutral-200 font-mono">Contas de Demonstração</h3>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed mb-3">
+                      Limpe os alunos de testes virtuais (Ana Silva, Carlos Souza, Igor Santos, etc.) do banco de dados para liberar espaço e organizar seus alunos reais vindos de convites.
+                    </p>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!onPurgeTestAccounts) return;
+                      const msg = activeTrainer?.id === 't_default'
+                        ? "Atenção: Você está conectado com o treinador demonstrativo (Daniel Personal Coach). Ao remover as contas de demonstração, você também será desconectado para poder criar o seu próprio perfil real de treinador. Deseja prosseguir?"
+                        : "Deseja realmente excluir permanentemente do banco de dados do Firestore os 5 alunos experimentais de demonstração para deixar o seu painel 100% limpo? Esta ação não pode ser desfeita.";
+                      
+                      if (window.confirm(msg)) {
+                        try {
+                          await onPurgeTestAccounts();
+                        } catch (err: any) {
+                          alert("Erro ao realizar limpeza: " + (err.message || String(err)));
+                        }
+                      }
+                    }}
+                    className="w-full bg-amber-500/10 hover:bg-amber-500/25 text-amber-400 hover:text-white border border-amber-500/25 hover:border-amber-500 font-extrabold text-[11px] py-2 rounded-lg transition duration-200 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 size={13} className="shrink-0" />
+                    <span>Remover Alunos de Demonstração</span>
+                  </button>
                 </div>
               </div>
 

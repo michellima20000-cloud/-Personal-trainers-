@@ -1478,6 +1478,7 @@ export default function App() {
                 onTriggerAutoResponse={handleTriggerAutoResponse}
                 onLogout={handleLogout}
                 onUpdateMarketingPlan={handleUpdateMarketingPlan}
+                onPurgeTestAccounts={handlePurgeTestAccounts}
               />
             ) : (
               <StudentDashboard
