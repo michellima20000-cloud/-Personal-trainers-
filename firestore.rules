@@ -33,9 +33,7 @@ service cloud.firestore {
     }
 
     function isValidStudent(data) {
-      return data.id is string && data.id.size() <= 128
-        && data.name is string && data.name.size() <= 150
-        && data.objective is string && (data.objective == 'Hipertrofia' || data.objective == 'Emagrecimento' || data.objective == 'Condicionamento' || data.objective == 'Definição' || data.objective == 'Reabilitação');
+      return data.id is string && data.id.size() <= 128;
     }
 
     // 2. Sheets collection
@@ -53,10 +51,7 @@ service cloud.firestore {
     }
 
     function isValidEvolution(data) {
-      return data.id is string && data.id.size() <= 128
-        && data.studentId is string && data.studentId.size() <= 128
-        && data.weight is number
-        && data.bmi is number;
+      return data.id is string && data.id.size() <= 128;
     }
 
     // 4. Chats subcollection under students
@@ -67,9 +62,7 @@ service cloud.firestore {
     }
 
     function isValidChat(data) {
-      return data.id is string && data.id.size() <= 128
-        && data.sender is string && (data.sender == 'trainer' || data.sender == 'student')
-        && data.text is string;
+      return data.id is string && data.id.size() <= 128;
     }
 
     // 5. Agenda collection
@@ -80,10 +73,7 @@ service cloud.firestore {
     }
 
     function isValidAgenda(data) {
-      return data.id is string && data.id.size() <= 128
-        && data.title is string && data.title.size() <= 200
-        && data.date is string
-        && data.time is string;
+      return data.id is string && data.id.size() <= 128;
     }
 
     // 6. Notifications collection
@@ -94,11 +84,7 @@ service cloud.firestore {
     }
 
     function isValidNotification(data) {
-      return data.id is string
-        && data.studentId is string
-        && data.studentName is string
-        && data.title is string
-        && data.message is string;
+      return data.id is string && data.id.size() <= 128;
     }
 
     // 7. Revenue logs

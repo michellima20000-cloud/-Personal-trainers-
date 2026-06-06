@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Student, Trainer, PlanType } from '../types';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
+import { fetchStudents } from '../utils/firebase';
 
 interface LoginScreenProps {
   students: Student[];
@@ -411,7 +412,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     return '123456';
   };
 
-  const handleStudentLogin = (e: React.FormEvent) => {
+  const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -425,24 +426,51 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       return;
     }
 
+    setLoading(true);
     const emailClean = studentLoginEmail.trim().toLowerCase();
-    const matchedStudent = students.find(s => {
-      const sEmail = getStudentEmail(s).toLowerCase();
-      const sPass = getStudentPassword(s);
-      return sEmail === emailClean && sPass === studentLoginPassword;
-    });
+    const passClean = String(studentLoginPassword).trim();
 
-    if (matchedStudent) {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
+    try {
+      // Direct, robust query against the remote Firestore collection to prevent replication lag / stale props
+      const latestStudents = await fetchStudents();
+      const allStudentsToSearch = latestStudents && latestStudents.length > 0 ? latestStudents : students;
+      
+      const matchedStudent = allStudentsToSearch.find(s => {
+        const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
+        const sPass = String(s.password || getStudentPassword(s)).trim();
+        return sEmail === emailClean && sPass === passClean;
+      });
+
+      if (matchedStudent) {
         setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
         setTimeout(() => {
+          setLoading(false);
           onLoginSuccess('student', matchedStudent.id);
         }, 1200);
-      }, 1000);
-    } else {
-      setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha criados na sua conta.');
+      } else {
+        setLoading(false);
+        setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha corretos criados na sua conta.');
+      }
+    } catch (err) {
+      console.warn('[Direct Login Auth] Direct fetch failed or timed out, carrying out local state authentication fallback...', err);
+      
+      // Fallback local memory search if Firestore is unreachable or guest connection issues
+      const matchedStudent = students.find(s => {
+        const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
+        const sPass = String(s.password || getStudentPassword(s)).trim();
+        return sEmail === emailClean && sPass === passClean;
+      });
+
+      if (matchedStudent) {
+        setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
+        setTimeout(() => {
+          setLoading(false);
+          onLoginSuccess('student', matchedStudent.id);
+        }, 1200);
+      } else {
+        setLoading(false);
+        setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha corretos criados na sua conta.');
+      }
     }
   };
 
