@@ -17,6 +17,7 @@ import SimulatedStripeCheckout from './SimulatedStripeCheckout';
 interface StudentDashboardProps {
   students: Student[];
   trainers: Trainer[];
+  activeTrainer?: Trainer | null;
   sheets: Record<string, TrainingSheet>;
   evolution: Record<string, EvolutionRecord[]>;
   chats: Record<string, ChatMessage[]>;
@@ -107,6 +108,7 @@ const EXERCISE_DETAILS: Record<string, {
 export default function StudentDashboard({
   students,
   trainers,
+  activeTrainer,
   sheets,
   evolution,
   chats,
@@ -1077,7 +1079,7 @@ export default function StudentDashboard({
   };
 
   const currentStudentEvolution = evolution[currentStudent?.id] || [];
-  const studentTrainer = (trainers || []).find(t => t.id === currentStudent?.trainerId) || trainers[0];
+  const studentTrainer = (trainers || []).find(t => t.id === currentStudent?.trainerId) || activeTrainer || trainers[0];
 
   const renderBillingPortal = () => {
     return (
@@ -1103,7 +1105,7 @@ export default function StudentDashboard({
             <div className="bg-[#121214] border border-neutral-800 p-5 rounded-2xl text-center space-y-2">
               <h3 className="text-md font-extrabold text-white">Selecione o seu Plano de Assessoria</h3>
               <p className="text-xs text-neutral-400 max-w-lg mx-auto leading-relaxed">
-                Você se cadastrou via link profissional do Coach <strong className="text-[#39FF14]">{studentTrainer?.name || 'Daniel Coach'}</strong>. Escolha a recorrência ideal para os seus objetivos e treinos personalizados.
+                Você se cadastrou via link profissional do Coach <strong className="text-[#39FF14]">{studentTrainer?.name || 'Seu Personal Trainer'}</strong>. Escolha a recorrência ideal para os seus objetivos e treinos personalizados.
               </p>
             </div>
 
@@ -1217,7 +1219,7 @@ export default function StudentDashboard({
                   <div>
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Chave PIX de {studentTrainer?.name || 'Daniel Coach'}
+                      Chave PIX de {studentTrainer?.name || 'Seu Personal Trainer'}
                     </h4>
                     <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
                       Copie a chave Pix abaixo e efetue a transferência do valor correspondente. Seus treinos serão liberados pelo coach imediatamente após.
@@ -1424,7 +1426,7 @@ export default function StudentDashboard({
               <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/25 px-2.5 py-1 rounded-md font-mono uppercase tracking-widest font-extrabold">Aguardando Liberação</span>
               <h3 className="text-md font-black text-white">Solicitação de Acesso Registrada!</h3>
               <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
-                Você escolheu o plano <strong className="text-[#39FF14]">{currentStudent?.plan || selectedPlanToBuy}</strong>. Agora, o seu Personal Trainer <strong className="text-[#39FF14]">{studentTrainer?.name || 'Daniel Coach'}</strong> precisa liberar o seu acesso comercial para sincronizar suas fichas de treino.
+                Você escolheu o plano <strong className="text-[#39FF14]">{currentStudent?.plan || selectedPlanToBuy}</strong>. Agora, o seu Personal Trainer <strong className="text-[#39FF14]">{studentTrainer?.name || 'Seu Personal Trainer'}</strong> precisa liberar o seu acesso comercial para sincronizar suas fichas de treino.
               </p>
             </div>
 
@@ -2077,7 +2079,7 @@ export default function StudentDashboard({
                 <div className="w-2.5 h-2.5 bg-[#39FF14] rounded-full animate-ping shrink-0"></div>
                 <div>
                   <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono my-0">Contato do Personal Trainer</h3>
-                  <p className="text-[10px] text-neutral-400 font-sans m-0 mt-0.5">Ativo: <strong className="text-[#39FF14]">{studentTrainer?.name || 'Daniel Personal'}</strong></p>
+                  <p className="text-[10px] text-neutral-400 font-sans m-0 mt-0.5">Ativo: <strong className="text-[#39FF14]">{studentTrainer?.name || 'Seu Personal Trainer'}</strong></p>
                 </div>
               </div>
               
@@ -2156,19 +2158,19 @@ export default function StudentDashboard({
         {activeTab === 'plano' && (() => {
           // Identify the current student's trainer safely
           const trainerList = trainers || [];
-          const trainer = (trainerList.find(t => t.id === currentStudent.trainerId) || trainerList[0] || {
+          const trainer = (trainerList.find(t => t.id === currentStudent.trainerId) || activeTrainer || trainerList[0] || {
             id: 'default-trainer',
-            name: 'Daniel Personal Coach',
-            email: 'trainer@gympulse.com',
+            name: 'Seu Personal Trainer',
+            email: 'contato@gympulse.com.br',
             selectedPlan: 'Mensal',
             trialStartDate: '',
             trialExpiresAt: '',
             subscriptionStatus: 'trial' as const,
-            customIdLink: 'daniel-personal',
+            customIdLink: 'personal',
             pixKeyType: 'Chave Aleatória' as const,
-            pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-            phoneWhatsApp: '+5511999999999',
-            stripeEnabled: true
+            pixKey: 'Chave não cadastrada',
+            phoneWhatsApp: '',
+            stripeEnabled: false
           }) as Trainer;
 
           const trainerPixType = trainer.pixKeyType || 'Chave Aleatória';
@@ -2953,7 +2955,7 @@ export default function StudentDashboard({
               </div>
               <h3 className="text-lg font-black text-white uppercase tracking-tight font-mono">Central WhatsApp & Alinhamento</h3>
               <p className="text-[11px] text-neutral-400">
-                Selecione como quer interagir com seu Personal Trainer <strong className="text-[#39FF14]">{studentTrainer?.name || 'Daniel Personal'}</strong>:
+                Selecione como quer interagir com seu Personal Trainer <strong className="text-[#39FF14]">{studentTrainer?.name || 'Seu Personal Trainer'}</strong>:
               </p>
             </div>
 

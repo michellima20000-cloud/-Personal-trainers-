@@ -243,14 +243,14 @@ export default function App() {
         const dbData = await Promise.race([parallelFetchPromise, timeoutPromise]);
         clearTimeout(timeoutId);
 
-        let remoteStudents = dbData.students;
+        let remoteStudents = (dbData.students || []).filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id) && s.trainerId !== 't_default');
         let remoteSheets = dbData.sheets;
         let remoteAgenda = dbData.agenda;
         let remoteNotifications = dbData.notifications;
         let remoteRevenueLogs = dbData.revenueLogs;
         let remoteAccessLogs = dbData.accessLogs;
         let remoteMarketingPlans = dbData.marketingPlans;
-        let remoteTrainers = dbData.trainers;
+        let remoteTrainers = (dbData.trainers || []).filter(t => t.id !== 't_default');
 
         // Ensure Semestral is removed and Anual is added to plans list
         remoteMarketingPlans = (remoteMarketingPlans || []).filter(p => p.id !== 'Semestral');
@@ -270,18 +270,44 @@ export default function App() {
         // Guarantee 'Semestral' doc is deleted from Firebase to keep database pristine
         deleteMarketingPlan('Semestral').catch(() => {});
 
+        // Parse URL parameters for invitation links
+        const params = new URLSearchParams(window.location.search);
+        const urlRole = params.get('role');
+        const urlStudentId = params.get('studentId');
+        const urlTrainerId = params.get('trainerId');
+
         // Synchronously determine the actual active trainer log state
         let finalActiveTrainer: Trainer | null = null;
-        if (preloadedState.role === 'student' && preloadedState.activeStudentId) {
+
+        // 1. If trainerId is in the URL (direct personal trainer link), match it FIRST as the absolute priority!
+        if (urlTrainerId) {
+          finalActiveTrainer = remoteTrainers.find(
+            t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || t.id === urlTrainerId
+          ) || null;
+        }
+
+        // 2. If studentId is in the URL (active student invite link), retrieve their actual personal trainer
+        if (!finalActiveTrainer && urlStudentId) {
+          const matchedStudent = remoteStudents.find(s => s.id === urlStudentId);
+          if (matchedStudent?.trainerId) {
+            finalActiveTrainer = remoteTrainers.find(t => t.id === matchedStudent.trainerId) || null;
+          }
+        }
+
+        // 3. Fallback to activeStudentId if stored in cache
+        if (!finalActiveTrainer && preloadedState.role === 'student' && preloadedState.activeStudentId) {
           const matchedStudent = remoteStudents.find(s => s.id === preloadedState.activeStudentId);
           if (matchedStudent?.trainerId) {
             finalActiveTrainer = remoteTrainers.find(t => t.id === matchedStudent.trainerId) || null;
           }
         }
+
+        // 4. Fallback to cached activeTrainer
         if (!finalActiveTrainer && preloadedState.activeTrainer) {
           finalActiveTrainer = remoteTrainers.find(t => t.id === preloadedState.activeTrainer.id) || null;
         }
-        // Fallback to first available trainer in database if none selected
+
+        // 5. Default fallback to first active trainer in DB (but only if it's not empty)
         if (!finalActiveTrainer && remoteTrainers.length > 0) {
           finalActiveTrainer = remoteTrainers[0];
         }
@@ -297,13 +323,7 @@ export default function App() {
         setTrainers(remoteTrainers);
         setActiveTrainer(finalActiveTrainer);
 
-        // Parse URL parameters for invitation links
-        const params = new URLSearchParams(window.location.search);
-        const urlRole = params.get('role');
-        const urlStudentId = params.get('studentId');
-        const urlTrainerId = params.get('trainerId');
-
-        const firstId = urlStudentId || remoteStudents?.[0]?.id || 's1';
+        const firstId = urlStudentId || remoteStudents?.[0]?.id || '';
         setActiveStudentId(prev => urlStudentId || prev || firstId);
 
         let finalIsLoggedIn = preloadedState.isLoggedIn;
@@ -441,12 +461,12 @@ export default function App() {
       stripeSecretKey: ''
     };
 
-    const recoveredStudents = parsed?.students || INITIAL_STUDENTS;
-    const recoveredTrainers = parsed?.trainers || [defaultTrainer];
-    const recoveredStudentId = parsed?.activeStudentId || (parsed?.students && parsed?.students[0]?.id) || INITIAL_STUDENTS[0]?.id || 's1';
+    const recoveredStudents = (parsed?.students || INITIAL_STUDENTS).filter((s: any) => !['s1', 's2', 's3', 's4', 's5'].includes(s.id) && s.trainerId !== 't_default');
+    const recoveredTrainers = (parsed?.trainers || []).filter((t: any) => t.id !== 't_default');
+    const recoveredStudentId = parsed?.activeStudentId || (recoveredStudents[0]?.id) || '';
     const recoveredRole = parsed?.role || 'trainer';
     
-    let recoveredTrainer = parsed?.activeTrainer || defaultTrainer;
+    let recoveredTrainer = parsed?.activeTrainer || (recoveredTrainers[0] || null);
     if (recoveredRole === 'student' && recoveredStudentId) {
       const matchStu = recoveredStudents.find((s: any) => s.id === recoveredStudentId);
       if (matchStu && matchStu.trainerId) {
@@ -1031,12 +1051,35 @@ export default function App() {
       trainerToSet = loggedInTrainer || trainers[0] || null;
       setActiveTrainer(trainerToSet);
     } else if (enteredRole === 'student') {
-      const activeStudent = students.find(s => s.id === (studentId || activeStudentId));
+      const targetStudentId = studentId || activeStudentId;
+      const activeStudent = students.find(s => s.id === targetStudentId);
+      
+      let foundTrainerId: string | undefined = undefined;
       if (activeStudent && activeStudent.trainerId) {
-        trainerToSet = trainers.find(t => t.id === activeStudent.trainerId) || null;
+        foundTrainerId = activeStudent.trainerId;
+      } else {
+        // Look up trainerId directly from URL referral params or prior active state
+        const params = new URLSearchParams(window.location.search);
+        const urlTrainerId = params.get('trainerId');
+        if (urlTrainerId) {
+          const matched = trainers.find(
+            t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || t.id === urlTrainerId
+          );
+          if (matched) {
+            foundTrainerId = matched.id;
+          }
+        }
+        if (!foundTrainerId && activeTrainer) {
+          foundTrainerId = activeTrainer.id;
+        }
       }
+
+      if (foundTrainerId) {
+        trainerToSet = trainers.find(t => t.id === foundTrainerId) || null;
+      }
+
       if (!trainerToSet && trainers.length > 0) {
-        trainerToSet = trainers[0];
+        trainerToSet = activeTrainer || trainers[0];
       }
       setActiveTrainer(trainerToSet);
     }
@@ -1519,6 +1562,7 @@ export default function App() {
               <StudentDashboard
                 students={students}
                 trainers={trainers}
+                activeTrainer={activeTrainer}
                 sheets={sheets}
                 evolution={evolution}
                 chats={chats}
