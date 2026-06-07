@@ -413,12 +413,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
   // Dynamically attach email and password to mock accounts if they are not stored
   const getStudentEmail = (s: Student) => {
-    if (s.email) return s.email;
-    return `${s.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')}@gympulse.com.br`;
+    if (!s) return '';
+    if (s.email) return String(s.email).trim().toLowerCase();
+    const nameStr = s.name ? String(s.name) : 'aluno';
+    return `${nameStr.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')}@gympulse.com.br`;
   };
 
   const getStudentPassword = (s: Student) => {
-    if (s.password) return s.password;
+    if (!s) return '123456';
+    if (s.password) return String(s.password).trim();
     return '123456';
   };
 
@@ -1943,12 +1946,41 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                   </p>
                 </div>
 
+                {/* FEEDBACK & LOADING LOGS INSIDE THE MODAL */}
+                {loading && (
+                  <div className="bg-neutral-950 border border-neutral-800 p-4 rounded-2xl flex flex-col items-center justify-center space-y-2 animate-pulse">
+                    <div className="flex items-center gap-2 text-[#39FF14]">
+                      <span className="animate-spin text-lg">⏳</span>
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider">
+                        Sincronizando banco...
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {errorMsg && (
+                  <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3.5 rounded-xl flex items-start gap-2.5 font-bold animate-fade-in">
+                    <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-500" />
+                    <span>{errorMsg}</span>
+                  </div>
+                )}
+
+                {successMsg && (
+                  <div className="bg-[#39FF14]/10 border border-[#39FF14]/30 text-[#39FF14] text-xs p-3.5 rounded-xl flex items-start gap-2.5 font-bold animate-fade-in">
+                    <Check size={16} className="shrink-0 mt-0.5 text-[#39FF14]" />
+                    <span>{successMsg}</span>
+                  </div>
+                )}
+
                 <div className="space-y-3 pt-2">
                   {/* Option 1: Aluno (Student Portal) */}
                   <button
                     type="button"
-                    onClick={() => executeGoogleLoginAsStudent(googlePendingRoleEmail)}
-                    className="w-full text-left bg-neutral-950 hover:bg-neutral-850 hover:border-[#39FF14]/40 border border-neutral-800 p-4 rounded-2xl flex items-center gap-3.5 transition-all cursor-pointer group active:scale-[0.99] shadow-md animate-fade-in"
+                    disabled={loading}
+                    onClick={() => googlePendingRoleEmail && executeGoogleLoginAsStudent(googlePendingRoleEmail)}
+                    className={`w-full text-left bg-neutral-950 hover:bg-neutral-850 hover:border-[#39FF14]/40 border border-neutral-800 p-4 rounded-2xl flex items-center gap-3.5 transition-all cursor-pointer group active:scale-[0.99] shadow-md animate-fade-in ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
                     <div className="w-10 h-10 rounded-xl bg-[#39FF14]/10 text-[#39FF14] flex items-center justify-center font-bold border border-[#39FF14]/20 group-hover:scale-105 transition-transform shrink-0">
                       <Users size={20} />
@@ -1967,8 +1999,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                   {/* Option 2: Personal Coach / Admin */}
                   <button
                     type="button"
-                    onClick={() => executeGoogleLoginAsTrainerOrAdmin(googlePendingRoleEmail)}
-                    className="w-full text-left bg-neutral-950 hover:bg-neutral-850 hover:border-blue-500/40 border border-neutral-800 p-4 rounded-2xl flex items-center gap-3.5 transition-all cursor-pointer group active:scale-[0.99] shadow-md animate-fade-in"
+                    disabled={loading}
+                    onClick={() => googlePendingRoleEmail && executeGoogleLoginAsTrainerOrAdmin(googlePendingRoleEmail)}
+                    className={`w-full text-left bg-neutral-950 hover:bg-neutral-850 hover:border-blue-500/40 border border-neutral-800 p-4 rounded-2xl flex items-center gap-3.5 transition-all cursor-pointer group active:scale-[0.99] shadow-md animate-fade-in ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
                     <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold border border-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
                       <Shield size={20} />
@@ -1988,8 +2023,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                 <div className="flex gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setGooglePendingRoleEmail(null)}
-                    className="w-full text-xs bg-neutral-950 text-neutral-400 font-bold py-3 rounded-xl border border-neutral-800 cursor-pointer hover:bg-neutral-850 transition text-center"
+                    disabled={loading}
+                    onClick={() => {
+                      setGooglePendingRoleEmail(null);
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                    }}
+                    className={`w-full text-xs bg-neutral-950 text-neutral-400 font-bold py-3 rounded-xl border border-neutral-800 cursor-pointer hover:bg-neutral-850 transition text-center ${
+                      loading ? 'opacity-40 cursor-not-allowed' : ''
+                    }`}
                   >
                     Voltar para Contas / Digitar E-mail
                   </button>
