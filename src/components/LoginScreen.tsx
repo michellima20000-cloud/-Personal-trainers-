@@ -488,35 +488,6 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setSuccessMsg('');
     const emailClean = email.trim().toLowerCase();
     
-    // Check if the email belongs to the Admin Supremo (Michel Lima)
-    if (emailClean === 'michel.lima20000@gmail.com') {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setSuccessMsg(`Acesso de Administrador Supremo verificado via Google! Seja bem-vindo, Michel Lima 👋`);
-        setShowGoogleModal(false);
-        setTimeout(() => {
-          onLoginSuccess('admin', undefined, undefined);
-        }, 1200);
-      }, 1000);
-      return;
-    }
-
-    // Check if the email belongs to any registered Coach/Trainer
-    const foundTrainer = trainers.find(t => t.email.toLowerCase() === emailClean);
-    if (foundTrainer) {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setSuccessMsg(`Verificado com sucesso via Google! Carregando Painel de ${foundTrainer.name}...`);
-        setShowGoogleModal(false);
-        setTimeout(() => {
-          onLoginSuccess('trainer', undefined, foundTrainer);
-        }, 1200);
-      }, 1000);
-      return;
-    }
-    
     // First: check if we have an active invitation link to bind this Google account
     if (invitedStudent) {
       setLoading(true);
@@ -546,7 +517,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       return;
     }
 
-    // 1. Look up matching student by email (Gmail)
+    // Second: check if a student is already registered with this exact Gmail/Google email!
+    // This allows you to test the Student Portal even if you use 'michel.lima20000@gmail.com'.
     const matched = students.find(s => getStudentEmail(s).toLowerCase() === emailClean);
     if (matched) {
       setLoading(true);
@@ -573,7 +545,40 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           setErrorMsg('Falha ao sincronizar dados da sua conta Google. Tente novamente.');
         }
       }, 1200);
-    } else {
+      return;
+    }
+
+    // Third: Fallback to check if the email belongs to the Admin Supremo (Michel Lima)
+    if (emailClean === 'michel.lima20000@gmail.com') {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setSuccessMsg(`Acesso de Administrador Supremo verificado via Google! Seja bem-vindo, Michel Lima 👋`);
+        setShowGoogleModal(false);
+        setTimeout(() => {
+          onLoginSuccess('admin', undefined, undefined);
+        }, 1200);
+      }, 1000);
+      return;
+    }
+
+    // Fourth: Fallback to check if the email belongs to any registered Coach/Trainer
+    const foundTrainer = trainers.find(t => t.email.toLowerCase() === emailClean);
+    if (foundTrainer) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setSuccessMsg(`Verificado com sucesso via Google! Carregando Painel de ${foundTrainer.name}...`);
+        setShowGoogleModal(false);
+        setTimeout(() => {
+          onLoginSuccess('trainer', undefined, foundTrainer);
+        }, 1200);
+      }, 1000);
+      return;
+    }
+    
+    // Fifth: If no student matches AND it is not admin/trainer, auto-register as a new student dynamically
+    if (true) {
       // 2. Auto-register student on-the-fly dynamically so student can complete quick registration
       setLoading(true);
       const guestNameParts = emailClean.split('@')[0].replace(/[^a-zA-Z]/g, ' ').split(' ').filter(Boolean);
