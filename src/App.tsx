@@ -272,7 +272,13 @@ export default function App() {
 
         // Synchronously determine the actual active trainer log state
         let finalActiveTrainer: Trainer | null = null;
-        if (preloadedState.activeTrainer) {
+        if (preloadedState.role === 'student' && preloadedState.activeStudentId) {
+          const matchedStudent = remoteStudents.find(s => s.id === preloadedState.activeStudentId);
+          if (matchedStudent?.trainerId) {
+            finalActiveTrainer = remoteTrainers.find(t => t.id === matchedStudent.trainerId) || null;
+          }
+        }
+        if (!finalActiveTrainer && preloadedState.activeTrainer) {
           finalActiveTrainer = remoteTrainers.find(t => t.id === preloadedState.activeTrainer.id) || null;
         }
         // Fallback to first available trainer in database if none selected
@@ -435,7 +441,20 @@ export default function App() {
       stripeSecretKey: ''
     };
 
-    setStudents(parsed?.students || INITIAL_STUDENTS);
+    const recoveredStudents = parsed?.students || INITIAL_STUDENTS;
+    const recoveredTrainers = parsed?.trainers || [defaultTrainer];
+    const recoveredStudentId = parsed?.activeStudentId || (parsed?.students && parsed?.students[0]?.id) || INITIAL_STUDENTS[0]?.id || 's1';
+    const recoveredRole = parsed?.role || 'trainer';
+    
+    let recoveredTrainer = parsed?.activeTrainer || defaultTrainer;
+    if (recoveredRole === 'student' && recoveredStudentId) {
+      const matchStu = recoveredStudents.find((s: any) => s.id === recoveredStudentId);
+      if (matchStu && matchStu.trainerId) {
+        recoveredTrainer = recoveredTrainers.find((t: any) => t.id === matchStu.trainerId) || recoveredTrainer;
+      }
+    }
+
+    setStudents(recoveredStudents);
     setSheets(parsed?.sheets || INITIAL_SHEETS);
     setEvolution(parsed?.evolution || INITIAL_EVOLUTION_RECORDS);
     setAgenda(parsed?.agenda || INITIAL_AGENDA);
@@ -444,9 +463,9 @@ export default function App() {
     setRevenueLogs(parsed?.revenueLogs || REVENUE_LOGS);
     setAccessLogs(parsed?.accessLogs || INITIAL_ACCESS_LOGS);
     setMarketingPlans((parsed?.marketingPlans || INITIAL_MARKETING_PLANS).filter((p: any) => p.id !== 'Semestral'));
-    setTrainers(parsed?.trainers || [defaultTrainer]);
-    setActiveTrainer(parsed?.activeTrainer || defaultTrainer);
-    setActiveStudentId(parsed?.activeStudentId || (parsed?.students && parsed?.students[0]?.id) || INITIAL_STUDENTS[0]?.id || 's1');
+    setTrainers(recoveredTrainers);
+    setActiveTrainer(recoveredTrainer);
+    setActiveStudentId(recoveredStudentId);
 
     if (parsed) {
       setIsLoggedIn(parsed.isLoggedIn !== undefined ? parsed.isLoggedIn : false);
@@ -693,6 +712,9 @@ export default function App() {
   };
   
   const handleAddStudent = async (std: Student) => {
+    if (!std.trainerId) {
+      std.trainerId = activeTrainer?.id || 't_default';
+    }
     const updated = [...students, std];
     setStudents(updated);
     
@@ -1007,6 +1029,15 @@ export default function App() {
     let trainerToSet: Trainer | null = null;
     if (enteredRole === 'trainer') {
       trainerToSet = loggedInTrainer || trainers[0] || null;
+      setActiveTrainer(trainerToSet);
+    } else if (enteredRole === 'student') {
+      const activeStudent = students.find(s => s.id === (studentId || activeStudentId));
+      if (activeStudent && activeStudent.trainerId) {
+        trainerToSet = trainers.find(t => t.id === activeStudent.trainerId) || null;
+      }
+      if (!trainerToSet && trainers.length > 0) {
+        trainerToSet = trainers[0];
+      }
       setActiveTrainer(trainerToSet);
     }
     

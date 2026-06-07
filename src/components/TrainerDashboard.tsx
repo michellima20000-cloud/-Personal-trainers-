@@ -423,6 +423,7 @@ export default function TrainerDashboard({
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
       value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
       phoneWhatsApp: newStudent.phoneWhatsApp ? newStudent.phoneWhatsApp.trim() : undefined,
+      trainerId: activeTrainer?.id || 't_default',
       email: '', // Password-less Google connection
       password: '',
       isProfileComplete: false
