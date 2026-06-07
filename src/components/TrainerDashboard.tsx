@@ -423,8 +423,8 @@ export default function TrainerDashboard({
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
       value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
       phoneWhatsApp: newStudent.phoneWhatsApp ? newStudent.phoneWhatsApp.trim() : undefined,
-      email: newStudent.email ? newStudent.email.trim().toLowerCase() : '',
-      password: newStudent.password ? newStudent.password : '123456',
+      email: '', // Password-less Google connection
+      password: '',
       isProfileComplete: false
     };
 
@@ -1570,23 +1570,14 @@ export default function TrainerDashboard({
                                 />
                               </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Senha de Acesso</label>
-                                <input 
-                                  type="text" 
-                                  value={tempStudentPassword}
-                                  onChange={(e) => setTempStudentPassword(e.target.value)}
-                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-mono"
-                                />
-                              </div>
+                            <div className="grid grid-cols-1 gap-3">
                               <div>
                                 <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">WhatsApp</label>
                                 <input 
                                   type="text" 
                                   value={tempStudentPhone}
                                   onChange={(e) => setTempStudentPhone(e.target.value)}
-                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none"
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-[#39FF14] outline-none font-sans"
                                 />
                               </div>
                             </div>
@@ -1801,8 +1792,8 @@ export default function TrainerDashboard({
                             onClick={() => {
                               const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
                               const emailSubject = encodeURIComponent(`Acesso Liberado - Portal do Aluno GymPulse`);
-                              const emailBody = encodeURIComponent(`Olá, ${selectedStudent.name}!\n\nSeu acesso ao seu aplicativo de treinos GymPulse foi liberado pelo seu Personal Trainer.\n\nPara acessar seu portal de treinos diretamente sem precisar digitar nada (seus dados serão preenchidos automaticamente), toque no link abaixo:\n👉 ${inviteUrl}\n\nCaso prefira entrar manualmente, seus dados de acesso são:\nE-mail: ${selectedStudent.email}\nSenha: ${selectedStudent.password || '123456'}\n\nFoco nos treinos!\n\nAtenciosamente,\n${activeTrainer?.name || 'Daniel Personal Coach'}`);
-                              window.open(`mailto:${selectedStudent.email}?subject=${emailSubject}&body=${emailBody}`, '_blank');
+                              const emailBody = encodeURIComponent(`Olá, ${selectedStudent.name}!\n\nSeu acesso ao seu aplicativo de treinos GymPulse foi liberado pelo seu Personal Trainer.\n\nPara acessar seu portal de treinos, toque no link de convite personalizado abaixo e faça login de forma segura usando sua Conta do Google (seu e-mail Gmail):\n👉 ${inviteUrl}\n\nApós o primeiro login, seu acompanhamento será sincronizado de forma 100% direta e automática!\n\nFoco nos treinos!\n\nAtenciosamente,\n${activeTrainer?.name || 'Daniel Personal Coach'}`);
+                              window.open(`mailto:${selectedStudent.email || ''}?subject=${emailSubject}&body=${emailBody}`, '_blank');
                             }}
                             className="bg-[#2B85E4] hover:bg-[#1A6BB8] text-white font-extrabold text-xs py-2 w-full rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer font-sans shadow-lg shadow-blue-500/10 hover:scale-[1.01]"
                           >
@@ -1971,7 +1962,7 @@ export default function TrainerDashboard({
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Nome Completo do Aluno</label>
                     <input 
@@ -1983,21 +1974,9 @@ export default function TrainerDashboard({
                       className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition"
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">E-mail de Acesso / Conta Gmail</label>
-                    <input 
-                      type="email" 
-                      required
-                      value={newStudent.email || ''}
-                      onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
-                      placeholder="Ex: ana.silva@gmail.com" 
-                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans"
-                    />
-                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">WhatsApp do Aluno</label>
                     <input 
@@ -2007,17 +1986,6 @@ export default function TrainerDashboard({
                       onChange={(e) => setNewStudent({...newStudent, phoneWhatsApp: e.target.value})}
                       placeholder="Ex: +5511999999999"
                       className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Definir Senha de Acesso</label>
-                    <input 
-                      type="text"
-                      value={newStudent.password || ''}
-                      onChange={(e) => setNewStudent({...newStudent, password: e.target.value})}
-                      placeholder="Padrão: 123456"
-                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-mono"
                     />
                   </div>
 

@@ -147,11 +147,11 @@ const getInitialStates = () => {
       initial.role = 'student';
     } else if (urlRole === 'student' && urlStudentId) {
       initial.role = 'student';
-      initial.isLoggedIn = true;
+      initial.isLoggedIn = false;
       initial.activeStudentId = urlStudentId;
     } else if (urlRole === 'student' || urlRole === 'trainer') {
       initial.role = urlRole as any;
-      initial.isLoggedIn = true;
+      initial.isLoggedIn = false;
       if (urlStudentId) {
         initial.activeStudentId = urlStudentId;
       }
@@ -310,24 +310,16 @@ export default function App() {
           finalIsLoggedIn = false;
           addSyncLog(`Link de onboarding de treinador detectado: Redirecionando para Cadastro.`);
         } else if (urlRole === 'student') {
-          if (urlStudentId) {
-            setRole('student');
-            setIsLoggedIn(true);
-            finalRole = 'student';
-            finalIsLoggedIn = true;
-            addSyncLog(`Convite de aluno reconhecido. Redirecionando direto para o seu Portal Aluno.`);
-          } else {
-            setRole('student');
-            setIsLoggedIn(true);
-            finalRole = 'student';
-            finalIsLoggedIn = true;
-            addSyncLog(`Link de convite detectado: Logado como Aluno.`);
-          }
+          setRole('student');
+          setIsLoggedIn(false);
+          finalRole = 'student';
+          finalIsLoggedIn = false;
+          addSyncLog(`Convite de aluno reconhecido. Prossiga com o login via Gmail.`);
         } else if (urlRole === 'trainer') {
           setRole('trainer');
-          setIsLoggedIn(true);
+          setIsLoggedIn(false);
           finalRole = 'trainer';
-          finalIsLoggedIn = true;
+          finalIsLoggedIn = false;
           addSyncLog(`Link administrativo consultor detectado.`);
         }
 

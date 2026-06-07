@@ -92,6 +92,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
   // Referral / Affiliate Onboarding Link Detect state
   const [referredTrainer, setReferredTrainer] = useState<Trainer | null>(null);
+  const [invitedStudent, setInvitedStudent] = useState<Student | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -108,7 +109,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     }
   }, [trainers]);
 
-  // Pre-fill student login details from URL invitation link when students database is loaded
+  // Handle invitation link for student to connect via Google
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -120,9 +121,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         if (urlStudentId && students && students.length > 0) {
           const matched = students.find(s => s.id === urlStudentId);
           if (matched) {
-            setStudentLoginEmail(matched.email || '');
-            setStudentLoginPassword(matched.password || '123456');
-            setSuccessMsg(`Pré-cadastro de ${matched.name} reconhecido com sucesso! Seus dados de acesso foram preenchidos.`);
+            setInvitedStudent(matched);
+            setSuccessMsg(`Convite ativo: Olá, ${matched.name}! Entre diretamente usando sua conta Google.`);
           }
         }
       }
@@ -479,6 +479,33 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setSuccessMsg('');
     const emailClean = email.trim().toLowerCase();
     
+    // First: check if we have an active invitation link to bind this Google account
+    if (invitedStudent) {
+      setLoading(true);
+      setTimeout(async () => {
+        try {
+          if (onUpdateStudent) {
+            await onUpdateStudent(invitedStudent.id, {
+              email: emailClean,
+              accessMethod: 'google',
+              isProfileComplete: true, // Bypass blocking onboarding screens
+              status: 'Ativo'
+            });
+          }
+          setLoading(false);
+          setSuccessMsg(`Sucesso! Seu convite foi vinculado à sua conta Google. Bem-vindo, ${invitedStudent.name}!`);
+          setShowGoogleModal(false);
+          setTimeout(() => {
+            onLoginSuccess('student', invitedStudent.id);
+          }, 1000);
+        } catch (err) {
+          setLoading(false);
+          setErrorMsg('Falha ao vincular sua conta Google ao convite. Tente de novo.');
+        }
+      }, 1200);
+      return;
+    }
+
     // 1. Look up matching student by email (Gmail)
     const matched = students.find(s => getStudentEmail(s).toLowerCase() === emailClean);
     if (matched) {
@@ -1654,71 +1681,70 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         {/* Student Auth Form */}
         {activeTab === 'student' && (
           <div className="space-y-5 animate-fade-in">
-            {/* Super simple, welcoming greeting for the Student */}
-            <div className="text-center space-y-1.5 py-2">
-              <h2 className="text-base font-extrabold text-white tracking-tight">Portal do Aluno</h2>
-              <p className="text-xs text-neutral-400">
-                Acesse sua ficha de treinos de forma simplificada com o e-mail cadastrado pelo seu Personal Trainer.
-              </p>
-            </div>
-
-            <form onSubmit={handleStudentLogin} className="space-y-4 pt-1">
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                    E-mail de Acesso do Aluno
-                  </label>
-                  <input
-                    type="email"
-                    value={studentLoginEmail}
-                    onChange={(e) => setStudentLoginEmail(e.target.value)}
-                    placeholder="Seu e-mail (Ex: aluno@gympulse.com)"
-                    className="w-full bg-neutral-950 text-xs text-white px-3.5 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
-                    required
-                    disabled={loading}
-                  />
+            {invitedStudent ? (
+              <div className="bg-neutral-950 p-5 rounded-2xl border-2 border-[#39FF14]/30 space-y-4 shadow-[0_0_20px_rgba(57,255,20,0.08)]">
+                <div className="flex justify-between items-start">
+                  <span className="bg-[#39FF14]/10 text-[#39FF14] text-[9.5px] font-mono font-bold tracking-wider uppercase px-2.5 py-1 rounded-full border border-[#39FF14]/20">
+                    ⚡ CONVITE ATIVO
+                  </span>
+                  <span className="text-[10px] text-neutral-400 font-mono">GymPulse Link</span>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                    Sua Senha de Acesso
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showStudentPass ? 'text' : 'password'}
-                      value={studentLoginPassword}
-                      onChange={(e) => setStudentLoginPassword(e.target.value)}
-                      placeholder="Sua senha de acesso"
-                      className="w-full bg-neutral-950 text-xs text-white pl-3.5 pr-10 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-mono"
-                      required
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowStudentPass(!showStudentPass)}
-                      className="absolute inset-y-0 right-3 flex items-center text-neutral-500 hover:text-white cursor-pointer"
-                    >
-                      {showStudentPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-base font-black text-white tracking-tight">
+                    Olá, <span className="text-[#39FF14]">{invitedStudent.name}</span>! 👋
+                  </h3>
+                  <p className="text-xs text-neutral-300 leading-relaxed">
+                    Seu Personal Trainer liberou seu acesso oficial! Conecte-se com sua Conta do Google (seu Gmail) abaixo para acessar sua ficha de treinos de forma direta e segura.
+                  </p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGoogleModal(true);
+                  }}
+                  className="w-full bg-white hover:bg-neutral-100 text-black font-extrabold text-xs py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2.5 shadow-lg hover:scale-[1.01] active:scale-98 cursor-pointer"
+                >
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z" />
+                    <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z" />
+                    <path fill="#FBBC05" d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z" />
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z" />
+                  </svg>
+                  <span>Conectar e Entrar com o Google</span>
+                </button>
+
+                <p className="text-[10px] text-neutral-400 text-center leading-normal">
+                  💡 Sem senhas. Sua conta do Google fará o login automático.
+                </p>
               </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-center space-y-1.5 py-1">
+                  <h2 className="text-base font-extrabold text-white tracking-tight">Portal do Aluno</h2>
+                  <p className="text-xs text-neutral-400">
+                    Acompanhe seus treinos, metas e evoluções em tempo real.
+                  </p>
+                </div>
 
-              <p className="text-[9.5px] text-neutral-500 text-center uppercase tracking-wider block font-sans pt-1 leading-relaxed">
-                🔒 O seu Personal Trainer cria e gerencia seu e-mail e senha diretamente no painel do sistema durante o pré-cadastro.
-              </p>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className={`w-full mt-2 bg-[#39FF14] text-black font-extrabold text-xs py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-[#39FF14]/10 hover:shadow-[#39FF14]/25 cursor-pointer active:scale-95 ${
-                  loading ? 'opacity-80 cursor-not-allowed animate-pulse' : ''
-                }`}
-              >
-                <span>{loading ? 'Acessando Portal...' : 'Entrar no Portal Aluno'}</span>
-                <ArrowRight size={14} className="shrink-0" />
-              </button>
-            </form>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGoogleModal(true);
+                  }}
+                  className="w-full bg-white hover:bg-neutral-100 text-black font-extrabold text-xs py-3.5 rounded-xl transition duration-200 flex items-center justify-center gap-2.5 cursor-pointer shadow-lg active:scale-98 hover:scale-[1.01]"
+                >
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z" />
+                    <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z" />
+                    <path fill="#FBBC05" d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z" />
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z" />
+                  </svg>
+                  <span>Entrar com o Google (Gmail)</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1769,8 +1795,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       )}
 
       {showGoogleModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
             <button 
               type="button"
               onClick={() => setShowGoogleModal(false)}
@@ -1778,91 +1804,80 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
             >
               ✕
             </button>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-6">
               <div className="flex flex-col items-center text-center space-y-2">
-                <svg className="w-8 h-8" viewBox="0 0 24 24">
+                <svg className="w-10 h-10 shrink-0" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61a5.66 5.66 0 01-2.45 3.71v3.08h3.95c2.31-2.13 3.63-5.27 3.63-8.64z" />
                   <path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.95-3.08c-1.1.74-2.5 1.18-4.01 1.18-3.09 0-5.71-2.09-6.64-4.89H1.36v3.18C3.34 20.25 7.42 24 12 24z" />
                   <path fill="#FBBC05" d="M5.36 14.3c-.24-.72-.38-1.5-.38-2.3s.14-1.58.38-2.3V6.52H1.36A11.967 11.967 0 000 12c0 2.03.51 3.94 1.36 5.62l4-3.32z" />
                   <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.96 1.19 15.24 0 12 0 7.42 0 3.34 3.75 1.36 7.82l4 3.12c.93-2.8 3.55-4.89 6.64-4.89z" />
                 </svg>
-                <h3 className="text-base font-bold text-white tracking-tight mt-1">Fazer login com o Google</h3>
-                <p className="text-xs text-neutral-400">Escolha um dos e-mails cadastrados ou use qualquer e-mail do Gmail para acessar direto. Se for sua primeira vez, criaremos sua conta na hora!</p>
+                
+                {invitedStudent ? (
+                  <>
+                    <h3 className="text-base font-black text-white tracking-tight mt-2">Vincular Conta Google</h3>
+                    <p className="text-xs text-neutral-300 px-3">
+                      Olá, <span className="text-[#39FF14] font-bold">{invitedStudent.name}</span>! Conecte seu próprio e-mail Gmail para ativar seu portal de treinos.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-base font-black text-white tracking-tight mt-2">Fazer Login com Google</h3>
+                    <p className="text-xs text-neutral-400 px-3">
+                      Insira o seu endereço de e-mail do Gmail cadastrado para acessar o portal GymPulse diretamente.
+                    </p>
+                  </>
+                )}
               </div>
 
-              {!showGoogleCustomEmailInput ? (
-                <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-                  {students.length === 0 ? (
-                    <p className="text-xs text-neutral-500 font-mono text-center py-4 bg-neutral-950 rounded-xl border border-neutral-800">
-                      Nenhum aluno pré-cadastrado no sistema.
-                    </p>
-                  ) : (
-                    students.map((student) => {
-                      const email = getStudentEmail(student);
-                      return (
-                        <button
-                          key={student.id}
-                          type="button"
-                          onClick={() => handleGoogleLoginMock(email)}
-                          className="w-full text-left bg-neutral-950 border border-neutral-800 hover:border-[#39FF14] p-3 rounded-xl flex items-center gap-3 transition-all cursor-pointer group active:scale-98"
-                        >
-                          <img 
-                            src={student.avatar} 
-                            alt={student.name} 
-                            className="w-7 h-7 rounded-full object-cover border border-neutral-700 font-sans"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-bold text-white leading-tight group-hover:text-[#39FF14] transition-colors">{student.name}</p>
-                            <span className="text-[9px] text-neutral-400 truncate block mt-0.5">{email}</span>
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setShowGoogleCustomEmailInput(true)}
-                    className="w-full text-center py-2 text-[10px] text-neutral-400 hover:text-[#39FF14] underline font-mono cursor-pointer block bg-transparent border-none mt-2"
-                  >
-                    + Usar outro e-mail Gmail do convite
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3.5 bg-neutral-950 border border-neutral-800/80 p-4 rounded-xl animate-fade-in shadow-inner">
-                  <label className="block text-[9px] text-[#39FF14] uppercase font-mono font-bold tracking-wider mb-1">
-                    Insira o E-mail (Gmail) do seu Pré-cadastro
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!googleCustomEmail || !googleCustomEmail.includes('@')) {
+                    setErrorMsg('Por favor, insira um e-mail Gmail válido.');
+                    return;
+                  }
+                  handleGoogleLoginMock(googleCustomEmail);
+                }} 
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                    Seu endereço de e-mail Gmail
                   </label>
                   <input
                     type="email"
+                    required
                     value={googleCustomEmail}
                     onChange={(e) => setGoogleCustomEmail(e.target.value)}
-                    placeholder="exemplo@gmail.com"
+                    placeholder="ex: seu.nome@gmail.com"
                     autoFocus
-                    className="w-full bg-neutral-900 text-xs text-white px-3 py-2.5 rounded-lg border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans"
+                    className="w-full bg-neutral-950 text-xs text-white px-4 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans text-center"
                   />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowGoogleCustomEmailInput(false)}
-                      className="flex-1 text-[10px] bg-neutral-900 text-neutral-400 font-bold py-2 rounded-lg cursor-pointer hover:bg-neutral-800"
-                    >
-                      Voltar ao seletor
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleGoogleLoginMock(googleCustomEmail)}
-                      className="flex-1 text-[10px] bg-[#39FF14] text-black font-extrabold py-2 rounded-lg cursor-pointer hover:bg-green-400"
-                    >
-                      Acessar Conta
-                    </button>
-                  </div>
+                  <p className="text-[10px] text-neutral-500 font-sans mt-2 text-center">
+                    💡 O navegador preencherá ou lembrará seu e-mail de acesso.
+                  </p>
                 </div>
-              )}
 
-              <p className="text-[10px] text-neutral-500 text-center font-sans mt-2">
-                Para continuar, o Google compartilhará seu nome, endereço de e-mail e foto do perfil com o GymPulse.
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleModal(false)}
+                    className="flex-1 text-xs bg-neutral-950 text-neutral-400 font-bold py-3 rounded-xl border border-neutral-800 cursor-pointer hover:bg-neutral-800 transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 text-xs bg-[#39FF14] text-black font-black py-3 rounded-xl cursor-pointer hover:bg-green-400 transition hover:shadow-[0_0_15px_rgba(57,255,20,0.25)]"
+                  >
+                    {invitedStudent ? 'Vincular e Entrar' : 'Acessar Portal'}
+                  </button>
+                </div>
+              </form>
+
+              <p className="text-[10px] text-neutral-500 text-center font-sans">
+                Para continuar, o Google compartilhará seu nome, endereço de e-mail e foto do perfil com o GymPulse de forma segura.
               </p>
             </div>
           </div>
