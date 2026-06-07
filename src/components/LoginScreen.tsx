@@ -488,6 +488,35 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setSuccessMsg('');
     const emailClean = email.trim().toLowerCase();
     
+    // Check if the email belongs to the Admin Supremo (Michel Lima)
+    if (emailClean === 'michel.lima20000@gmail.com') {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setSuccessMsg(`Acesso de Administrador Supremo verificado via Google! Seja bem-vindo, Michel Lima 👋`);
+        setShowGoogleModal(false);
+        setTimeout(() => {
+          onLoginSuccess('admin', undefined, undefined);
+        }, 1200);
+      }, 1000);
+      return;
+    }
+
+    // Check if the email belongs to any registered Coach/Trainer
+    const foundTrainer = trainers.find(t => t.email.toLowerCase() === emailClean);
+    if (foundTrainer) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setSuccessMsg(`Verificado com sucesso via Google! Carregando Painel de ${foundTrainer.name}...`);
+        setShowGoogleModal(false);
+        setTimeout(() => {
+          onLoginSuccess('trainer', undefined, foundTrainer);
+        }, 1200);
+      }, 1000);
+      return;
+    }
+    
     // First: check if we have an active invitation link to bind this Google account
     if (invitedStudent) {
       setLoading(true);
