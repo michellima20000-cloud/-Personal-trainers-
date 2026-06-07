@@ -38,7 +38,7 @@ interface TrainerDashboardProps {
 }
 
 export default function TrainerDashboard({
-  students,
+  students: rawStudents,
   sheets,
   evolution,
   agenda,
@@ -62,6 +62,10 @@ export default function TrainerDashboard({
   onUpdateMarketingPlan,
   onPurgeTestAccounts
 }: TrainerDashboardProps) {
+  const students = useMemo(() => {
+    return rawStudents.filter(s => activeTrainer ? s.trainerId === activeTrainer.id : true);
+  }, [rawStudents, activeTrainer]);
+
   const [activeTab, setActiveTab] = useState<'alunos' | 'cadastrar_aluno' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs' | 'configuracoes'>('alunos');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
@@ -1333,7 +1337,7 @@ export default function TrainerDashboard({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const inviteUrl = `${window.location.origin}?role=student&studentId=${student.id}`;
+                            const inviteUrl = `${window.location.origin}?role=student&studentId=${student.id}&trainerId=${activeTrainer?.customIdLink || activeTrainer?.id || ''}`;
                             navigator.clipboard.writeText(inviteUrl);
                             setCopiedStudentId(student.id);
                             setTimeout(() => setCopiedStudentId(null), 2000);
@@ -1755,12 +1759,12 @@ export default function TrainerDashboard({
                         
                         <div className="flex items-center gap-2 bg-neutral-950 p-2 rounded-lg border border-neutral-800">
                           <span className="text-[10px] font-mono text-[#39FF14] select-all truncate flex-1 leading-none py-1">
-                            {window.location.origin}?role=student&studentId={selectedStudent.id}
+                            {window.location.origin}?role=student&studentId={selectedStudent.id}&trainerId={activeTrainer?.customIdLink || activeTrainer?.id || ''}
                           </span>
                           <button
                             type="button"
                             onClick={() => {
-                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
+                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}&trainerId=${activeTrainer?.customIdLink || activeTrainer?.id || ''}`;
                               navigator.clipboard.writeText(inviteUrl);
                               setCopiedLink(true);
                               setTimeout(() => setCopiedLink(false), 2000);
@@ -1776,7 +1780,7 @@ export default function TrainerDashboard({
                           <button
                             type="button"
                             onClick={() => {
-                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
+                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}&trainerId=${activeTrainer?.customIdLink || activeTrainer?.id || ''}`;
                               const message = `Olá, *${selectedStudent.name}*! Seu acesso ao aplicativo de treinos *GymPulse* foi liberado. Toque no link abaixo e entre direto usando sua Conta do Google:\n\n👉 ${inviteUrl}`;
                               const encodedText = encodeURIComponent(message);
                               const dest = selectedStudent.phoneWhatsApp ? selectedStudent.phoneWhatsApp.replace(/[^0-9]/g, '') : '';
@@ -1791,7 +1795,7 @@ export default function TrainerDashboard({
                           <button
                             type="button"
                             onClick={() => {
-                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}`;
+                              const inviteUrl = `${window.location.origin}?role=student&studentId=${selectedStudent.id}&trainerId=${activeTrainer?.customIdLink || activeTrainer?.id || ''}`;
                               const emailSubject = encodeURIComponent(`Acesso Liberado - Portal do Aluno GymPulse`);
                               const emailBody = encodeURIComponent(`Olá, ${selectedStudent.name}!\n\nSeu acesso ao seu aplicativo de treinos GymPulse foi liberado pelo seu Personal Trainer.\n\nPara acessar seu portal de treinos, toque no link de convite personalizado abaixo e faça login de forma segura usando sua Conta do Google (seu e-mail Gmail):\n👉 ${inviteUrl}\n\nApós o primeiro login, seu acompanhamento será sincronizado de forma 100% direta e automática!\n\nFoco nos treinos!\n\nAtenciosamente,\n${activeTrainer?.name || 'Daniel Personal Coach'}`);
                               window.open(`mailto:${selectedStudent.email || ''}?subject=${emailSubject}&body=${emailBody}`, '_blank');

@@ -243,7 +243,7 @@ export default function App() {
         const dbData = await Promise.race([parallelFetchPromise, timeoutPromise]);
         clearTimeout(timeoutId);
 
-        let remoteStudents = (dbData.students || []).filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id) && s.trainerId !== 't_default');
+        let remoteStudents = (dbData.students || []).filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id));
         let remoteSheets = dbData.sheets;
         let remoteAgenda = dbData.agenda;
         let remoteNotifications = dbData.notifications;
@@ -461,7 +461,7 @@ export default function App() {
       stripeSecretKey: ''
     };
 
-    const recoveredStudents = (parsed?.students || INITIAL_STUDENTS).filter((s: any) => !['s1', 's2', 's3', 's4', 's5'].includes(s.id) && s.trainerId !== 't_default');
+    const recoveredStudents = (parsed?.students || INITIAL_STUDENTS).filter((s: any) => !['s1', 's2', 's3', 's4', 's5'].includes(s.id));
     const recoveredTrainers = (parsed?.trainers || []).filter((t: any) => t.id !== 't_default');
     const recoveredStudentId = parsed?.activeStudentId || (recoveredStudents[0]?.id) || '';
     const recoveredRole = parsed?.role || 'trainer';
@@ -571,6 +571,36 @@ export default function App() {
       return updated;
     });
   }, [role, activeStudentId, students.length, isLoggedIn, loadingFirebase]);
+
+  // Real-time synchronization of students list from Firebase Firestore
+  useEffect(() => {
+    if (loadingFirebase) return;
+
+    const q = collection(db, 'students');
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list: Student[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as Student);
+      });
+
+      // Filter out test students (match initial load filter)
+      const filtered = list.filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id));
+
+      setStudents((prev) => {
+        // Deep compare to prevent unnecessary state triggers
+        if (JSON.stringify(prev) === JSON.stringify(filtered)) {
+          return prev;
+        }
+        return filtered;
+      });
+    }, (error) => {
+      console.error("Error syncing students collection in real-time:", error);
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [loadingFirebase]);
 
   // Real-time synchronization of chats from Firebase Firestore using collections onSnapshot
   useEffect(() => {

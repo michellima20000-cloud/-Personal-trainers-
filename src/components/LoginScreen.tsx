@@ -123,11 +123,20 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           if (matched) {
             setInvitedStudent(matched);
             setSuccessMsg(`Convite ativo: Olá, ${matched.name}! Entre diretamente usando sua conta Google.`);
+            
+            // Auto-resolve referredTrainer from the student's existing record if they have a trainer assigned
+            if (matched.trainerId && trainers && trainers.length > 0) {
+              const matchedTrainer = trainers.find(t => t.id === matched.trainerId);
+              if (matchedTrainer) {
+                setReferredTrainer(matchedTrainer);
+                setRegStudentTrainerId(matchedTrainer.id);
+              }
+            }
           }
         }
       }
     }
-  }, [students]);
+  }, [students, trainers]);
 
   useEffect(() => {
     if (!regStudentTrainerId && trainers && trainers.length > 0) {
@@ -484,16 +493,18 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       setLoading(true);
       setTimeout(async () => {
         try {
+          const resolvedTrainerId = referredTrainer?.id || invitedStudent.trainerId || regStudentTrainerId || (trainers && trainers.length > 0 ? trainers[0].id : 't_default');
           if (onUpdateStudent) {
             await onUpdateStudent(invitedStudent.id, {
               email: emailClean,
               accessMethod: 'google',
               isProfileComplete: true, // Bypass blocking onboarding screens
-              status: 'Ativo'
+              status: 'Ativo',
+              trainerId: resolvedTrainerId
             });
           }
           setLoading(false);
-          setSuccessMsg(`Sucesso! Seu convite foi vinculado à sua conta Google. Bem-vindo, ${invitedStudent.name}!`);
+          setSuccessMsg(`Sucesso! Seu convite foi vinculado à sua conta Google e associado ao seu Personal Coach. Bem-vindo, ${invitedStudent.name}!`);
           setShowGoogleModal(false);
           setTimeout(() => {
             onLoginSuccess('student', invitedStudent.id);
@@ -510,13 +521,28 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     const matched = students.find(s => getStudentEmail(s).toLowerCase() === emailClean);
     if (matched) {
       setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setSuccessMsg(`Sucesso! Conectado via Google. Bem-vindo de volta, ${matched.name}!`);
-        setShowGoogleModal(false);
-        setTimeout(() => {
-          onLoginSuccess('student', matched.id);
-        }, 1000);
+      setTimeout(async () => {
+        try {
+          const resolvedTrainerId = referredTrainer?.id || matched.trainerId || regStudentTrainerId || (trainers && trainers.length > 0 ? trainers[0].id : 't_default');
+          if (onUpdateStudent) {
+            await onUpdateStudent(matched.id, {
+              email: emailClean,
+              accessMethod: 'google',
+              isProfileComplete: true, // Bypass blocking onboarding screens
+              status: 'Ativo',
+              trainerId: resolvedTrainerId
+            });
+          }
+          setLoading(false);
+          setSuccessMsg(`Sucesso! Conectado via Google. Bem-vindo de volta, ${matched.name}!`);
+          setShowGoogleModal(false);
+          setTimeout(() => {
+            onLoginSuccess('student', matched.id);
+          }, 1000);
+        } catch (err) {
+          setLoading(false);
+          setErrorMsg('Falha ao sincronizar dados da sua conta Google. Tente novamente.');
+        }
       }, 1200);
     } else {
       // 2. Auto-register student on-the-fly dynamically so student can complete quick registration
@@ -548,7 +574,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 120,
         // Auto-link to the referred trainer if present:
-        trainerId: referredTrainer ? referredTrainer.id : (trainers && trainers.length > 0 ? trainers[0].id : undefined)
+        trainerId: referredTrainer ? referredTrainer.id : (trainers && trainers.length > 0 ? trainers[0].id : 't_default')
       };
 
       setTimeout(async () => {
