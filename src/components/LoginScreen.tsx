@@ -1728,8 +1728,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                 <button
                   type="button"
                   onClick={() => {
-                    const resolvedEmail = invitedStudent.email || (invitedStudent.name.toLowerCase().replace(/[^a-z0-9]/g, '') + '@gmail.com');
-                    handleGoogleLoginMock(resolvedEmail);
+                    setShowGoogleCustomEmailInput(false);
+                    setShowGoogleModal(true);
                   }}
                   className="w-full bg-white hover:bg-neutral-100 text-black font-extrabold text-xs py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2.5 shadow-lg hover:scale-[1.01] active:scale-98 cursor-pointer"
                 >
@@ -1848,84 +1848,117 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                 </div>
                 
                 <h3 className="text-sm font-bold text-neutral-200 tracking-tight">
-                  Fazer login com o Google
+                  {invitedStudent && !showGoogleCustomEmailInput ? 'Escolha uma conta' : 'Fazer login com o Google'}
                 </h3>
                 <p className="text-[11px] text-neutral-400">
                   para prosseguir no portal <span className="text-[#39FF14] font-bold">GymPulse</span>
                 </p>
               </div>
 
-              {/* Secure Gmail Input Form */}
-              <form 
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!googleCustomEmail || !googleCustomEmail.includes('@')) {
-                    setErrorMsg('Por favor, insira um e-mail Gmail válido.');
-                    return;
-                  }
-                  handleGoogleLoginMock(googleCustomEmail);
-                }} 
-                className="space-y-4 animate-fade-in"
-              >
-                <div>
-                  <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
-                    Endereço de e-mail Gmail
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={googleCustomEmail}
-                    onChange={(e) => setGoogleCustomEmail(e.target.value)}
-                    placeholder="ex: seu-nome@gmail.com"
-                    autoFocus
-                    className="w-full bg-neutral-950 text-xs text-white px-4 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans text-center"
-                  />
-                  <p className="text-[10px] text-neutral-500 font-sans mt-2 text-center leading-normal">
-                    💡 Digite o e-mail da sua conta Google vinculada para acessar sua conta de forma segura.
+              {invitedStudent && !showGoogleCustomEmailInput ? (
+                /* Secure One-Click Login for the invited student ONLY */
+                <div className="space-y-4 animate-fade-in">
+                  <p className="text-[10px] text-neutral-400 text-center leading-normal mb-1">
+                    Selecione sua conta do Google vinculada para prosseguir automaticamente:
                   </p>
+                  
+                  {(() => {
+                    const resolvedEmail = invitedStudent.email || (invitedStudent.name.toLowerCase().replace(/[^a-z0-9]/g, '') + '@gmail.com');
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleGoogleLoginMock(resolvedEmail)}
+                        className="w-full text-left bg-neutral-950 hover:bg-neutral-850 hover:border-[#39FF14]/50 border border-neutral-800/80 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group active:scale-[0.99] shadow-lg"
+                      >
+                        <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-sm select-none uppercase">
+                          {invitedStudent.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-white truncate group-hover:text-[#39FF14] transition-colors">
+                            {invitedStudent.name}
+                          </p>
+                          <p className="text-[10px] text-neutral-400 font-mono truncate mt-0.5">{resolvedEmail}</p>
+                        </div>
+                        <ArrowRight size={14} className="text-neutral-500 group-hover:text-[#39FF14] group-hover:translate-x-0.5 transition" />
+                      </button>
+                    );
+                  })()}
                 </div>
+              ) : (
+                /* Secure Gmail Input Form */
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!googleCustomEmail || !googleCustomEmail.includes('@')) {
+                      setErrorMsg('Por favor, insira um e-mail Gmail válido.');
+                      return;
+                    }
+                    handleGoogleLoginMock(googleCustomEmail);
+                  }} 
+                  className="space-y-4 animate-fade-in"
+                >
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 font-mono font-bold uppercase tracking-widest mb-1.5">
+                      Endereço de e-mail Gmail
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={googleCustomEmail}
+                      onChange={(e) => setGoogleCustomEmail(e.target.value)}
+                      placeholder="ex: seu-nome@gmail.com"
+                      autoFocus
+                      className="w-full bg-neutral-950 text-xs text-white px-4 py-3 rounded-xl border border-neutral-800 focus:outline-none focus:border-[#39FF14] transition font-sans text-center"
+                    />
+                    <p className="text-[10px] text-neutral-500 font-sans mt-2 text-center leading-normal">
+                      💡 Digite o e-mail da sua conta Google vinculada para acessar sua conta de forma segura.
+                    </p>
+                  </div>
 
-                <div className="flex gap-2">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowGoogleModal(false);
+                        setShowGoogleCustomEmailInput(false);
+                      }}
+                      className="flex-1 text-xs bg-neutral-950 text-neutral-400 font-bold py-3 rounded-xl border border-neutral-800 cursor-pointer hover:bg-neutral-800 transition"
+                    >
+                      Voltar
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 text-xs bg-[#39FF14] text-black font-black py-3 rounded-xl cursor-pointer hover:bg-green-400 transition hover:shadow-[0_0_15px_rgba(57,255,20,0.25)]"
+                    >
+                      Acessar Portal
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Developer/Teacher Quick Login Shortcut - Shown ONLY when there is no active invitation so we protect student privacy */}
+              {!invitedStudent && (
+                <div className="pt-4 border-t border-neutral-800/60 space-y-2">
+                  <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-wider text-center">Atalho do Desenvolvedor / Admin</p>
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowGoogleModal(false);
-                      setShowGoogleCustomEmailInput(false);
-                    }}
-                    className="flex-1 text-xs bg-neutral-950 text-neutral-400 font-bold py-3 rounded-xl border border-neutral-800 cursor-pointer hover:bg-neutral-800 transition"
+                    onClick={() => handleGoogleLoginMock('michel.lima20000@gmail.com')}
+                    className="w-full text-left bg-neutral-950/60 hover:bg-neutral-800 border border-dashed border-neutral-800/80 p-2.5 rounded-2xl flex items-center gap-3 transition-all cursor-pointer group"
                   >
-                    Voltar
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 text-xs bg-[#39FF14] text-black font-black py-3 rounded-xl cursor-pointer hover:bg-green-400 transition hover:shadow-[0_0_15px_rgba(57,255,20,0.25)]"
-                  >
-                    Acessar Portal
+                    <div className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-[#39FF14] font-extrabold text-xs">
+                      M
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-neutral-300 truncate flex items-center gap-1.5 font-sans">
+                        Michel Lima
+                        <span className="bg-[#39FF14]/10 text-[#39FF14] text-[8px] font-bold uppercase px-1 rounded-md border border-[#39FF14]/20 animate-pulse">Trainer Admin</span>
+                      </p>
+                      <p className="text-[10px] text-neutral-500 font-mono truncate">michel.lima20000@gmail.com</p>
+                    </div>
+                    <ArrowRight size={13} className="text-neutral-500 group-hover:text-[#39FF14] group-hover:translate-x-0.5 transition" />
                   </button>
                 </div>
-              </form>
-
-              {/* Developer/Teacher Quick Login Shortcut */}
-              <div className="pt-4 border-t border-neutral-800/60 space-y-2">
-                <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-wider text-center">Atalho do Desenvolvedor / Admin</p>
-                <button
-                  type="button"
-                  onClick={() => handleGoogleLoginMock('michel.lima20000@gmail.com')}
-                  className="w-full text-left bg-neutral-950/60 hover:bg-neutral-800 border border-dashed border-neutral-800/80 p-2.5 rounded-2xl flex items-center gap-3 transition-all cursor-pointer group"
-                >
-                  <div className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-[#39FF14] font-extrabold text-xs">
-                    M
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-neutral-300 truncate flex items-center gap-1.5 font-sans">
-                      Michel Lima
-                      <span className="bg-[#39FF14]/10 text-[#39FF14] text-[8px] font-bold uppercase px-1 rounded-md border border-[#39FF14]/20 animate-pulse">Trainer Admin</span>
-                    </p>
-                    <p className="text-[10px] text-neutral-500 font-mono truncate">michel.lima20000@gmail.com</p>
-                  </div>
-                  <ArrowRight size={13} className="text-neutral-500 group-hover:text-[#39FF14] group-hover:translate-x-0.5 transition" />
-                </button>
-              </div>
+              )}
 
               <p className="text-[10px] text-neutral-500 text-center font-sans leading-relaxed">
                 Para continuar, o Google compartilhará seu nome, endereço de e-mail e foto do perfil de forma simulada com o portal GymPulse.
