@@ -505,7 +505,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         try {
           const resolvedTrainerId = referredTrainer?.id || invitedStudent.trainerId || regStudentTrainerId || (trainers && trainers.length > 0 ? trainers[0].id : 't_default');
           if (onUpdateStudent) {
-            await onUpdateStudent(invitedStudent.id, {
+            onUpdateStudent(invitedStudent.id, {
               email: emailClean,
               accessMethod: 'google',
               isProfileComplete: true, // Bypass blocking onboarding screens
@@ -535,7 +535,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         try {
           const resolvedTrainerId = referredTrainer?.id || matched.trainerId || regStudentTrainerId || (trainers && trainers.length > 0 ? trainers[0].id : 't_default');
           if (onUpdateStudent) {
-            await onUpdateStudent(matched.id, {
+            onUpdateStudent(matched.id, {
               email: emailClean,
               accessMethod: 'google',
               isProfileComplete: true, // Bypass blocking onboarding screens
@@ -592,7 +592,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setTimeout(async () => {
       try {
         if (onAddStudent) {
-          await onAddStudent(newStudent);
+          onAddStudent(newStudent);
         }
         setLoading(false);
         setSuccessMsg(`Bem-vindo ao GymPulse! Criamos seu portal de acesso rápido para ${generatedName}.`);
@@ -665,7 +665,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setTimeout(async () => {
       try {
         if (onAddTrainer) {
-          await onAddTrainer(newTrainer);
+          onAddTrainer(newTrainer);
         }
         setLoading(false);
         setSuccessMsg(`Bem-vindo, Coach! Criamos seu perfil de Personal Trainer para ${trainerName}.`);

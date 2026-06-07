@@ -739,26 +739,38 @@ export default function App() {
     const updated = [...trainers, trn];
     setTrainers(updated);
     setActiveTrainer(trn);
-    try {
-      await saveTrainer(trn);
-      addSyncLog(`[Firebase] Novo personal ${trn.name} cadastrado com sucesso.`);
-    } catch (e) {
-      addSyncLog(`[Error] Erro ao sincronizar cadastro de profissional.`);
-    }
+    
+    // Save to local storage synchronously first
     saveState(students, sheets, evolution, agenda, chats, notifications, revenueLogs, accessLogs, true, 'trainer', marketingPlans, trn, updated);
+
+    addSyncLog(`[Firebase] Gravando novo profissional...`);
+    saveTrainer(trn)
+      .then(() => {
+        addSyncLog(`[Firebase] Novo personal ${trn.name} cadastrado com sucesso.`);
+      })
+      .catch((e) => {
+        console.error("Firebase save trainer failed:", e);
+        addSyncLog(`[Error] Erro ao sincronizar cadastro de profissional.`);
+      });
   };
 
   const handleUpdateTrainer = async (trn: Trainer) => {
     const updated = trainers.map(t => t.id === trn.id ? trn : t);
     setTrainers(updated);
     setActiveTrainer(trn);
-    try {
-      await saveTrainer(trn);
-      addSyncLog(`[Firebase] Configuração de ${trn.name} atualizada na nuvem.`);
-    } catch (e) {
-      addSyncLog(`[Error] Erro ao sincronizar atualização de profissional.`);
-    }
+
+    // Save to local storage synchronously first
     saveState(students, sheets, evolution, agenda, chats, notifications, revenueLogs, accessLogs, isLoggedIn, 'trainer', marketingPlans, trn, updated);
+
+    addSyncLog(`[Firebase] Atualizando profissional...`);
+    saveTrainer(trn)
+      .then(() => {
+        addSyncLog(`[Firebase] Configuração de ${trn.name} atualizada na nuvem.`);
+      })
+      .catch((e) => {
+        console.error("Firebase update trainer failed:", e);
+        addSyncLog(`[Error] Erro ao sincronizar atualização de profissional.`);
+      });
   };
   
   const handleAddStudent = async (std: Student) => {
@@ -806,37 +818,46 @@ export default function App() {
     const updatedNotifs = [initNotif, ...notifications];
     setNotifications(updatedNotifs);
 
-    // Persist to Cloud
-    addSyncLog(`[Firebase] Gravando novo aluno "${std.name}"...`);
-    try {
-      await saveStudent(std);
-      await saveSheet(std.id, initSheet);
-      await saveEvolutionRecord(std.id, initRecord);
-      await saveChatMessage(std.id, initChat);
-      await saveNotification(initNotif);
-      addSyncLog(`[Firebase] Novo aluno cadastrado e sincronizado com sucesso.`);
-    } catch (err) {
-      addSyncLog(`[Error] Falha ao persistir cadastros no Firestore.`);
-    }
-
+    // Persist to local storage synchronously and immediately
     saveState(updated, updatedSheets, updatedEvol, agenda, updatedChats, updatedNotifs, revenueLogs);
+
+    // Persist to Cloud asynchronously in the background so it does not block execution block
+    addSyncLog(`[Firebase] Iniciando persistência de "${std.name}" em nuvem (segundo plano)...`);
+    Promise.all([
+      saveStudent(std),
+      saveSheet(std.id, initSheet),
+      saveEvolutionRecord(std.id, initRecord),
+      saveChatMessage(std.id, initChat),
+      saveNotification(initNotif)
+    ])
+      .then(() => {
+        addSyncLog(`[Firebase] Novo aluno cadastrado e sincronizado com sucesso.`);
+      })
+      .catch((err) => {
+        console.error("Firebase background save failed:", err);
+        addSyncLog(`[Error] Falha ao persistir cadastros no Firestore.`);
+      });
   };
 
   const handleUpdateStudent = async (id: string, data: Partial<Student>) => {
     const updated = students.map(s => s.id === id ? { ...s, ...data } : s);
     setStudents(updated);
 
+    // Persist to local storage synchronously and immediately
+    saveState(updated, sheets, evolution, agenda, chats, notifications, revenueLogs);
+
     const updatedStudent = updated.find(s => s.id === id);
     if (updatedStudent) {
-      try {
-        await saveStudent(updatedStudent);
-        addSyncLog(`[Firebase] Dados de "${updatedStudent.name}" atualizados em nuvem.`);
-      } catch (err) {
-        addSyncLog(`[Error] Erro ao sincronizar update de biotipo.`);
-      }
+      addSyncLog(`[Firebase] Atualizando "${updatedStudent.name}" em nuvem (segundo plano)...`);
+      saveStudent(updatedStudent)
+        .then(() => {
+          addSyncLog(`[Firebase] Dados de "${updatedStudent.name}" atualizados em nuvem.`);
+        })
+        .catch((err) => {
+          console.error("Firebase update student failed:", err);
+          addSyncLog(`[Error] Erro ao sincronizar update de biotipo.`);
+        });
     }
-
-    saveState(updated, sheets, evolution, agenda, chats, notifications, revenueLogs);
   };
 
   const handleDeleteStudent = async (id: string) => {
@@ -854,16 +875,21 @@ export default function App() {
     const updatedChats = { ...chats };
     delete updatedChats[id];
 
-    addSyncLog(`[Firebase] Excluindo documentos de "${targetName}"...`);
-    try {
-      await deleteDoc(doc(db, 'students', id));
-      await deleteDoc(doc(db, 'sheets', id));
-      addSyncLog(`[Firebase] Aluno e histórico limpos do servidor em nuvem.`);
-    } catch (err) {
-      addSyncLog(`[Error] Erro de rede ao deletar registro.`);
-    }
-
+    // Save to local storage synchronously and immediately
     saveState(updated, updatedSheets, updatedEvol, agenda, updatedChats, notifications, revenueLogs);
+
+    addSyncLog(`[Firebase] Iniciando exclusão de "${targetName}" em nuvem...`);
+    Promise.all([
+      deleteDoc(doc(db, 'students', id)),
+      deleteDoc(doc(db, 'sheets', id))
+    ])
+      .then(() => {
+        addSyncLog(`[Firebase] Aluno e histórico limpos do servidor em nuvem.`);
+      })
+      .catch((err) => {
+        console.error("Firebase delete student failed:", err);
+        addSyncLog(`[Error] Erro de rede ao deletar registro.`);
+      });
   };
 
   const handleUpdateSheet = async (studentId: string, sheetToSave: TrainingSheet) => {
@@ -887,15 +913,18 @@ export default function App() {
     const updatedNotifs = [newNotif, ...notifications];
     setNotifications(updatedNotifs);
 
-    try {
-      await saveSheet(studentId, sheetToSave);
-      await saveNotification(newNotif);
-      addSyncLog(`[Firebase] Planilha de treino de "${student?.name}" salva na nuvem.`);
-    } catch (err) {
-      addSyncLog(`[Error] Erro de sincronização de planilha.`);
-    }
-
+    // Save to local storage synchronously and immediately
     saveState(students, updatedSheets, evolution, agenda, chats, updatedNotifs, revenueLogs);
+
+    saveSheet(studentId, sheetToSave)
+      .then(() => saveNotification(newNotif))
+      .then(() => {
+        addSyncLog(`[Firebase] Planilha de treino de "${student?.name}" salva na nuvem.`);
+      })
+      .catch((err) => {
+        console.error("Firebase save sheet failed:", err);
+        addSyncLog(`[Error] Erro de sincronização de planilha.`);
+      });
   };
 
   const handleAddAgendaEvent = async (event: AgendaEvent) => {
@@ -921,17 +950,22 @@ export default function App() {
       setNotifications(updatedNotifs);
     }
 
-    try {
-      await saveAgendaEvent(event);
-      if (newNotifAddress) {
-        await saveNotification(newNotifAddress);
-      }
-      addSyncLog(`[Firebase] Data agendada para "${event.title}" gravada com sucesso.`);
-    } catch (err) {
-      addSyncLog(`[Error] Erro ao sincronizar agenda.`);
+    // Save to local storage synchronously and immediately
+    saveState(students, sheets, evolution, updated, chats, updatedNotifs, revenueLogs);
+
+    const promises = [saveAgendaEvent(event)];
+    if (newNotifAddress) {
+      promises.push(saveNotification(newNotifAddress));
     }
 
-    saveState(students, sheets, evolution, updated, chats, updatedNotifs, revenueLogs);
+    Promise.all(promises)
+      .then(() => {
+        addSyncLog(`[Firebase] Data agendada para "${event.title}" gravada com sucesso.`);
+      })
+      .catch((err) => {
+        console.error("Firebase save agenda failed:", err);
+        addSyncLog(`[Error] Erro ao sincronizar agenda.`);
+      });
   };
 
   const handleDeleteAgendaEvent = async (id: string) => {
@@ -939,14 +973,17 @@ export default function App() {
     const updated = agenda.filter(e => e.id !== id);
     setAgenda(updated);
     
-    try {
-      await deleteAgendaEventDoc(id);
-      addSyncLog(`[Firebase] Evento "${target?.title}" removido com sucesso.`);
-    } catch (err) {
-      addSyncLog(`[Error] Falha ao apagar compromisso.`);
-    }
-
+    // Save to local storage synchronously and immediately
     saveState(students, sheets, evolution, updated, chats, notifications, revenueLogs);
+
+    deleteAgendaEventDoc(id)
+      .then(() => {
+        addSyncLog(`[Firebase] Evento "${target?.title}" removido com sucesso.`);
+      })
+      .catch((err) => {
+        console.error("Firebase delete agenda failed:", err);
+        addSyncLog(`[Error] Falha ao apagar compromisso.`);
+      });
   };
 
   const handleSendMessage = async (studentId: string, text: string, senderOverride?: 'trainer' | 'student') => {
@@ -965,28 +1002,30 @@ export default function App() {
     };
     setChats(updatedChats);
 
-    try {
-      await saveChatMessage(studentId, newMsg);
-    } catch (err) {
-      console.error("Firebase message dispatch error:", err);
-    }
-
+    // Save synchronously and immediately
     saveState(students, sheets, evolution, agenda, updatedChats, notifications, revenueLogs);
     addSyncLog(`[CONVERSA] Mensagem enviada por ${senderRole === 'trainer' ? 'Personal' : 'Aluno'}: "${text.substring(0, 30)}..."`);
+
+    saveChatMessage(studentId, newMsg)
+      .catch((err) => {
+        console.error("Firebase message dispatch error:", err);
+      });
   };
 
   const handleSendNotification = async (notif: AppNotification) => {
     const updated = [notif, ...notifications];
     setNotifications(updated);
 
-    try {
-      await saveNotification(notif);
-      addSyncLog(`[Firebase] Notificação manual persistida.`);
-    } catch (err) {
-      console.error(err);
-    }
-
+    // Save synchronously and immediately
     saveState(students, sheets, evolution, agenda, chats, updated, revenueLogs);
+
+    saveNotification(notif)
+      .then(() => {
+        addSyncLog(`[Firebase] Notificação manual persistida.`);
+      })
+      .catch((err) => {
+        console.error("Firebase save notification failed:", err);
+      });
   };
 
   const handleAddEvolutionRecord = async (studentId: string, record: EvolutionRecord) => {
@@ -1015,19 +1054,26 @@ export default function App() {
     const updatedNotifs = [newNotif, ...notifications];
     setNotifications(updatedNotifs);
 
-    try {
-      await saveEvolutionRecord(studentId, record);
-      const targetObj = updatedStudents.find(s => s.id === studentId);
-      if (targetObj) {
-        await saveStudent(targetObj);
-      }
-      await saveNotification(newNotif);
-      addSyncLog(`[Firebase] Registro biométrico integrado e salvo.`);
-    } catch (err) {
-      addSyncLog(`[Error] Falha ao sincronizar biometria.`);
+    // Save synchronously and immediately
+    saveState(updatedStudents, sheets, updatedEvol, agenda, chats, updatedNotifs, revenueLogs);
+
+    const targetObj = updatedStudents.find(s => s.id === studentId);
+    const promises = [
+      saveEvolutionRecord(studentId, record),
+      saveNotification(newNotif)
+    ];
+    if (targetObj) {
+      promises.push(saveStudent(targetObj));
     }
 
-    saveState(updatedStudents, sheets, updatedEvol, agenda, chats, updatedNotifs, revenueLogs);
+    Promise.all(promises)
+      .then(() => {
+        addSyncLog(`[Firebase] Registro biométrico integrado e salvo.`);
+      })
+      .catch((err) => {
+        console.error("Firebase save evolution failed:", err);
+        addSyncLog(`[Error] Falha ao sincronizar biometria.`);
+      });
   };
 
   const handleCompleteWorkout = async (studentId: string, workoutLetter: 'A' | 'B' | 'C' | 'D' | 'E') => {
@@ -1058,16 +1104,21 @@ export default function App() {
     });
     setRevenueLogs(updatedRevenue);
 
-    try {
-      await saveNotification(completedNotif);
-      const activeMonthLog = updatedRevenue[updatedRevenue.length - 1];
-      await saveRevenueLog(activeMonthLog);
-      addSyncLog(`[Firebase] Ficha de rendimento físico salva no banco cloud.`);
-    } catch (err) {
-      addSyncLog(`[Error] Erro ao sincronizar conclusão de treinos.`);
-    }
-
+    // Save synchronously and immediately
     saveState(students, sheets, evolution, agenda, chats, updatedNotifs, updatedRevenue);
+
+    const activeMonthLog = updatedRevenue[updatedRevenue.length - 1];
+    Promise.all([
+      saveNotification(completedNotif),
+      saveRevenueLog(activeMonthLog)
+    ])
+      .then(() => {
+        addSyncLog(`[Firebase] Ficha de rendimento físico salva no banco cloud.`);
+      })
+      .catch((err) => {
+        console.error("Firebase update revenue logs failed:", err);
+        addSyncLog(`[Error] Erro ao sincronizar conclusão de treinos.`);
+      });
   };
 
   const handleLoginSuccess = (enteredRole: 'trainer' | 'student' | 'admin', studentId?: string, loggedInTrainer?: Trainer) => {
