@@ -409,6 +409,15 @@ export default function StudentDashboard({
                 <button
                   type="button"
                   onClick={() => {
+                    setObErrorMsg('');
+                    if (!obName.trim()) {
+                      setObErrorMsg('Por favor, informe seu Nome Completo.');
+                      return;
+                    }
+                    if (!obEmail.trim() || !obEmail.includes('@')) {
+                      setObErrorMsg('É obrigatório preencher seu E-mail do Google (Gmail) para vincular sua conta e receber notificações.');
+                      return;
+                    }
                     setObAccessMethod('google');
                     setObPayingStatus('processing');
                     setTimeout(() => {
@@ -443,6 +452,15 @@ export default function StudentDashboard({
                 <button
                   type="button"
                   onClick={() => {
+                    setObErrorMsg('');
+                    if (!obName.trim()) {
+                      setObErrorMsg('Por favor, informe seu Nome Completo.');
+                      return;
+                    }
+                    if (!obEmail.trim() || !obEmail.includes('@')) {
+                      setObErrorMsg('O e-mail é obrigatório para ativar seu acesso padrão por e-mail e senha.');
+                      return;
+                    }
                     setObAccessMethod('password');
                     setObPayingStatus('processing');
                     setTimeout(() => {

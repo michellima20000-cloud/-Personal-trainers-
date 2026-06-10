@@ -142,19 +142,17 @@ const getInitialStates = () => {
     const urlStudentId = params.get('studentId');
     const urlTrainerId = params.get('trainerId');
     
-    if (urlTrainerId) {
-      initial.isLoggedIn = false;
+    // Auto-login students immediately and bypass login screen when clicking a direct student link
+    if (urlStudentId) {
       initial.role = 'student';
-    } else if (urlRole === 'student' && urlStudentId) {
-      initial.role = 'student';
-      initial.isLoggedIn = false;
+      initial.isLoggedIn = true;
       initial.activeStudentId = urlStudentId;
+    } else if (urlTrainerId) {
+      initial.isLoggedIn = false;
+      initial.role = 'student';
     } else if (urlRole === 'student' || urlRole === 'trainer') {
       initial.role = urlRole as any;
       initial.isLoggedIn = false;
-      if (urlStudentId) {
-        initial.activeStudentId = urlStudentId;
-      }
     }
   }
   
@@ -190,6 +188,20 @@ export default function App() {
   ]);
   const [loadingFirebase, setLoadingFirebase] = useState(true);
   const [syncingStatus, setSyncingStatus] = useState<'syncing' | 'synced' | 'error'>('syncing');
+
+  // Rapid loading fallback to make startup feel instantaneous using preloaded caches
+  useEffect(() => {
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const urlStudentId = params ? params.get('studentId') : null;
+    const isDirectLink = !!urlStudentId;
+    
+    const delay = isDirectLink ? 150 : 450; // Near-instantaneous (150ms) reveal for direct student link clicks!
+    
+    const timer = setTimeout(() => {
+      setLoadingFirebase(false);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Initialize and Synchronize with Firebase
   useEffect(() => {
@@ -329,7 +341,24 @@ export default function App() {
         let finalIsLoggedIn = preloadedState.isLoggedIn;
         let finalRole = preloadedState.role;
 
-        if (urlTrainerId) {
+        if (urlStudentId) {
+          setRole('student');
+          setIsLoggedIn(true);
+          finalRole = 'student';
+          finalIsLoggedIn = true;
+          addSyncLog(`Link de acesso direto do aluno detectado: Autenticando instantaneamente.`);
+          const matchedStudent = remoteStudents.find(s => s.id === urlStudentId);
+          if (matchedStudent && matchedStudent.status !== 'Ativo') {
+            matchedStudent.status = 'Ativo';
+            saveStudent(matchedStudent)
+              .then(() => {
+                addSyncLog(`[Firebase] Status do aluno "${matchedStudent.name}" auto-ativado na nuvem.`);
+              })
+              .catch(err => {
+                console.error("Failed to auto-activate student on boot:", err);
+              });
+          }
+        } else if (urlTrainerId) {
           setRole('student');
           setIsLoggedIn(false);
           finalRole = 'student';
@@ -1301,6 +1330,12 @@ export default function App() {
     } else if (enteredRole === 'student') {
       const targetStudentId = studentId || activeStudentId;
       const activeStudent = students.find(s => s.id === targetStudentId);
+      if (activeStudent && activeStudent.status !== 'Ativo') {
+        activeStudent.status = 'Ativo';
+        saveStudent(activeStudent).catch(err => {
+          console.error("Failed to auto-activate student on success login:", err);
+        });
+      }
       
       let foundTrainerId: string | undefined = undefined;
       
