@@ -152,12 +152,11 @@ const getInitialStates = () => {
         initial.activeStudentId = urlStudentId;
       }
     } else if (urlTrainerId) {
-      if (initial.isLoggedIn && initial.role === 'student') {
-        // Keep logged-in active student session!
-      } else {
-        initial.isLoggedIn = false;
-        initial.role = 'student';
-      }
+      // If there's a trainer referral in the URL, log out of any cached session
+      // and clear the active student ID to guarantee they see the login/onboarding screen of that specific Trainer!
+      initial.isLoggedIn = false;
+      initial.role = 'student';
+      initial.activeStudentId = '';
     } else if (urlRole === 'student' || urlRole === 'trainer') {
       if (initial.isLoggedIn && initial.role === urlRole) {
         // Keep logged-in active session!
@@ -1386,8 +1385,10 @@ export default function App() {
       
       // Auto-bind student to trainer persistently in the database if there is a mismatch or missing trainerId!
       if (activeStudent && trainerToSet && activeStudent.trainerId !== trainerToSet.id) {
-        activeStudent.trainerId = trainerToSet.id;
-        saveStudent(activeStudent).then(() => {
+        const updatedStudent = { ...activeStudent, trainerId: trainerToSet.id };
+        const updatedStudents = students.map(s => s.id === activeStudent.id ? updatedStudent : s);
+        setStudents(updatedStudents);
+        saveStudent(updatedStudent).then(() => {
           addSyncLog(`[Firebase] Vinculando Aluno "${activeStudent.name}" ao Personal Coach "${trainerToSet?.name}" com sucesso.`);
         }).catch(err => {
           console.error("Failed to persist student trainerId auto-bind:", err);

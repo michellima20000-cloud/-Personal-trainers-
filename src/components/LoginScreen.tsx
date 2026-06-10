@@ -95,12 +95,13 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [referredTrainer, setReferredTrainer] = useState<Trainer | null>(null);
   const [invitedStudent, setInvitedStudent] = useState<Student | null>(null);
 
+  // Handle custom trainer referral / landing page links
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const trainerRefId = params.get('trainerId');
     if (trainerRefId && trainers && trainers.length > 0) {
       const match = trainers.find(
-        t => (t.customIdLink || '').toLowerCase() === trainerRefId.toLowerCase() || t.id === trainerRefId
+        t => (t.customIdLink || '').toLowerCase() === trainerRefId.toLowerCase() || t.id.toLowerCase() === trainerRefId.toLowerCase()
       );
       if (match) {
         setReferredTrainer(match);
@@ -116,6 +117,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       const params = new URLSearchParams(window.location.search);
       const urlRole = params.get('role');
       const urlStudentId = params.get('studentId');
+      const urlTrainerId = params.get('trainerId');
       
       if (urlRole === 'student' || urlStudentId) {
         setActiveTab('student');
@@ -126,7 +128,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
             setSuccessMsg(`Convite ativo: Olá, ${matched.name}! Entre diretamente usando sua conta Google.`);
             
             // Auto-resolve referredTrainer from the student's existing record if they have a trainer assigned
-            if (matched.trainerId && trainers && trainers.length > 0) {
+            // ONLY if there is no explicit trainerId parameter in the URL prioritizing a different trainer!
+            if (!urlTrainerId && matched.trainerId && trainers && trainers.length > 0) {
               const matchedTrainer = trainers.find(t => t.id === matched.trainerId);
               if (matchedTrainer) {
                 setReferredTrainer(matchedTrainer);
