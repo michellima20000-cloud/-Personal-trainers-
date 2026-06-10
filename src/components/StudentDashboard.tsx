@@ -686,6 +686,20 @@ export default function StudentDashboard({
     );
   }
 
+  // Welcome modal states
+  const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (currentStudent && currentStudent.isProfileComplete && currentStudent.status !== 'Inativo') {
+      const key = `gympulse_welcome_shown_${currentStudent.id}`;
+      const shown = sessionStorage.getItem(key);
+      if (shown !== 'true') {
+        setShowWelcomeModal(true);
+        sessionStorage.setItem(key, 'true');
+      }
+    }
+  }, [currentStudent?.id, currentStudent?.isProfileComplete, currentStudent?.status]);
+
   // Tabs: workout, performance, chat, subscript
   const [activeTab, setActiveTab] = useState<'treino' | 'evolucao' | 'chat' | 'plano'>('treino');
   const [activeLetter, setActiveLetter] = useState<'A' | 'B' | 'C' | 'D' | 'E'>('A');
@@ -3077,6 +3091,96 @@ export default function StudentDashboard({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Welcome & Trainer Connection Confirmation Modal */}
+      {showWelcomeModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Subtle backdrop blur overlay */}
+          <div 
+            className="absolute inset-0 bg-black/85 backdrop-blur-md transition-opacity duration-300"
+            onClick={() => setShowWelcomeModal(false)}
+          />
+          
+          {/* Main card box */}
+          <div className="relative w-full max-w-md bg-[#0F0F11] border border-neutral-800 rounded-3xl p-6 md:p-8 shadow-2xl shadow-black/80 text-center animate-fade-in transform transition-all select-none">
+            {/* Green neon slide highlights */}
+            <div className="absolute top-0 right-0 left-0 h-[3px] bg-gradient-to-r from-emerald-500 via-[#39FF14] to-emerald-800 rounded-t-3xl" />
+            
+            {/* Round glow elements */}
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-24 h-24 bg-[#39FF14]/15 rounded-full blur-2xl font-sans" />
+
+            {/* Celebratory verification badge */}
+            <div className="mx-auto w-14 h-14 bg-[#39FF14]/10 border border-[#39FF14]/30 text-[#39FF14] flex items-center justify-center rounded-2xl mb-4 shadow-lg shadow-[#39FF14]/5">
+              <CheckCircle2 size={32} strokeWidth={2.5} />
+            </div>
+
+            {/* Title & Subheadings */}
+            <h3 className="text-xl font-black text-white tracking-tight leading-snug font-sans">
+              Conexão Confirmada! ⚡
+            </h3>
+            <p className="text-[10px] text-[#39FF14] uppercase tracking-widest font-mono font-bold mt-1">
+              Plataforma GymPulse
+            </p>
+
+            <p className="text-xs sm:text-sm text-neutral-400 mt-3 leading-relaxed font-sans">
+              Seu perfil de aluno foi vinculado com sucesso! Você está conectado à consultoria oficial de:
+            </p>
+
+            {/* Visual Professional Coach Card */}
+            <div className="mt-4 bg-neutral-950 p-4 rounded-2xl border border-neutral-850 flex items-center gap-4 text-left shadow-inner relative overflow-hidden">
+              <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-[#39FF14]/5 rounded-full blur-xl pointer-events-none" />
+              
+              <div className="relative shrink-0">
+                <div className="w-12 h-12 bg-[#39FF14]/15 text-[#39FF14] rounded-xl border border-[#39FF14]/30 flex items-center justify-center font-black text-lg shadow-inner">
+                  {studentTrainer?.name?.charAt(0).toUpperCase() || 'P'}
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-[#39FF14] text-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-neutral-950 shadow">
+                  <Check size={8} strokeWidth={4} />
+                </div>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <span className="text-[9px] text-[#39FF14] font-mono tracking-widest uppercase font-black">Meu Personal Coach</span>
+                <h4 className="text-[14px] font-black text-white truncate my-0 leading-tight">
+                  {studentTrainer?.name || 'Seu Consultor Esportivo'}
+                </h4>
+                <p className="text-[10px] text-neutral-400 truncate mt-0.5">
+                  {studentTrainer?.email || 'contato@gympulse.com.br'}
+                </p>
+              </div>
+            </div>
+
+            {/* Alignment specifications check */}
+            <div className="mt-4 bg-[#121214] border border-neutral-850 p-3.5 rounded-xl text-left space-y-2">
+              <div className="flex items-center gap-2 text-xs text-neutral-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#39FF14]" />
+                <span className="text-neutral-400">Objetivo Planejado:</span>
+                <strong className="text-white font-mono ml-auto">{currentStudent?.objective || 'Hipertrofia'}</strong>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-neutral-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#39FF14]" />
+                <span className="text-neutral-400">Sincronização Cloud:</span>
+                <strong className="text-emerald-400 text-[11px] font-mono ml-auto flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                  Ativa em tempo real
+                </strong>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-neutral-500 mt-4 leading-normal font-sans">
+              Todas as suas cargas, fichas de treino, fotos de evolução e mensagens de chat estão 100% integradas.
+            </p>
+
+            {/* Action buttons */}
+            <button
+              onClick={() => setShowWelcomeModal(false)}
+              className="w-full mt-5 bg-[#39FF14] hover:bg-[#39FF14]/90 text-black font-black text-xs py-3.5 rounded-xl transition duration-200 shadow-lg hover:shadow-[#39FF14]/15 focus:outline-none focus:ring-2 focus:ring-[#39FF14]/60 cursor-pointer text-center font-sans tracking-wide border-none uppercase"
+            >
+              Começar Consultoria! 🚀
+            </button>
           </div>
         </div>
       )}

@@ -572,6 +572,12 @@ export default function App() {
     });
   }, [role, activeStudentId, students.length, isLoggedIn, loadingFirebase]);
 
+  // Master reactive LocalStorage synchronization effect
+  useEffect(() => {
+    if (loadingFirebase) return;
+    saveState(students, sheets, evolution, agenda, chats, notifications, revenueLogs);
+  }, [students, sheets, evolution, agenda, chats, notifications, revenueLogs]);
+
   // Real-time synchronization of students list from Firebase Firestore
   useEffect(() => {
     if (loadingFirebase) return;
@@ -601,6 +607,167 @@ export default function App() {
       unsub();
     };
   }, [loadingFirebase]);
+
+  // Real-time synchronization of trainers from Firebase Firestore
+  useEffect(() => {
+    if (loadingFirebase) return;
+
+    const q = collection(db, 'trainers');
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list: Trainer[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as Trainer);
+      });
+
+      const filtered = list.filter(t => t.id !== 't_default');
+
+      setTrainers((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(filtered)) {
+          return prev;
+        }
+        return filtered;
+      });
+      
+      // Keep activeTrainer updated if features changed
+      setActiveTrainer((prevActive) => {
+        if (!prevActive) return prevActive;
+        const updatedSelf = filtered.find(t => t.id === prevActive.id);
+        if (updatedSelf && JSON.stringify(updatedSelf) !== JSON.stringify(prevActive)) {
+          return updatedSelf;
+        }
+        return prevActive;
+      });
+    }, (error) => {
+      console.error("Error syncing trainers in real-time:", error);
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [loadingFirebase]);
+
+  // Real-time synchronization of training sheets from Firebase Firestore
+  useEffect(() => {
+    if (loadingFirebase) return;
+
+    const q = collection(db, 'sheets');
+    const unsub = onSnapshot(q, (snapshot) => {
+      const sheetsMap: Record<string, TrainingSheet> = {};
+      snapshot.forEach((d) => {
+        sheetsMap[d.id] = d.data() as TrainingSheet;
+      });
+
+      setSheets((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(sheetsMap)) {
+          return prev;
+        }
+        return sheetsMap;
+      });
+    }, (error) => {
+      console.error("Error syncing training sheets in real-time:", error);
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [loadingFirebase]);
+
+  // Real-time synchronization of agenda events from Firebase Firestore
+  useEffect(() => {
+    if (loadingFirebase) return;
+
+    const q = collection(db, 'agenda');
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list: AgendaEvent[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as AgendaEvent);
+      });
+
+      setAgenda((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(list)) {
+          return prev;
+        }
+        return list;
+      });
+    }, (error) => {
+      console.error("Error syncing agenda in real-time:", error);
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [loadingFirebase]);
+
+  // Real-time synchronization of notifications from Firebase Firestore
+  useEffect(() => {
+    if (loadingFirebase) return;
+
+    const q = collection(db, 'notifications');
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list: AppNotification[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as AppNotification);
+      });
+
+      // Sort notifications chronologically (newest first)
+      list.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+
+      setNotifications((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(list)) {
+          return prev;
+        }
+        return list;
+      });
+    }, (error) => {
+      console.error("Error syncing notifications in real-time:", error);
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [loadingFirebase]);
+
+  // Real-time synchronization of evolution subcollections for each student
+  useEffect(() => {
+    if (loadingFirebase || students.length === 0) return;
+
+    const unsubscribes: (() => void)[] = [];
+
+    students.forEach((student) => {
+      const q = collection(db, 'students', student.id, 'evolution');
+      const unsub = onSnapshot(q, (snapshot) => {
+        const records: EvolutionRecord[] = [];
+        snapshot.forEach((doc) => {
+          records.push(doc.data() as EvolutionRecord);
+        });
+
+        // Sort records chronologically (newest first)
+        records.sort((a, b) => {
+          const tA = new Date(a.date).getTime() || 0;
+          const tB = new Date(b.date).getTime() || 0;
+          return tB - tA;
+        });
+
+        setEvolution((prev) => {
+          const prevRecords = prev[student.id] || [];
+          if (JSON.stringify(prevRecords) === JSON.stringify(records)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [student.id]: records
+          };
+        });
+      }, (error) => {
+        console.error(`Error syncing evolution for student ${student.id}:`, error);
+      });
+      unsubscribes.push(unsub);
+    });
+
+    return () => {
+      unsubscribes.forEach((unsub) => unsub());
+    };
+  }, [loadingFirebase, students]);
 
   // Real-time synchronization of chats from Firebase Firestore using collections onSnapshot
   useEffect(() => {
@@ -1136,23 +1303,25 @@ export default function App() {
       const activeStudent = students.find(s => s.id === targetStudentId);
       
       let foundTrainerId: string | undefined = undefined;
-      if (activeStudent && activeStudent.trainerId) {
+      
+      // Look up trainerId directly from URL referral params first (it is the invite/professional origin!)
+      const params = new URLSearchParams(window.location.search);
+      const urlTrainerId = params.get('trainerId');
+      if (urlTrainerId) {
+        const matched = trainers.find(
+          t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || t.id === urlTrainerId
+        );
+        if (matched) {
+          foundTrainerId = matched.id;
+        }
+      }
+      
+      if (!foundTrainerId && activeStudent && activeStudent.trainerId) {
         foundTrainerId = activeStudent.trainerId;
-      } else {
-        // Look up trainerId directly from URL referral params or prior active state
-        const params = new URLSearchParams(window.location.search);
-        const urlTrainerId = params.get('trainerId');
-        if (urlTrainerId) {
-          const matched = trainers.find(
-            t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || t.id === urlTrainerId
-          );
-          if (matched) {
-            foundTrainerId = matched.id;
-          }
-        }
-        if (!foundTrainerId && activeTrainer) {
-          foundTrainerId = activeTrainer.id;
-        }
+      }
+      
+      if (!foundTrainerId && activeTrainer) {
+        foundTrainerId = activeTrainer.id;
       }
 
       if (foundTrainerId) {
@@ -1162,6 +1331,17 @@ export default function App() {
       if (!trainerToSet && trainers.length > 0) {
         trainerToSet = activeTrainer || trainers[0];
       }
+      
+      // Auto-bind student to trainer persistently in the database if there is a mismatch or missing trainerId!
+      if (activeStudent && trainerToSet && activeStudent.trainerId !== trainerToSet.id) {
+        activeStudent.trainerId = trainerToSet.id;
+        saveStudent(activeStudent).then(() => {
+          addSyncLog(`[Firebase] Vinculando Aluno "${activeStudent.name}" ao Personal Coach "${trainerToSet?.name}" com sucesso.`);
+        }).catch(err => {
+          console.error("Failed to persist student trainerId auto-bind:", err);
+        });
+      }
+      
       setActiveTrainer(trainerToSet);
     }
     

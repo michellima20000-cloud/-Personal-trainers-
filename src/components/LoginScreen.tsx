@@ -491,6 +491,10 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setErrorMsg('');
     setSuccessMsg('');
     const emailClean = email.trim().toLowerCase();
+    if (invitedStudent) {
+      executeGoogleLoginAsStudent(emailClean);
+      return;
+    }
     setGooglePendingRoleEmail(emailClean);
   };
 
