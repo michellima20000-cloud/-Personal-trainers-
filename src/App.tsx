@@ -328,7 +328,7 @@ export default function App() {
 
         // 4. Fallback to cached activeTrainer
         if (!finalActiveTrainer && preloadedState.activeTrainer) {
-          finalActiveTrainer = remoteTrainers.find(t => t.id === preloadedState.activeTrainer.id) || null;
+          finalActiveTrainer = remoteTrainers.find(t => t.id === preloadedState.activeTrainer.id) || preloadedState.activeTrainer;
         }
 
         // 5. Default fallback to first active trainer in DB (but only if it's not empty)
@@ -946,7 +946,10 @@ export default function App() {
   // Firestore & local synchronized event handlers:
 
   const handleAddTrainer = async (trn: Trainer) => {
-    const updated = [...trainers, trn];
+    const exists = trainers.some(t => t.id === trn.id);
+    const updated = exists
+      ? trainers.map(t => t.id === trn.id ? trn : t)
+      : [...trainers, trn];
     setTrainers(updated);
     setActiveTrainer(trn);
     
