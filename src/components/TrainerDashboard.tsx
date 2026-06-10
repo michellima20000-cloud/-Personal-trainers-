@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
   MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock,
-  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard, Settings, Mail
+  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard, Settings, Mail, UserCheck
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -372,6 +372,8 @@ export default function TrainerDashboard({
 
   // Personal/Individual student plan editing states
   const [editingStudentPlan, setEditingStudentPlan] = useState<boolean>(false);
+  const [newStudentIsProfileComplete, setNewStudentIsProfileComplete] = useState<boolean>(false);
+  const [tempStudentIsProfileComplete, setTempStudentIsProfileComplete] = useState<boolean>(false);
   const [tempStudentPlan, setTempStudentPlan] = useState<PlanType>('Mensal');
   const [tempStudentValue, setTempStudentValue] = useState<number>(0);
   const [tempStudentStatus, setTempStudentStatus] = useState<'Ativo' | 'Inativo'>('Ativo');
@@ -428,14 +430,15 @@ export default function TrainerDashboard({
       value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
       phoneWhatsApp: newStudent.phoneWhatsApp ? newStudent.phoneWhatsApp.trim() : undefined,
       trainerId: activeTrainer?.id || 't_default',
-      email: '', // Password-less Google connection
-      password: '',
-      isProfileComplete: false
+      email: isRapido ? '' : (newStudent.email ? newStudent.email.trim().toLowerCase() : ''),
+      password: isRapido ? '123456' : (newStudent.password || '123456'),
+      isProfileComplete: newStudentIsProfileComplete
     };
 
     onAddStudent(createdStudent);
     setSelectedStudentId(studentId);
     setActiveTab('alunos');
+    setNewStudentIsProfileComplete(false);
     // reset form
     setNewStudent({
       name: '',
@@ -1446,9 +1449,33 @@ export default function TrainerDashboard({
                                 O Aluno receberá o link enviado e completará seus dados pessoais, e-mail/WhatsApp, senha e dados de pagamento.
                               </p>
                             </div>
-                            <p className="text-[9.5px] text-neutral-500 font-mono text-center">
-                              Assim que ele preencher, as informações preenchidas aparecerão aqui para sua confirmação imediata.
+                            <p className="text-[9.5px] text-neutral-500 font-mono text-center mb-1">
+                              Assim que ele preencher, as informações preenchidas aparecerão aqui para sua confirmation imediata.
                             </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTempStudentName(selectedStudent.name || '');
+                                setTempStudentPhone(selectedStudent.phoneWhatsApp || '');
+                                setTempStudentEmail(selectedStudent.email || '');
+                                setTempStudentPassword(selectedStudent.password || '123456');
+                                setTempStudentAge(selectedStudent.age || 25);
+                                setTempStudentWeight(selectedStudent.weight || 70);
+                                setTempStudentHeight(selectedStudent.height || 1.70);
+                                setTempStudentObjective(selectedStudent.objective || 'Hipertrofia');
+                                setTempStudentRestrictions(selectedStudent.restrictions || '');
+                                setTempStudentHistory(selectedStudent.history || '');
+                                setTempStudentPlan(selectedStudent.plan);
+                                setTempStudentValue(selectedStudent.value);
+                                setTempStudentStatus(selectedStudent.status || 'Ativo');
+                                setTempStudentIsProfileComplete(selectedStudent.isProfileComplete || false);
+                                setEditingStudentPlan(true);
+                              }}
+                              className="w-full bg-[#39FF14]/10 hover:bg-[#39FF14]/20 border border-[#39FF14]/30 text-[#39FF14] font-extrabold py-2 rounded-xl font-sans transition-all active:scale-95 text-xs text-center flex items-center justify-center gap-1.5 mt-2 cursor-pointer"
+                            >
+                              <UserCheck size={14} />
+                              Preencher Manualmente Pelo Personal
+                            </button>
                           </div>
                         ) : (
                           <div className="space-y-3 text-xs">
@@ -1496,11 +1523,12 @@ export default function TrainerDashboard({
                               onClick={() => {
                                 onUpdateStudent(selectedStudent.id, {
                                   status: 'Ativo',
+                                  isProfileComplete: true,
                                   history: `Cadastro via convite revisado e aprovado pelo Personal Trainer em ${new Date().toLocaleDateString('pt-BR')}. ` + (selectedStudent.history || '')
                                 });
                                 alert('Incrível! O perfil do aluno foi devidamente revisado, confirmado e liberado para uso imediato!');
                               }}
-                              className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold py-2.5 rounded-xl font-sans transition-all active:scale-95 text-xs text-center flex items-center justify-center gap-1.5 shadow-md hover:shadow-[#39FF14]/15"
+                              className="w-full bg-[#39FF14] hover:bg-green-400 text-black font-extrabold py-2.5 rounded-xl font-sans transition-all active:scale-95 text-xs text-center flex items-center justify-center gap-1.5 shadow-md hover:shadow-[#39FF14]/15 cursor-pointer"
                             >
                               <Check size={14} className="stroke-[3]" />
                               Confirmar Informações & Liberar Acesso Aluno
@@ -1537,6 +1565,7 @@ export default function TrainerDashboard({
                               setTempStudentPlan(selectedStudent.plan);
                               setTempStudentValue(selectedStudent.value);
                               setTempStudentStatus(selectedStudent.status || 'Ativo');
+                              setTempStudentIsProfileComplete(selectedStudent.isProfileComplete || false);
                               setEditingStudentPlan(true);
                             }}
                             className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 hover:bg-neutral-800 text-[10px] font-medium text-[#39FF14] transition-all cursor-pointer font-mono"
@@ -1591,7 +1620,7 @@ export default function TrainerDashboard({
                           {/* Section 2: Plan and Contract */}
                           <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800/60 space-y-3">
                             <p className="text-[9px] text-[#39FF14] uppercase font-mono">2. Contrato e Status Administrativo</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                               <div>
                                 <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Tipo de Plano</label>
                                 <select 
@@ -1630,6 +1659,23 @@ export default function TrainerDashboard({
                                 >
                                   <option value="Ativo">Ativo (Permitir Entrada)</option>
                                   <option value="Inativo">Inativo (Bloqueado por Débito)</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Onboarding / Tutorial</label>
+                                <select 
+                                  value={tempStudentIsProfileComplete ? "completo" : "pendente"}
+                                  onChange={(e) => {
+                                    const isComp = e.target.value === "completo";
+                                    setTempStudentIsProfileComplete(isComp);
+                                    if (isComp) {
+                                      setTempStudentStatus('Ativo');
+                                    }
+                                  }}
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none cursor-pointer"
+                                >
+                                  <option value="completo">✓ Concluído (Acesso Direto)</option>
+                                  <option value="pendente">⏳ Pendente (Fazer Tutorial)</option>
                                 </select>
                               </div>
                             </div>
@@ -1730,7 +1776,8 @@ export default function TrainerDashboard({
                                   history: tempStudentHistory,
                                   plan: tempStudentPlan,
                                   value: tempStudentValue,
-                                  status: tempStudentStatus
+                                  status: tempStudentStatus,
+                                  isProfileComplete: tempStudentIsProfileComplete
                                 });
                                 setEditingStudentPlan(false);
                               }}
@@ -2008,20 +2055,41 @@ export default function TrainerDashboard({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Estado de Acesso Inicial</label>
                     <select 
                       value={newStudent.status} 
-                      onChange={(e) => setNewStudent({...newStudent, status: e.target.value as 'Ativo' | 'Inativo'})}
+                      onChange={(e) => {
+                        const sVal = e.target.value as 'Ativo' | 'Inativo';
+                        setNewStudent({...newStudent, status: sVal});
+                      }}
                       className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
                     >
-                      <option value="Ativo">Ativo (Acesso Liberado / Pagamento Confirmado)</option>
-                      <option value="Inativo">Inativo (Aguardando Pagamento do Aluno)</option>
+                      <option value="Ativo">🟢 Ativo (Acesso Liberado)</option>
+                      <option value="Inativo">🔴 Inativo (Bloqueado/Pendente)</option>
                     </select>
                   </div>
 
-                  {cadastroMode === 'completo' && (
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Onboarding / Tutorial Aluno</label>
+                    <select 
+                      value={newStudentIsProfileComplete ? "completo" : "pendente"} 
+                      onChange={(e) => {
+                        const isComp = e.target.value === "completo";
+                        setNewStudentIsProfileComplete(isComp);
+                        if (isComp) {
+                          setNewStudent(prev => ({...prev, status: 'Ativo'}));
+                        }
+                      }}
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-3.5 py-3 text-xs outline-none transition cursor-pointer"
+                    >
+                      <option value="pendente">⏳ Pendente (Aluno preenche pelo link)</option>
+                      <option value="completo">✅ Completo (Acesso Direto Sem Onboarding)</option>
+                    </select>
+                  </div>
+
+                  {cadastroMode === 'completo' ? (
                     <div>
                       <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Objetivo Físico</label>
                       <select 
@@ -2035,6 +2103,12 @@ export default function TrainerDashboard({
                         <option value="Definição">Definição Muscular</option>
                         <option value="Reabilitação">Tratamento Físico (Reabilitação)</option>
                       </select>
+                    </div>
+                  ) : (
+                    <div className="flex items-end">
+                      <p className="text-[10px] text-neutral-500 font-mono leading-tight mb-2">
+                        * No modo rápido, dados adicionais podem ser editados depois.
+                      </p>
                     </div>
                   )}
                 </div>

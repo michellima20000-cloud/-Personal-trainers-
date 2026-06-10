@@ -144,15 +144,27 @@ const getInitialStates = () => {
     
     // Auto-login disabled so students must go through LoginScreen, authenticate with Google, and link their Gmail!
     if (urlStudentId) {
-      initial.role = 'student';
-      initial.isLoggedIn = false;
-      initial.activeStudentId = urlStudentId;
+      if (initial.isLoggedIn && initial.role === 'student' && initial.activeStudentId === urlStudentId) {
+        // Keep logged-in active student session!
+      } else {
+        initial.role = 'student';
+        initial.isLoggedIn = false;
+        initial.activeStudentId = urlStudentId;
+      }
     } else if (urlTrainerId) {
-      initial.isLoggedIn = false;
-      initial.role = 'student';
+      if (initial.isLoggedIn && initial.role === 'student') {
+        // Keep logged-in active student session!
+      } else {
+        initial.isLoggedIn = false;
+        initial.role = 'student';
+      }
     } else if (urlRole === 'student' || urlRole === 'trainer') {
-      initial.role = urlRole as any;
-      initial.isLoggedIn = false;
+      if (initial.isLoggedIn && initial.role === urlRole) {
+        // Keep logged-in active session!
+      } else {
+        initial.role = urlRole as any;
+        initial.isLoggedIn = false;
+      }
     }
   }
   
@@ -538,7 +550,8 @@ export default function App() {
     newLoggedInRole?: 'trainer' | 'student' | 'admin',
     newMarketingPlans?: MarketingPlan[],
     newActiveTrainer?: Trainer | null,
-    newTrainers?: Trainer[]
+    newTrainers?: Trainer[],
+    newActiveStudentId?: string
   ) => {
     const data = {
       students: newStudents,
@@ -553,7 +566,8 @@ export default function App() {
       role: newLoggedInRole !== undefined ? newLoggedInRole : role,
       marketingPlans: newMarketingPlans || marketingPlans,
       activeTrainer: newActiveTrainer !== undefined ? newActiveTrainer : activeTrainer,
-      trainers: newTrainers || trainers
+      trainers: newTrainers || trainers,
+      activeStudentId: newActiveStudentId !== undefined ? newActiveStudentId : activeStudentId
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
   };
@@ -1395,7 +1409,9 @@ export default function App() {
       true, 
       enteredRole,
       marketingPlans,
-      trainerToSet
+      trainerToSet,
+      trainers,
+      studentId
     );
 
     const desc = enteredRole === 'admin' 
