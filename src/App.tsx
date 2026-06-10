@@ -142,10 +142,10 @@ const getInitialStates = () => {
     const urlStudentId = params.get('studentId');
     const urlTrainerId = params.get('trainerId');
     
-    // Auto-login students immediately and bypass login screen when clicking a direct student link
+    // Auto-login disabled so students must go through LoginScreen, authenticate with Google, and link their Gmail!
     if (urlStudentId) {
       initial.role = 'student';
-      initial.isLoggedIn = true;
+      initial.isLoggedIn = false;
       initial.activeStudentId = urlStudentId;
     } else if (urlTrainerId) {
       initial.isLoggedIn = false;
@@ -343,19 +343,19 @@ export default function App() {
 
         if (urlStudentId) {
           setRole('student');
-          setIsLoggedIn(true);
+          setIsLoggedIn(false);
           finalRole = 'student';
-          finalIsLoggedIn = true;
-          addSyncLog(`Link de acesso direto do aluno detectado: Autenticando instantaneamente.`);
+          finalIsLoggedIn = false;
+          addSyncLog(`Link de convite de aluno detectado: Aguardando autenticação da conta Google.`);
           const matchedStudent = remoteStudents.find(s => s.id === urlStudentId);
           if (matchedStudent && matchedStudent.status !== 'Ativo') {
             matchedStudent.status = 'Ativo';
             saveStudent(matchedStudent)
               .then(() => {
-                addSyncLog(`[Firebase] Status do aluno "${matchedStudent.name}" auto-ativado na nuvem.`);
+                addSyncLog(`[Firebase] Status do aluno "${matchedStudent.name}" pré-ativado na nuvem.`);
               })
               .catch(err => {
-                console.error("Failed to auto-activate student on boot:", err);
+                console.error("Failed to pre-activate student on boot:", err);
               });
           }
         } else if (urlTrainerId) {

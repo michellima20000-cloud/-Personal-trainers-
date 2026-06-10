@@ -262,7 +262,7 @@ export default function StudentDashboard({
             restrictions: obRestrictions.trim() || 'Nenhuma restrição declarada.',
             isProfileComplete: true,
             paymentDetailsConfirmed: true,
-            status: 'Inativo' // Set status as Inativo so they see the high-fidelity pending screen waiting for trainer's review!
+            status: 'Ativo' // Set status to 'Ativo' so they are fully active and their trainer can see their active progress!
           });
           setObStep(4);
           setObPayingStatus('idle');

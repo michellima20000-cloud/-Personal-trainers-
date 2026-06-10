@@ -512,7 +512,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
             onUpdateStudent(invitedStudent.id, {
               email: emailClean,
               accessMethod: 'google',
-              isProfileComplete: true, // Bypass blocking onboarding screens
+              isProfileComplete: invitedStudent.isProfileComplete || false, // Let them complete the remaining steps (bio, payment) if not complete!
               status: 'Ativo',
               trainerId: resolvedTrainerId
             });
@@ -542,7 +542,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
             onUpdateStudent(matched.id, {
               email: emailClean,
               accessMethod: 'google',
-              isProfileComplete: true, // Bypass blocking onboarding screens
+              isProfileComplete: matched.isProfileComplete || false, // Preserve and respect prior onboarding status
               status: 'Ativo',
               trainerId: resolvedTrainerId
             });
@@ -577,7 +577,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       status: 'Ativo',
       joinedAt: new Date().toLocaleDateString('pt-BR'),
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      isProfileComplete: true, // mark complete so they enter portal immediately (bypass blocking onboarding screens)
+      isProfileComplete: false, // Set to false to allow completing the onboarding wizard and choosing payment method!
       plan: 'Mensal',
       objective: 'Hipertrofia',
       restrictions: '',
