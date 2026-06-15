@@ -337,6 +337,11 @@ export default function App() {
           finalActiveTrainer = remoteTrainers[0];
         }
 
+        // Cache the active trainer referral identifier if it is a real trainer
+        if (finalActiveTrainer && finalActiveTrainer.id !== 't_default' && typeof window !== 'undefined') {
+          localStorage.setItem('gympulse_referred_trainer_id', finalActiveTrainer.id);
+        }
+
         // Apply state updates to React
         setStudents(remoteStudents);
         setSheets(remoteSheets);
@@ -1360,7 +1365,7 @@ export default function App() {
       
       let foundTrainerId: string | undefined = undefined;
       
-      // Look up trainerId directly from URL referral params first (it is the invite/professional origin!)
+      // 1. Look up trainerId directly from URL referral params first (it is the invite/professional origin!)
       const params = new URLSearchParams(window.location.search);
       const urlTrainerId = params.get('trainerId');
       if (urlTrainerId) {
@@ -1371,6 +1376,14 @@ export default function App() {
         );
         if (matched) {
           foundTrainerId = matched.id;
+        }
+      }
+      
+      // 2. Look up trainerId from localStorage stored cache fallback
+      if (!foundTrainerId && typeof window !== 'undefined') {
+        const storedTrainerId = localStorage.getItem('gympulse_referred_trainer_id');
+        if (storedTrainerId && storedTrainerId !== 't_default') {
+          foundTrainerId = storedTrainerId;
         }
       }
       

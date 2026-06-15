@@ -3,7 +3,7 @@ import {
   Users, Dumbbell, Shield, Lock, Eye, EyeOff, Key, 
   Sparkles, Check, AlertCircle, ArrowRight, Laptop, Smartphone,
   DollarSign, CheckSquare, Sparkle, QrCode, Clipboard, Star, Zap, Award,
-  Camera, Upload
+  Camera, Upload, UserCheck
 } from 'lucide-react';
 import { Student, Trainer, PlanType } from '../types';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
@@ -99,6 +99,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const trainerRefId = params.get('trainerId');
+    let matchedTrainer: Trainer | null = null;
+
     if (trainerRefId && trainers && trainers.length > 0) {
       const match = trainers.find(
         t => (t.customIdLink || '').toLowerCase() === trainerRefId.toLowerCase() || 
@@ -106,9 +108,24 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
              (t.email || '').split('@')[0].toLowerCase() === trainerRefId.toLowerCase()
       );
       if (match) {
-        setReferredTrainer(match);
-        setRegStudentTrainerId(match.id);
-        setActiveTab('student');
+        matchedTrainer = match;
+      }
+    }
+
+    // Fallback to localStorage
+    if (!matchedTrainer && typeof window !== 'undefined') {
+      const storedTrainerId = localStorage.getItem('gympulse_referred_trainer_id');
+      if (storedTrainerId && trainers && trainers.length > 0) {
+        matchedTrainer = trainers.find(t => t.id === storedTrainerId) || null;
+      }
+    }
+
+    if (matchedTrainer) {
+      setReferredTrainer(matchedTrainer);
+      setRegStudentTrainerId(matchedTrainer.id);
+      setActiveTab('student');
+      if (typeof window !== 'undefined' && matchedTrainer.id !== 't_default') {
+        localStorage.setItem('gympulse_referred_trainer_id', matchedTrainer.id);
       }
     }
   }, [trainers]);
@@ -136,6 +153,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
               if (matchedTrainer) {
                 setReferredTrainer(matchedTrainer);
                 setRegStudentTrainerId(matchedTrainer.id);
+                localStorage.setItem('gympulse_referred_trainer_id', matchedTrainer.id);
               }
             }
           }
@@ -581,7 +599,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     referredTrainerId: string | undefined, 
     regTrainerId: string | undefined
   ) => {
-    // 1. Explicit referredTrainer from URL (the absolute source of truth for the invite link)
+    // 1. Explicit referredTrainer from URL or state (the absolute source of truth for the invite link)
     if (referredTrainerId && referredTrainerId !== 't_default') {
       return referredTrainerId;
     }
@@ -589,7 +607,17 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     if (regTrainerId && regTrainerId !== 't_default') {
       return regTrainerId;
     }
-    // 3. Fallback to direct look up in URL query parameters at execution time
+    // 3. Fallback to localStorage matched trainer
+    if (typeof window !== 'undefined') {
+      const storedTrainerId = localStorage.getItem('gympulse_referred_trainer_id');
+      if (storedTrainerId && storedTrainerId !== 't_default' && trainers && trainers.length > 0) {
+        const matched = trainers.find(t => t.id === storedTrainerId);
+        if (matched) {
+          return matched.id;
+        }
+      }
+    }
+    // 4. Fallback to direct look up in URL query parameters at execution time
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const urlTrainerId = params.get('trainerId');
@@ -604,11 +632,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }
       }
     }
-    // 4. Existing student's current trainer ID (if it is a valid database trainer ID)
+    // 5. Existing student's current trainer ID (if it is a valid database trainer ID)
     if (currentTrainerId && currentTrainerId !== 't_default') {
       return currentTrainerId;
     }
-    // 5. Fallback to first real trainer available in the database snapshot
+    // 6. Fallback to first real trainer available in the database snapshot
     if (trainers && trainers.length > 0) {
       const realTrainer = trainers.find(t => t.id !== 't_default');
       if (realTrainer) {
@@ -2035,6 +2063,23 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       {showGoogleModal && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
           <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
+            {referredTrainer && (
+              <div className="bg-neutral-950 border-b border-neutral-800/80 p-4 pt-10 pb-4 flex items-center justify-between gap-3 text-left">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/30 text-[#39FF14] flex items-center justify-center font-bold">
+                    <UserCheck size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[8px] text-neutral-400 leading-none font-extrabold uppercase tracking-widest">Seu Personal Coach</p>
+                    <p className="text-xs font-black text-white mt-1 leading-none">{referredTrainer.name}</p>
+                  </div>
+                </div>
+                <span className="text-[7px] font-mono font-black bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/20 px-2.5 py-1 rounded-full uppercase tracking-wider animate-pulse whitespace-nowrap">
+                  Alinhamento Ativo
+                </span>
+              </div>
+            )}
+            
             <button 
               type="button"
               onClick={() => {
@@ -2042,7 +2087,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                 setShowGoogleCustomEmailInput(false);
                 setGooglePendingRoleEmail(null);
               }}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-white cursor-pointer transition font-bold text-sm bg-neutral-950/60 w-8 h-8 rounded-full flex items-center justify-center border border-neutral-800"
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white cursor-pointer transition font-bold text-sm bg-neutral-950/60 w-8 h-8 rounded-full flex items-center justify-center border border-neutral-800 z-[10]"
             >
               ✕
             </button>
