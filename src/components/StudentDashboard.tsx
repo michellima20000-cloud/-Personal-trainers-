@@ -1111,7 +1111,7 @@ export default function StudentDashboard({
   };
 
   const currentStudentEvolution = evolution[currentStudent?.id] || [];
-  const studentTrainer = (trainers || []).find(t => t.id === currentStudent?.trainerId) || activeTrainer || trainers[0];
+  const studentTrainer = (trainers || []).find(t => t.id === currentStudent?.trainerId) || (activeTrainer && (trainers || []).find(t => t.id === activeTrainer.id)) || activeTrainer || (trainers || []).find(t => t.id !== 't_default') || trainers[0];
 
   const renderBillingPortal = () => {
     return (

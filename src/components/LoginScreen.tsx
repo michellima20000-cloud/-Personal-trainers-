@@ -574,6 +574,34 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setGooglePendingRoleEmail(emailClean);
   };
 
+  const getResolvedTrainerId = (
+    currentTrainerId: string | undefined, 
+    referredTrainerId: string | undefined, 
+    regTrainerId: string | undefined
+  ) => {
+    // 1. Explicit referredTrainer from URL (the absolute source of truth for the invite link)
+    if (referredTrainerId && referredTrainerId !== 't_default') {
+      return referredTrainerId;
+    }
+    // 2. Explicit registered student trainer ID from URL
+    if (regTrainerId && regTrainerId !== 't_default') {
+      return regTrainerId;
+    }
+    // 3. Existing student's current trainer ID (if it is a valid database trainer ID)
+    if (currentTrainerId && currentTrainerId !== 't_default') {
+      return currentTrainerId;
+    }
+    // 4. Fallback to first real trainer available in the database snapshot
+    if (trainers && trainers.length > 0) {
+      const realTrainer = trainers.find(t => t.id !== 't_default');
+      if (realTrainer) {
+        return realTrainer.id;
+      }
+      return trainers[0].id;
+    }
+    return 't_default';
+  };
+
   const executeGoogleLoginAsStudent = (emailClean: string) => {
     setLoading(true);
     setErrorMsg('');
@@ -583,7 +611,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     if (invitedStudent) {
       setTimeout(async () => {
         try {
-          const resolvedTrainerId = referredTrainer?.id || invitedStudent.trainerId || regStudentTrainerId || (trainers && trainers.length > 0 ? trainers[0].id : 't_default');
+          const resolvedTrainerId = getResolvedTrainerId(invitedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
           if (onUpdateStudent) {
             onUpdateStudent(invitedStudent.id, {
               email: emailClean,
@@ -613,7 +641,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     if (matched) {
       setTimeout(async () => {
         try {
-          const resolvedTrainerId = referredTrainer?.id || matched.trainerId || regStudentTrainerId || (trainers && trainers.length > 0 ? trainers[0].id : 't_default');
+          const resolvedTrainerId = getResolvedTrainerId(matched.trainerId, referredTrainer?.id, regStudentTrainerId);
           if (onUpdateStudent) {
             onUpdateStudent(matched.id, {
               email: emailClean,
@@ -645,6 +673,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       : 'Aluno Convidado';
     
     const newStudentId = 'st_g_' + Date.now().toString();
+    const resolvedNewStudentTrainerId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
     const newStudent: Student = {
       id: newStudentId,
       name: generatedName,
@@ -665,8 +694,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       history: 'Cadastro instantâneo via Google Account.',
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
       value: 120,
-      // Auto-link to the referred trainer if present:
-      trainerId: referredTrainer ? referredTrainer.id : (trainers && trainers.length > 0 ? trainers[0].id : 't_default')
+      trainerId: resolvedNewStudentTrainerId
     };
 
     setTimeout(async () => {
@@ -866,12 +894,12 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           chosenTrainerName = matchedTrainer.name;
         } else {
           // If typed name doesn't match a stored trainer, associate with first trainer but record the trainer name
-          finalTrainerId = trainers[0]?.id || 't_default';
+          finalTrainerId = trainers.find(t => t.id !== 't_default')?.id || trainers[0]?.id || 't_default';
           chosenTrainerName = regStudentTrainerNameInput.trim();
         }
       } else {
-        finalTrainerId = trainers[0]?.id || 't_default';
-        chosenTrainerName = trainers[0]?.name || 'Consultoria Geral';
+        finalTrainerId = trainers.find(t => t.id !== 't_default')?.id || trainers[0]?.id || 't_default';
+        chosenTrainerName = trainers.find(t => t.id !== 't_default')?.name || trainers[0]?.name || 'Consultoria Geral';
       }
 
       const createdStudent: Student = {

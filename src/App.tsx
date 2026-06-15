@@ -986,8 +986,8 @@ export default function App() {
   };
   
   const handleAddStudent = async (std: Student) => {
-    if (!std.trainerId) {
-      std.trainerId = activeTrainer?.id || 't_default';
+    if (!std.trainerId || std.trainerId === 't_default') {
+      std.trainerId = activeTrainer?.id || (trainers && trainers.length > 0 ? (trainers.find(t => t.id !== 't_default')?.id || trainers[0].id) : 't_default');
     }
     const updated = [...students, std];
     setStudents(updated);

@@ -123,8 +123,8 @@ export default function TrainerDashboard({
   const [showSimulatedStripe, setShowSimulatedStripe] = useState(false);
   
   // Profile Configuration states
-  const [profileTrainerName, setProfileTrainerName] = useState(activeTrainer?.name || 'Daniel Personal Coach');
-  const [profileTrainerLink, setProfileTrainerLink] = useState(activeTrainer?.customIdLink || 'daniel-personal');
+  const [profileTrainerName, setProfileTrainerName] = useState(activeTrainer?.name || 'Personal Coach');
+  const [profileTrainerLink, setProfileTrainerLink] = useState(activeTrainer?.customIdLink || activeTrainer?.id || activeTrainer?.email?.split('@')[0] || 'coach');
   const [profileTrainerPlan, setProfileTrainerPlan] = useState<PlanType>(activeTrainer?.selectedPlan || 'Trimestral');
   const [profilePixKeyType, setProfilePixKeyType] = useState<'CNPJ' | 'CPF' | 'Telefone' | 'E-mail' | 'Chave Aleatória'>(activeTrainer?.pixKeyType || 'Chave Aleatória');
   const [profilePixKey, setProfilePixKey] = useState(activeTrainer?.pixKey || '9bbf9c81-8077-4cdd-bb85-055ee56bfd31');
@@ -1117,13 +1117,13 @@ export default function TrainerDashboard({
                     <input
                       type="text"
                       readOnly
-                      value={window.location.origin + '/?trainerId=' + (activeTrainer?.customIdLink || 'daniel-personal')}
+                      value={window.location.origin + '/?trainerId=' + (activeTrainer?.customIdLink || activeTrainer?.id || '')}
                       className="flex-1 bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-300 px-3 py-2 rounded-lg font-mono focus:outline-none focus:border-[#39FF14]"
                     />
                     <button
                       type="button"
                       onClick={() => {
-                        const link = window.location.origin + '/?trainerId=' + (activeTrainer?.customIdLink || 'daniel-personal');
+                        const link = window.location.origin + '/?trainerId=' + (activeTrainer?.customIdLink || activeTrainer?.id || '');
                         navigator.clipboard.writeText(link);
                         setCopiedRecruitmentLink(true);
                         setTimeout(() => setCopiedRecruitmentLink(false), 2000);
