@@ -547,6 +547,27 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     const emailClean = studentLoginEmail.trim().toLowerCase();
     const passClean = String(studentLoginPassword).trim();
 
+    // 1. If we have an active invitation link (invitedStudent is set),
+    // they are setting or completing their account credentials (email and password).
+    // Let's associate/configure these credentials on their record directly, activate them, and log them in.
+    if (invitedStudent) {
+      setSuccessMsg(`Sucesso! Seus dados de acesso foram configurados. Bem-vindo, ${invitedStudent.name}!`);
+      if (onUpdateStudent) {
+        onUpdateStudent(invitedStudent.id, {
+          email: emailClean,
+          password: passClean,
+          status: 'Ativo',
+          isProfileComplete: invitedStudent.isProfileComplete || false,
+          accessMethod: 'password'
+        });
+      }
+      setTimeout(() => {
+        setLoading(false);
+        onLoginSuccess('student', invitedStudent.id);
+      }, 1200);
+      return;
+    }
+
     try {
       // Direct, robust query against the remote Firestore collection to prevent replication lag / stale props
       const latestStudents = await fetchStudents();
