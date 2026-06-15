@@ -164,6 +164,8 @@ export default function StudentDashboard({
     );
   }
 
+  const [copiedLink, setCopiedLink] = useState(false);
+
   // Onboarding Wizard states for incoming invite-link student profiles
   const [obStep, setObStep] = useState<number>(0); // 0 = welcome, 1 = ident, 2 = bio, 3 = payment, 4 = complete
   const [obName, setObName] = useState('');
@@ -1594,6 +1596,24 @@ export default function StudentDashboard({
             >
               <FileText size={14} className="shrink-0" />
               <span>Gerar PDF Resumo</span>
+            </button>
+
+            <button
+              onClick={() => {
+                const linkStr = `${window.location.origin}?role=student&studentId=${currentStudent.id}&trainerId=${currentStudent.trainerId || ''}`;
+                navigator.clipboard.writeText(linkStr);
+                setCopiedLink(true);
+                setTimeout(() => setCopiedLink(false), 2000);
+              }}
+              className={`flex items-center justify-center gap-2 border rounded-xl px-4 py-2 text-xs font-extrabold transition-all duration-200 active:scale-95 cursor-pointer shadow-lg ${
+                copiedLink
+                  ? 'bg-[#39FF14] text-black border-[#39FF14]'
+                  : 'bg-neutral-900 hover:bg-[#39FF14]/10 border-neutral-800 text-[#39FF14] hover:border-[#39FF14]/30'
+              }`}
+              title="Copiar meu link de acesso permanente"
+            >
+              <Copy size={14} className="shrink-0" />
+              <span>{copiedLink ? 'Link Copiado!' : 'Copiar Meu Link'}</span>
             </button>
 
             {onLogout && (

@@ -430,8 +430,8 @@ export default function TrainerDashboard({
       value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
       phoneWhatsApp: newStudent.phoneWhatsApp ? newStudent.phoneWhatsApp.trim() : undefined,
       trainerId: activeTrainer?.id || 't_default',
-      email: isRapido ? '' : (newStudent.email ? newStudent.email.trim().toLowerCase() : ''),
-      password: isRapido ? '123456' : (newStudent.password || '123456'),
+      email: newStudent.email ? newStudent.email.trim().toLowerCase() : `${newStudent.name.toLowerCase().replace(/\s+/g, '')}@gympulse.com.br`,
+      password: newStudent.password ? newStudent.password.trim() : '123456',
       isProfileComplete: newStudentIsProfileComplete
     };
 
@@ -2052,6 +2052,32 @@ export default function TrainerDashboard({
                       <option value="Trimestral">Trimestral (R$ 140/mês)</option>
                       <option value="Anual">Anual (R$ 90/mês)</option>
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">E-mail de Acesso (Login do Aluno)</label>
+                    <input 
+                      type="email"
+                      required
+                      value={newStudent.email || ''}
+                      onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
+                      placeholder="Ex: ana.silva@email.com"
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Senha Provisória de Acesso</label>
+                    <input 
+                      type="text"
+                      required
+                      value={newStudent.password || ''}
+                      onChange={(e) => setNewStudent({...newStudent, password: e.target.value})}
+                      placeholder="Mínimo 4 caracteres (Ex: 123456)"
+                      className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans font-mono"
+                    />
                   </div>
                 </div>
 
