@@ -305,7 +305,9 @@ export default function App() {
         // 1. If trainerId is in the URL (direct personal trainer link), match it FIRST as the absolute priority!
         if (urlTrainerId) {
           finalActiveTrainer = remoteTrainers.find(
-            t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || t.id === urlTrainerId
+            t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
+                 t.id.toLowerCase() === urlTrainerId.toLowerCase() ||
+                 (t.email || '').split('@')[0].toLowerCase() === urlTrainerId.toLowerCase()
           ) || null;
         }
 
@@ -325,8 +327,8 @@ export default function App() {
           }
         }
 
-        // 4. Fallback to cached activeTrainer
-        if (!finalActiveTrainer && preloadedState.activeTrainer) {
+        // 4. Fallback to cached activeTrainer (ignoring fake DEFAULT_TRAINER 't_default')
+        if (!finalActiveTrainer && preloadedState.activeTrainer && preloadedState.activeTrainer.id !== 't_default') {
           finalActiveTrainer = remoteTrainers.find(t => t.id === preloadedState.activeTrainer.id) || preloadedState.activeTrainer;
         }
 
@@ -987,7 +989,10 @@ export default function App() {
   
   const handleAddStudent = async (std: Student) => {
     if (!std.trainerId || std.trainerId === 't_default') {
-      std.trainerId = activeTrainer?.id || (trainers && trainers.length > 0 ? (trainers.find(t => t.id !== 't_default')?.id || trainers[0].id) : 't_default');
+      const firstReal = trainers.find(t => t.id !== 't_default');
+      std.trainerId = (activeTrainer && activeTrainer.id !== 't_default') 
+        ? activeTrainer.id 
+        : (firstReal?.id || trainers[0]?.id || 't_default');
     }
     const updated = [...students, std];
     setStudents(updated);
@@ -1360,18 +1365,20 @@ export default function App() {
       const urlTrainerId = params.get('trainerId');
       if (urlTrainerId) {
         const matched = trainers.find(
-          t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || t.id === urlTrainerId
+          t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
+               t.id.toLowerCase() === urlTrainerId.toLowerCase() ||
+               (t.email || '').split('@')[0].toLowerCase() === urlTrainerId.toLowerCase()
         );
         if (matched) {
           foundTrainerId = matched.id;
         }
       }
       
-      if (!foundTrainerId && activeStudent && activeStudent.trainerId) {
+      if (!foundTrainerId && activeStudent && activeStudent.trainerId && activeStudent.trainerId !== 't_default') {
         foundTrainerId = activeStudent.trainerId;
       }
       
-      if (!foundTrainerId && activeTrainer) {
+      if (!foundTrainerId && activeTrainer && activeTrainer.id !== 't_default') {
         foundTrainerId = activeTrainer.id;
       }
 
@@ -1380,7 +1387,8 @@ export default function App() {
       }
 
       if (!trainerToSet && trainers.length > 0) {
-        trainerToSet = activeTrainer || trainers[0];
+        const firstReal = trainers.find(t => t.id !== 't_default');
+        trainerToSet = (activeTrainer && activeTrainer.id !== 't_default') ? activeTrainer : (firstReal || trainers[0]);
       }
       
       // Auto-bind student to trainer persistently in the database if there is a mismatch or missing trainerId!

@@ -101,7 +101,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     const trainerRefId = params.get('trainerId');
     if (trainerRefId && trainers && trainers.length > 0) {
       const match = trainers.find(
-        t => (t.customIdLink || '').toLowerCase() === trainerRefId.toLowerCase() || t.id.toLowerCase() === trainerRefId.toLowerCase()
+        t => (t.customIdLink || '').toLowerCase() === trainerRefId.toLowerCase() || 
+             t.id.toLowerCase() === trainerRefId.toLowerCase() ||
+             (t.email || '').split('@')[0].toLowerCase() === trainerRefId.toLowerCase()
       );
       if (match) {
         setReferredTrainer(match);
@@ -587,11 +589,26 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     if (regTrainerId && regTrainerId !== 't_default') {
       return regTrainerId;
     }
-    // 3. Existing student's current trainer ID (if it is a valid database trainer ID)
+    // 3. Fallback to direct look up in URL query parameters at execution time
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlTrainerId = params.get('trainerId');
+      if (urlTrainerId && trainers && trainers.length > 0) {
+        const matched = trainers.find(t => 
+          (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
+          t.id.toLowerCase() === urlTrainerId.toLowerCase() ||
+          (t.email || '').split('@')[0].toLowerCase() === urlTrainerId.toLowerCase()
+        );
+        if (matched) {
+          return matched.id;
+        }
+      }
+    }
+    // 4. Existing student's current trainer ID (if it is a valid database trainer ID)
     if (currentTrainerId && currentTrainerId !== 't_default') {
       return currentTrainerId;
     }
-    // 4. Fallback to first real trainer available in the database snapshot
+    // 5. Fallback to first real trainer available in the database snapshot
     if (trainers && trainers.length > 0) {
       const realTrainer = trainers.find(t => t.id !== 't_default');
       if (realTrainer) {
