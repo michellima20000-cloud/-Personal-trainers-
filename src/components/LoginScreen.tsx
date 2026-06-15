@@ -7,12 +7,12 @@ import {
 } from 'lucide-react';
 import { Student, Trainer, PlanType } from '../types';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
-import { fetchStudents } from '../utils/firebase';
+import { fetchStudents, fetchStudent, fetchStudentByEmail } from '../utils/firebase';
 
 interface LoginScreenProps {
   students: Student[];
   trainers: Trainer[];
-  onLoginSuccess: (role: 'trainer' | 'student' | 'admin', studentId?: string, loggedInTrainer?: Trainer) => void;
+  onLoginSuccess: (role: 'trainer' | 'student' | 'admin', studentId?: string, loggedInTrainer?: Trainer, loggedInStudent?: Student) => void;
   onAddStudent: (student: Student) => void;
   onAddTrainer: (trainer: Trainer) => void;
   onUpdateStudent?: (id: string, data: Partial<Student>) => void;
@@ -140,11 +140,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       
       if (urlRole === 'student' || urlStudentId) {
         setActiveTab('student');
-        if (urlStudentId && students && students.length > 0) {
-          const matched = students.find(s => s.id === urlStudentId);
+        if (urlStudentId) {
+          const matched = (students || []).find(s => s.id === urlStudentId);
           if (matched) {
             setInvitedStudent(matched);
-            setSuccessMsg(`Convite ativo: Olá, ${matched.name}! Entre diretamente usando sua conta Google.`);
+            setSuccessMsg(`Convite ativo: Olá, ${matched.name}! Entre usando seu e-mail e senha abaixo.`);
             
             // Auto-resolve referredTrainer from the student's existing record if they have a trainer assigned
             // ONLY if there is no explicit trainerId parameter in the URL prioritizing a different trainer!
@@ -156,6 +156,22 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
                 localStorage.setItem('gympulse_referred_trainer_id', matchedTrainer.id);
               }
             }
+          } else {
+            // Direct robust fallback fetch from Firestore for immediate access!
+            fetchStudent(urlStudentId).then(fetched => {
+              if (fetched) {
+                setInvitedStudent(fetched);
+                setSuccessMsg(`Convite ativo: Olá, ${fetched.name}! Entre usando seu e-mail e senha abaixo.`);
+                if (!urlTrainerId && fetched.trainerId && trainers && trainers.length > 0) {
+                  const matchedTrainer = trainers.find(t => t.id === fetched.trainerId);
+                  if (matchedTrainer) {
+                    setReferredTrainer(matchedTrainer);
+                    setRegStudentTrainerId(matchedTrainer.id);
+                    localStorage.setItem('gympulse_referred_trainer_id', matchedTrainer.id);
+                  }
+                }
+              }
+            }).catch(e => console.warn("Could not fetch individual invited student:", e));
           }
         }
       }
@@ -552,18 +568,20 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     // Let's associate/configure these credentials on their record directly, activate them, and log them in.
     if (invitedStudent) {
       setSuccessMsg(`Sucesso! Seus dados de acesso foram configurados. Bem-vindo, ${invitedStudent.name}!`);
+      const updatedData: Partial<Student> = {
+        email: emailClean,
+        password: passClean,
+        status: 'Ativo',
+        isProfileComplete: invitedStudent.isProfileComplete || false,
+        accessMethod: 'password'
+      };
       if (onUpdateStudent) {
-        onUpdateStudent(invitedStudent.id, {
-          email: emailClean,
-          password: passClean,
-          status: 'Ativo',
-          isProfileComplete: invitedStudent.isProfileComplete || false,
-          accessMethod: 'password'
-        });
+        onUpdateStudent(invitedStudent.id, updatedData);
       }
       setTimeout(() => {
         setLoading(false);
-        onLoginSuccess('student', invitedStudent.id);
+        const fullyUpdated = { ...invitedStudent, ...updatedData };
+        onLoginSuccess('student', invitedStudent.id, undefined, fullyUpdated);
       }, 1200);
       return;
     }
@@ -573,17 +591,28 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       const latestStudents = await fetchStudents();
       const allStudentsToSearch = latestStudents && latestStudents.length > 0 ? latestStudents : students;
       
-      const matchedStudent = allStudentsToSearch.find(s => {
+      let matchedStudent = allStudentsToSearch.find(s => {
         const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
         const sPass = String(s.password || getStudentPassword(s)).trim();
         return sEmail === emailClean && sPass === passClean;
       });
 
+      // Direct email lookup in Firestore as robust double-check!
+      if (!matchedStudent) {
+        const dbStudent = await fetchStudentByEmail(emailClean);
+        if (dbStudent) {
+          const sPass = String(dbStudent.password || getStudentPassword(dbStudent)).trim();
+          if (sPass === passClean) {
+            matchedStudent = dbStudent;
+          }
+        }
+      }
+
       if (matchedStudent) {
         setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
         setTimeout(() => {
           setLoading(false);
-          onLoginSuccess('student', matchedStudent.id);
+          onLoginSuccess('student', matchedStudent.id, undefined, matchedStudent);
         }, 1200);
       } else {
         setLoading(false);
@@ -593,17 +622,32 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       console.warn('[Direct Login Auth] Direct fetch failed or timed out, carrying out local state authentication fallback...', err);
       
       // Fallback local memory search if Firestore is unreachable or guest connection issues
-      const matchedStudent = students.find(s => {
+      let matchedStudent = students.find(s => {
         const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
         const sPass = String(s.password || getStudentPassword(s)).trim();
         return sEmail === emailClean && sPass === passClean;
       });
 
+      // Even in catch block, let's try direct email lookup in case collection load failed but single document query works!
+      if (!matchedStudent) {
+        try {
+          const dbStudent = await fetchStudentByEmail(emailClean);
+          if (dbStudent) {
+            const sPass = String(dbStudent.password || getStudentPassword(dbStudent)).trim();
+            if (sPass === passClean) {
+              matchedStudent = dbStudent;
+            }
+          }
+        } catch (e) {
+          console.warn("Direct document fetch under main failure failed too:", e);
+        }
+      }
+
       if (matchedStudent) {
         setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
         setTimeout(() => {
           setLoading(false);
-          onLoginSuccess('student', matchedStudent.id);
+          onLoginSuccess('student', matchedStudent.id, undefined, matchedStudent);
         }, 1200);
       } else {
         setLoading(false);

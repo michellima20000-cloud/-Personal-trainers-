@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { 
   getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  getDocFromServer
+  getDocFromServer, query, where, limit
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Student, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, AccessLog, MarketingPlan, Trainer } from '../types';
@@ -243,6 +243,36 @@ export async function fetchStudents(): Promise<Student[]> {
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+  }
+}
+
+export async function fetchStudent(studentId: string): Promise<Student | null> {
+  const p = `students/${studentId}`;
+  try {
+    const snap = await getDoc(doc(db, 'students', studentId));
+    if (snap.exists()) {
+      return snap.data() as Student;
+    }
+    return null;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, p);
+    return null;
+  }
+}
+
+export async function fetchStudentByEmail(email: string): Promise<Student | null> {
+  const emailClean = String(email).trim().toLowerCase();
+  const p = `students?email=${emailClean}`;
+  try {
+    const q = query(collection(db, 'students'), where('email', '==', emailClean), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      return snap.docs[0].data() as Student;
+    }
+    return null;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, p);
+    return null;
   }
 }
 

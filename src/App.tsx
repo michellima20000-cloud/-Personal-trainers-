@@ -1343,7 +1343,7 @@ export default function App() {
       });
   };
 
-  const handleLoginSuccess = (enteredRole: 'trainer' | 'student' | 'admin', studentId?: string, loggedInTrainer?: Trainer) => {
+  const handleLoginSuccess = (enteredRole: 'trainer' | 'student' | 'admin', studentId?: string, loggedInTrainer?: Trainer, loggedInStudent?: Student) => {
     setRole(enteredRole);
     if (studentId) {
       setActiveStudentId(studentId);
@@ -1355,7 +1355,20 @@ export default function App() {
       setActiveTrainer(trainerToSet);
     } else if (enteredRole === 'student') {
       const targetStudentId = studentId || activeStudentId;
-      const activeStudent = students.find(s => s.id === targetStudentId);
+      
+      // If we got the direct student object from LoginScreen (which queried Firestore directly),
+      // we can merge it into the students state if it's missing or update it to match the login credentials!
+      let activeStudent = students.find(s => s.id === targetStudentId);
+      if (!activeStudent && loggedInStudent) {
+        activeStudent = loggedInStudent;
+        setStudents(prev => {
+          if (!prev.some(s => s.id === loggedInStudent.id)) {
+            return [...prev, loggedInStudent];
+          }
+          return prev;
+        });
+      }
+
       if (activeStudent && activeStudent.status !== 'Ativo') {
         activeStudent.status = 'Ativo';
         saveStudent(activeStudent).catch(err => {
