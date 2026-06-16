@@ -23,7 +23,7 @@ import { deleteDoc, doc, collection, onSnapshot } from 'firebase/firestore';
 import { 
   db,
   initializeAnonymousAuth, 
-  fetchStudents, saveStudent,
+  fetchStudents, fetchStudent, saveStudent,
   fetchSheets, saveSheet,
   fetchAllEvolutionRecords, saveEvolutionRecord,
   fetchAllChatMessages, saveChatMessage,
@@ -1062,24 +1062,44 @@ export default function App() {
   };
 
   const handleUpdateStudent = async (id: string, data: Partial<Student>) => {
-    const updated = students.map(s => s.id === id ? { ...s, ...data } : s);
+    // 1. Resolve current student record from state or fetch directly from Firestore if missing
+    let currentStudent = students.find(s => s.id === id);
+    
+    if (!currentStudent) {
+      try {
+        currentStudent = await fetchStudent(id) || undefined;
+      } catch (err) {
+        console.warn("Could not fetch student directly in handleUpdateStudent fallback:", err);
+      }
+    }
+    
+    const updatedStudent: Student = currentStudent 
+      ? { ...currentStudent, ...data }
+      : { id, ...data } as Student;
+
+    // 2. Update local students array
+    let updated: Student[];
+    const exists = students.some(s => s.id === id);
+    if (exists) {
+      updated = students.map(s => s.id === id ? updatedStudent : s);
+    } else {
+      updated = [...students, updatedStudent];
+    }
     setStudents(updated);
 
-    // Persist to local storage synchronously and immediately
+    // 3. Persist state to local storage
     saveState(updated, sheets, evolution, agenda, chats, notifications, revenueLogs);
 
-    const updatedStudent = updated.find(s => s.id === id);
-    if (updatedStudent) {
-      addSyncLog(`[Firebase] Atualizando "${updatedStudent.name}" em nuvem (segundo plano)...`);
-      saveStudent(updatedStudent)
-        .then(() => {
-          addSyncLog(`[Firebase] Dados de "${updatedStudent.name}" atualizados em nuvem.`);
-        })
-        .catch((err) => {
-          console.error("Firebase update student failed:", err);
-          addSyncLog(`[Error] Erro ao sincronizar update de biotipo.`);
-        });
-    }
+    // 4. Save to Cloud securely and directly
+    addSyncLog(`[Firebase] Atualizando "${updatedStudent.name || id}" em nuvem (segundo plano)...`);
+    return saveStudent(updatedStudent)
+      .then(() => {
+        addSyncLog(`[Firebase] Dados de "${updatedStudent.name || id}" atualizados em nuvem.`);
+      })
+      .catch((err) => {
+        console.error("Firebase update student failed:", err);
+        addSyncLog(`[Error] Falha ao sincronizar dados de "${updatedStudent.name || id}" em nuvem.`);
+      });
   };
 
   const handleDeleteStudent = async (id: string) => {

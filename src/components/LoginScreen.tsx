@@ -145,6 +145,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           if (matched) {
             setInvitedStudent(matched);
             setSuccessMsg(`Convite ativo: Olá, ${matched.name}! Entre usando seu e-mail e senha abaixo.`);
+            if (matched.email) {
+              setStudentLoginEmail(matched.email);
+            }
             
             // Auto-resolve referredTrainer from the student's existing record if they have a trainer assigned
             // ONLY if there is no explicit trainerId parameter in the URL prioritizing a different trainer!
@@ -162,6 +165,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
               if (fetched) {
                 setInvitedStudent(fetched);
                 setSuccessMsg(`Convite ativo: Olá, ${fetched.name}! Entre usando seu e-mail e senha abaixo.`);
+                if (fetched.email) {
+                  setStudentLoginEmail(fetched.email);
+                }
                 if (!urlTrainerId && fetched.trainerId && trainers && trainers.length > 0) {
                   const matchedTrainer = trainers.find(t => t.id === fetched.trainerId);
                   if (matchedTrainer) {
@@ -565,9 +571,18 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
     // 1. If we have an active invitation link (invitedStudent is set),
     // they are setting or completing their account credentials (email and password).
-    // Let's associate/configure these credentials on their record directly, activate them, and log them in.
+    // Let's validate the password against what the personal trainer pre-registered.
     if (invitedStudent) {
-      setSuccessMsg(`Sucesso! Seus dados de acesso foram configurados. Bem-vindo, ${invitedStudent.name}!`);
+      const regEmail = String(invitedStudent.email || '').trim().toLowerCase();
+      const regPass = String(invitedStudent.password || '123456').trim();
+
+      if (passClean !== regPass) {
+        setLoading(false);
+        setErrorMsg('Senha incorreta! Digite a senha cadastrada pelo seu Personal Trainer para este acesso.');
+        return;
+      }
+
+      setSuccessMsg(`Sucesso! Seus dados de acesso foram validados. Bem-vindo, ${invitedStudent.name}!`);
       const updatedData: Partial<Student> = {
         email: emailClean,
         password: passClean,
