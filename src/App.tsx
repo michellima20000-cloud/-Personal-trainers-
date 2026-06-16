@@ -267,6 +267,42 @@ export default function App() {
         clearTimeout(timeoutId);
 
         let remoteStudents = (dbData.students || []).filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id));
+        
+        // Anti-wipe local-to-cloud auto-synchronization safeguard
+        const localOnlyStudents = (preloadedState.students || []).filter(
+          s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id) && 
+               !remoteStudents.some(rs => rs.id === s.id)
+        );
+
+        if (localOnlyStudents.length > 0) {
+          addSyncLog(`[Sync] Sincronizando ${localOnlyStudents.length} aluno(s) locais pendentes para o Firebase...`);
+          localOnlyStudents.forEach(s => {
+            saveStudent(s)
+              .then(() => addSyncLog(`[Sync] Aluno "${s.name}" sincronizado com a nuvem.`))
+              .catch(err => console.error("Failed to sync student to cloud:", err));
+            
+            const localSheet = preloadedState.sheets?.[s.id];
+            if (localSheet) {
+              saveSheet(s.id, localSheet).catch(err => console.error("Failed to sync training sheet to cloud:", err));
+            }
+
+            const localEvols = preloadedState.evolution?.[s.id];
+            if (localEvols && Array.isArray(localEvols)) {
+              localEvols.forEach(r => {
+                saveEvolutionRecord(s.id, r).catch(err => console.error("Failed to sync evolution record to cloud:", err));
+              });
+            }
+
+            const localChats = preloadedState.chats?.[s.id];
+            if (localChats && Array.isArray(localChats)) {
+              localChats.forEach(m => {
+                saveChatMessage(s.id, m).catch(err => console.error("Failed to sync chat message to cloud:", err));
+              });
+            }
+          });
+          remoteStudents = [...remoteStudents, ...localOnlyStudents];
+        }
+
         let remoteSheets = dbData.sheets;
         let remoteAgenda = dbData.agenda;
         let remoteNotifications = dbData.notifications;
