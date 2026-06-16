@@ -32,6 +32,12 @@ service cloud.firestore {
       allow delete: if isAllowed();
     }
 
+    match /alunos/{studentId} {
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidId(studentId) && isValidStudent(incoming());
+      allow delete: if isAllowed();
+    }
+
     function isValidStudent(data) {
       return data.id is string && data.id.size() <= 128;
     }

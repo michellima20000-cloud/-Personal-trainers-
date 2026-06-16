@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { Student, Trainer, PlanType } from '../types';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
-import { fetchStudents, fetchStudent, fetchStudentByEmail } from '../utils/firebase';
+import { fetchStudents, fetchStudent, fetchStudentByEmail, auth, saveStudent, db } from '../utils/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { deleteDoc, doc } from 'firebase/firestore';
 
 interface LoginScreenProps {
   students: Student[];
@@ -652,119 +654,134 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
     // 1. If we have an active invitation link (invitedStudent is set),
     // they are setting or completing their account credentials (email and password).
-    // Let's validate the password against what the personal trainer pre-registered.
     if (invitedStudent) {
       console.log(`[GymPulse Login] Entrando via link de convite ativo para: "${invitedStudent.name}" (ID: ${invitedStudent.id})`);
       
-      // Since they have the secure link sent via WhatsApp by their trainer, we accept any password they set (minimum 4 characters)
-      // and update it in Firestore. This acts as a robust self-healing onboarding flow!
-      if (passClean.length < 4) {
+      // Minimum password size must be 6 characters to comply with Firebase Auth constraints
+      if (passClean.length < 6) {
         setLoading(false);
-        setErrorMsg('Sua senha de acesso deve conter no mínimo 4 caracteres.');
+        setErrorMsg('Sua senha de acesso deve conter no mínimo 6 caracteres para garantir a segurança da autenticação no Firebase.');
         return;
       }
 
-      setSuccessMsg(`Sucesso! Seus dados de acesso foram validados. Bem-vindo, ${invitedStudent.name}!`);
-      const updatedData: Partial<Student> = {
-        email: emailClean,
-        password: passClean,
-        status: 'Ativo',
-        isProfileComplete: invitedStudent.isProfileComplete || false,
-        accessMethod: 'password'
-      };
-      if (onUpdateStudent) {
-        onUpdateStudent(invitedStudent.id, updatedData);
-      }
-      setTimeout(() => {
+      setSuccessMsg(`Sucesso! Criando credenciais seguras para ${invitedStudent.name} no Portal...`);
+      
+      try {
+        // Register client securely in Firebase Auth under the hood
+        try {
+          await createUserWithEmailAndPassword(auth, emailClean, passClean);
+          console.log(`[GymPulse Auth] Sucesso ao criar usuário no Firebase Auth para: ${emailClean}`);
+        } catch (authCreateErr: any) {
+          // If already exists, log in to verify password correctness
+          if (authCreateErr.code === 'auth/email-already-in-use') {
+            await signInWithEmailAndPassword(auth, emailClean, passClean);
+            console.log(`[GymPulse Auth] Usuário já existia no Firebase Auth; autenticado com sucesso.`);
+          } else {
+            console.warn("[GymPulse Auth] Erro ao criar ou conectar no Firebase Auth, prosseguindo com fluxo híbrido de dados:", authCreateErr);
+          }
+        }
+
+        const updatedData: Partial<Student> = {
+          email: emailClean,
+          password: passClean,
+          status: 'Ativo',
+          isProfileComplete: invitedStudent.isProfileComplete || false,
+          accessMethod: 'password' as const
+        };
+        if (onUpdateStudent) {
+          onUpdateStudent(invitedStudent.id, updatedData);
+        }
+        setTimeout(() => {
+          setLoading(false);
+          const fullyUpdated = { ...invitedStudent, ...updatedData };
+          onLoginSuccess('student', invitedStudent.id, undefined, fullyUpdated);
+        }, 1200);
+      } catch (err: any) {
         setLoading(false);
-        const fullyUpdated = { ...invitedStudent, ...updatedData };
-        onLoginSuccess('student', invitedStudent.id, undefined, fullyUpdated);
-      }, 1200);
+        console.error("Firebase auth registration failed during invite handling:", err);
+        setErrorMsg(`Não foi possível autenticar: ${err.message || err}`);
+      }
+      return;
+    }
+
+    let matchedStudent: Student | null = null;
+    let uid = '';
+    
+    try {
+      console.log(`[GymPulse Login] Autenticando aluno no Firebase Auth: "${emailClean}"`);
+      const userCredential = await signInWithEmailAndPassword(auth, emailClean, passClean);
+      uid = userCredential.user.uid;
+      console.log(`[GymPulse Auth] Autenticado com sucesso. UID: ${uid}`);
+    } catch (authErr: any) {
+      console.error(`[GymPulse Auth Error] Falha de login para o e-mail: ${emailClean}`, authErr);
+      setLoading(false);
+      
+      // Map error codes to friendly custom messages
+      if (authErr.code === 'auth/wrong-password' || authErr.code === 'auth/invalid-credential') {
+        const dbStudent = await fetchStudentByEmail(emailClean);
+        if (dbStudent) {
+          setErrorMsg(`Senha incorreta! Encontramos o perfil do aluno "${dbStudent.name}", mas a senha digitada não confere. Certifique-se de usar a senha provisória de 6 caracteres criada pelo seu treinador.`);
+        } else {
+          setErrorMsg(`Dados incorretos de acesso. Por favor, verifique o e-mail e senha inseridos.`);
+        }
+      } else if (authErr.code === 'auth/user-not-found') {
+        setErrorMsg(`E-mail não cadastrado! Não encontramos o e-mail "${studentLoginEmail.trim()}". Confirme se escreveu corretamente ou verifique com seu Personal Trainer.`);
+      } else if (authErr.code === 'auth/invalid-email') {
+        setErrorMsg('Formato de e-mail inválido. Por favor, corrija-o para avançar.');
+      } else {
+        setErrorMsg(`Não foi possível autenticar: E-mail não cadastrado ou credencial inválida.`);
+      }
       return;
     }
 
     try {
-      // Direct, robust query against the remote Firestore collection to find the student
-      let matchedStudent: Student | null = null;
-      let emailExists = false;
-      let matchingStudentDoc: Student | null = null;
-
-      // Plan A: Direct lookup by cleaned email in Firestore (equality filter)
-      console.log(`[GymPulse Login] Plano A: Buscando aluno no Firestore pelo e-mail: "${emailClean}"`);
-      const dbStudent = await fetchStudentByEmail(emailClean);
-      if (dbStudent) {
-        console.log(`[GymPulse Login] Plano A: Encontrou aluno por e-mail no Firestore!`);
-        emailExists = true;
-        matchingStudentDoc = dbStudent;
-        if (checkPasswordMatch(dbStudent, passClean)) {
-          matchedStudent = dbStudent;
-        }
-      }
-
-      // Plan B: Direct lookup by raw case-sensitive email in Firestore
-      if (!matchedStudent) {
-        console.log(`[GymPulse Login] Plano B: Buscando aluno no Firestore pelo e-mail cru: "${studentLoginEmail.trim()}"`);
-        const dbStudentRaw = await fetchStudentByEmail(studentLoginEmail.trim());
-        if (dbStudentRaw) {
-          console.log(`[GymPulse Login] Plano B: Encontrou aluno por e-mail cru!`);
-          emailExists = true;
-          matchingStudentDoc = dbStudentRaw;
-          if (checkPasswordMatch(dbStudentRaw, passClean)) {
-            matchedStudent = dbStudentRaw;
-          }
-        }
-      }
-
-      // Plan C: Fetch latest snapshot of all trainers' students to compare case-insensitively in browser memory
-      if (!matchedStudent) {
-        console.log(`[GymPulse Login] Plano C: Buscando em todos os alunos do Firestore...`);
-        const latestStudents = await fetchStudents();
-        console.log(`[GymPulse Login] Plano C: Alunos carregados da nuvem:`, latestStudents?.length || 0);
-        if (latestStudents && latestStudents.length > 0) {
-          const found = latestStudents.find(s => {
-            const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
-            return sEmail === emailClean;
-          });
-          if (found) {
-            console.log(`[GymPulse Login] Plano C: Encontrou aluno via busca completa! Nome: "${found.name}"`);
-            emailExists = true;
-            matchingStudentDoc = found;
-            if (checkPasswordMatch(found, passClean)) {
-              matchedStudent = found;
+      // Agora que passou pelo Firebase Auth, vamos buscar o documento correspondente no Firestore usando o UID!
+      let dbStudent = await fetchStudent(uid);
+      if (!dbStudent) {
+        // Se caso por algum motivo antigo ou para manter compatibilidade
+        console.log(`[GymPulse Login] Aluno não encontrado pelo UID ${uid}. Fazendo busca de correlação por e-mail: ${emailClean}`);
+        const foundByEmail = await fetchStudentByEmail(emailClean);
+        if (foundByEmail) {
+          dbStudent = foundByEmail;
+          // Se o ID antigo for diferente, vamos migrar ele para UID!
+          if (dbStudent.id !== uid) {
+            console.log(`[GymPulse Login] Migrando ID do aluno "${dbStudent.name}" de "${dbStudent.id}" para o UID "${uid}"`);
+            const mappedStudent: Student = {
+              ...dbStudent,
+              id: uid,
+              uid: uid,
+              email: emailClean,
+              password: passClean,
+              status: 'Ativo',
+              onboarding: 'completo',
+              nome: dbStudent.name,
+              telefone: dbStudent.phoneWhatsApp || '',
+              plano: dbStudent.plan || 'Mensal',
+            };
+            await saveStudent(mappedStudent);
+            
+            try {
+              await deleteDoc(doc(db, 'students', dbStudent.id));
+              await deleteDoc(doc(db, 'alunos', dbStudent.id));
+            } catch (delErr) {
+              console.warn("[GymPulse Login] Erro ao limpar ID anterior:", delErr);
             }
+            dbStudent = mappedStudent;
           }
         }
       }
 
-      // Plan D: Fallback local state lookup (useful for instant edits or offline sandbox)
-      if (!matchedStudent && students && students.length > 0) {
-        console.log(`[GymPulse Login] Plano D: Buscando no estado local (total alunos: ${students.length})`);
-        const foundLocal = students.find(s => {
-          const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
-          return sEmail === emailClean;
-        });
-        if (foundLocal) {
-          console.log(`[GymPulse Login] Plano D: Encontrou aluno no estado local.`);
-          emailExists = true;
-          matchingStudentDoc = foundLocal;
-          if (checkPasswordMatch(foundLocal, passClean)) {
-            matchedStudent = foundLocal;
-          }
-        }
-      }
+      if (dbStudent) {
+        matchedStudent = dbStudent;
+        console.log(`[GymPulse Login] Aluno logado e perfil carregado: "${matchedStudent.name}"`);
+        setSuccessMsg(`Sucesso! Bem vindo ao GymPulse, carregando seus treinos...`);
 
-      if (matchedStudent) {
-        console.log(`[GymPulse Login] SUCESSO! Efetuando login do aluno: "${matchedStudent.name}"`);
-        setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
-        
-        // Auto-activate the student in Firestore if they are pre-registered and currently 'Inativo'
+        // Sincroniza estado e ativa se necessário
         const updates: Partial<Student> = {};
         if (matchedStudent.status !== 'Ativo') {
           matchedStudent.status = 'Ativo';
           updates.status = 'Ativo';
         }
-        
-        // Save matching password immediately to self-heal credentials desyncs
         if (matchedStudent.password !== passClean) {
           matchedStudent.password = passClean;
           updates.password = passClean;
@@ -780,13 +797,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }, 1200);
       } else {
         setLoading(false);
-        if (emailExists && matchingStudentDoc) {
-          console.log(`[GymPulse Login] Falhou por SENHA incorreta.`);
-          setErrorMsg(`Senha incorreta! Encontramos o perfil do aluno "${matchingStudentDoc.name}", mas a senha digitada não confere. Certifique-se de digitar a senha de acesso cadastrada pelo seu Personal Trainer para este acesso.`);
-        } else {
-          console.log(`[GymPulse Login] Falhou por EMAIL não cadastrado.`);
-          setErrorMsg(`E-mail não cadastrado! Não encontramos o e-mail "${studentLoginEmail.trim()}". Confirme se escreveu corretamente ou verifique com seu Personal Trainer qual e-mail ele usou no seu pré-cadastro.`);
-        }
+        setErrorMsg('Usuário autenticado no Firebase, mas nenhum perfil de Aluno correspondente no Firestore foi encontrado. Solicite assistência para seu Personal.');
       }
     } catch (err) {
       console.warn('[Direct Login Auth] Direct fetch failed, trying local matching fallback...', err);

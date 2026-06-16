@@ -253,6 +253,16 @@ export async function fetchStudent(studentId: string): Promise<Student | null> {
     if (snap.exists()) {
       return snap.data() as Student;
     }
+    // Fallback to 'alunos' collection
+    const snapAlunos = await getDoc(doc(db, 'alunos', studentId));
+    if (snapAlunos.exists()) {
+      const data = snapAlunos.data() as Student;
+      return {
+        ...data,
+        name: data.name || data.nome || 'Aluno',
+        phoneWhatsApp: data.phoneWhatsApp || data.telefone || ''
+      };
+    }
     return null;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
@@ -264,10 +274,22 @@ export async function fetchStudentByEmail(email: string): Promise<Student | null
   const emailClean = String(email).trim().toLowerCase();
   const p = `students?email=${emailClean}`;
   try {
+    // Try 'students' collection
     const q = query(collection(db, 'students'), where('email', '==', emailClean), limit(1));
     const snap = await getDocs(q);
     if (!snap.empty) {
       return snap.docs[0].data() as Student;
+    }
+    // Fallback/Try 'alunos' collection
+    const qAlunos = query(collection(db, 'alunos'), where('email', '==', emailClean), limit(1));
+    const snapAlunos = await getDocs(qAlunos);
+    if (!snapAlunos.empty) {
+      const data = snapAlunos.docs[0].data() as Student;
+      return {
+        ...data,
+        name: data.name || data.nome || 'Aluno',
+        phoneWhatsApp: data.phoneWhatsApp || data.telefone || ''
+      };
     }
     return null;
   } catch (err) {
@@ -279,7 +301,14 @@ export async function fetchStudentByEmail(email: string): Promise<Student | null
 export async function saveStudent(student: Student): Promise<void> {
   const p = `students/${student.id}`;
   try {
-    await setDoc(doc(db, 'students', student.id), cleanUndefined(student));
+    const mappedStudent = {
+      ...student,
+      nome: student.name,
+      telefone: student.phoneWhatsApp || '',
+    };
+    // Save to both collections to guarantee alignment with custom user workflows
+    await setDoc(doc(db, 'students', student.id), cleanUndefined(mappedStudent));
+    await setDoc(doc(db, 'alunos', student.id), cleanUndefined(mappedStudent));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, p);
   }

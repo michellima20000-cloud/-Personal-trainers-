@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit3, CheckCircle, TrendingUp, DollarSign, 
   AlertCircle, Star, Search, Send, Smile, Phone, Video, 
   MapPin, Clock, ArrowUpRight, BarChart2, Check, X, Award, Copy, LogOut, Lock,
-  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard, Settings, Mail, UserCheck
+  Upload, Image, Eye, EyeOff, Smartphone, MessageCircle, Zap, Clipboard, Settings, Mail, UserCheck, RefreshCw
 } from 'lucide-react';
 import { Student, Exercise, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, Objective, PlanType, WorkoutExercise, AccessLog, MarketingPlan, Trainer } from '../types';
 import { EXERCISE_BANK } from '../mockData';
@@ -23,7 +23,7 @@ interface TrainerDashboardProps {
   marketingPlans?: MarketingPlan[];
   activeTrainer?: Trainer | null;
   onUpdateTrainer?: (trainer: Trainer) => void;
-  onAddStudent: (student: Student) => void;
+  onAddStudent: (student: Student) => any;
   onUpdateStudent: (id: string, data: Partial<Student>) => void;
   onDeleteStudent: (id: string) => void;
   onUpdateSheet: (studentId: string, sheet: TrainingSheet) => void;
@@ -328,6 +328,10 @@ export default function TrainerDashboard({
     phoneWhatsApp: ''
   });
 
+  const [registering, setRegistering] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [registerSuccess, setRegisterSuccess] = useState<string | null>(null);
+
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '');
 
   React.useEffect(() => {
@@ -403,19 +407,45 @@ export default function TrainerDashboard({
     ? (sheets[selectedStudentId][editingSheetLetter] || []) 
     : [];
 
-  const handleCreateStudent = (e: React.FormEvent) => {
+  const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudent.name) return;
+    setRegisterError(null);
+    setRegisterSuccess(null);
+
+    // 1. Validar nome, telefone, e-mail e senha.
+    const nameClean = (newStudent.name || '').trim();
+    const phoneClean = (newStudent.phoneWhatsApp || '').trim();
+    const emailClean = (newStudent.email || '').trim().toLowerCase();
+    const passwordClean = (newStudent.password || '').trim();
+
+    if (!nameClean) {
+      setRegisterError('Por favor, informe o Nome Completo do Aluno.');
+      return;
+    }
+    if (!phoneClean) {
+      setRegisterError('Por favor, informe o WhatsApp de Contato do Aluno.');
+      return;
+    }
+    if (!emailClean || !emailClean.includes('@')) {
+      setRegisterError('Por favor, informe um endereço de e-mail válido.');
+      return;
+    }
+    if (!passwordClean || passwordClean.length < 6) {
+      setRegisterError('A Senha Provisória do aluno deve conter no mínimo 6 caracteres para os padrões de segurança do Firebase.');
+      return;
+    }
+
+    setRegistering(true);
     
     // Auto populate values
-    const studentId = 's_' + Date.now();
+    const tempStudentId = 's_temp_' + Date.now();
     
     // Values based on rapid vs full mode
     const isRapido = cadastroMode === 'rapido';
     
     const createdStudent: Student = {
-      id: studentId,
-      name: newStudent.name.trim(),
+      id: tempStudentId,
+      name: nameClean,
       avatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 900000)}?w=150&auto=format&fit=crop&q=80`,
       age: isRapido ? 25 : Number(newStudent.age || 25),
       weight: isRapido ? 70 : Number(newStudent.weight || 70),
@@ -424,36 +454,54 @@ export default function TrainerDashboard({
       restrictions: isRapido ? 'Nenhuma restrição (Cadastro Rápido).' : (newStudent.restrictions || 'Nenhuma restrição informada.'),
       history: isRapido ? 'Iniciante (Modo Pré-cadastro rápido).' : (newStudent.history || 'Iniciante.'),
       plan: (newStudent.plan as PlanType) || 'Mensal',
-      status: (newStudent.status as 'Ativo' | 'Inativo') || 'Inativo', // Default inativo until profile complete
+      status: (newStudent.status as 'Ativo' | 'Inativo') || 'Ativo',
       joinedAt: new Date().toLocaleDateString('pt-BR'),
       nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
       value: newStudent.plan === 'Anual' ? 90.00 : newStudent.plan === 'Semestral' ? 120.00 : newStudent.plan === 'Trimestral' ? 140.00 : 150.00,
-      phoneWhatsApp: newStudent.phoneWhatsApp ? newStudent.phoneWhatsApp.trim() : undefined,
+      phoneWhatsApp: phoneClean,
       trainerId: activeTrainer?.id || 't_default',
-      email: newStudent.email ? newStudent.email.trim().toLowerCase() : `${newStudent.name.toLowerCase().replace(/\s+/g, '')}@gympulse.com.br`,
-      password: newStudent.password ? newStudent.password.trim() : '123456',
-      isProfileComplete: newStudentIsProfileComplete
+      email: emailClean,
+      password: passwordClean,
+      isProfileComplete: newStudentIsProfileComplete,
+      // Portuguese fields
+      nome: nameClean,
+      telefone: phoneClean,
+      plano: (newStudent.plan as PlanType) || 'Mensal',
+      onboarding: newStudentIsProfileComplete ? 'completo' : 'pendente',
     };
 
-    onAddStudent(createdStudent);
-    setSelectedStudentId(studentId);
-    setActiveTab('alunos');
-    setNewStudentIsProfileComplete(false);
-    // reset form
-    setNewStudent({
-      name: '',
-      email: '',
-      password: '',
-      age: 25,
-      weight: 70,
-      height: 1.75,
-      objective: 'Hipertrofia',
-      restrictions: '',
-      history: '',
-      plan: 'Mensal',
-      status: 'Ativo',
-      phoneWhatsApp: ''
-    });
+    try {
+      // 2. Criar automaticamente o usuário no Firebase Authentication e Firestore
+      const finalStudent = await onAddStudent(createdStudent);
+      const authenticatedId = finalStudent?.id || finalStudent?.uid || tempStudentId;
+
+      setRegisterSuccess(`Cadastro concluído com sucesso no Firebase Auth & Firestore para ${nameClean}!`);
+      
+      setSelectedStudentId(authenticatedId);
+      setActiveTab('alunos');
+      setNewStudentIsProfileComplete(false);
+      
+      // reset form
+      setNewStudent({
+        name: '',
+        email: '',
+        password: '',
+        age: 25,
+        weight: 70,
+        height: 1.75,
+        objective: 'Hipertrofia',
+        restrictions: '',
+        history: '',
+        plan: 'Mensal',
+        status: 'Ativo',
+        phoneWhatsApp: ''
+      });
+    } catch (err: any) {
+      console.error("Firebase auth creation or profile setup failed:", err);
+      setRegisterError(err.message || "Erro desconhecido ao tentar pré-cadastrar Aluno.");
+    } finally {
+      setRegistering(false);
+    }
   };
 
   const handleDeleteExerciseFromSheet = (exerciseIndex: number) => {
@@ -2024,6 +2072,17 @@ export default function TrainerDashboard({
                   </div>
                 )}
 
+                {registerError && (
+                  <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-3.5 text-xs font-semibold">
+                    ⚠️ {registerError}
+                  </div>
+                )}
+                {registerSuccess && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 text-[#39FF14] rounded-xl p-3.5 text-xs font-semibold">
+                    ✓ {registerSuccess}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-[10px] text-neutral-400 uppercase font-mono mb-1.5 font-bold tracking-wider">Nome Completo do Aluno</label>
@@ -2085,7 +2144,7 @@ export default function TrainerDashboard({
                       required
                       value={newStudent.password || ''}
                       onChange={(e) => setNewStudent({...newStudent, password: e.target.value})}
-                      placeholder="Mínimo 4 caracteres (Ex: 123456)"
+                      placeholder="Mínimo 6 caracteres (Ex: 123456)"
                       className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition font-sans font-mono"
                     />
                   </div>
@@ -2213,9 +2272,20 @@ export default function TrainerDashboard({
                 <div className="pt-4 border-t border-neutral-800/80 flex justify-end">
                   <button 
                     type="submit"
-                    className="bg-[#39FF14] text-black hover:bg-green-400 px-8 py-3.5 rounded-xl text-xs font-bold font-sans transition-all active:scale-95 cursor-pointer shadow-lg shadow-[#39FF14]/10 flex items-center gap-2"
+                    disabled={registering}
+                    className={`bg-[#39FF14] text-black hover:bg-green-400 px-8 py-3.5 rounded-xl text-xs font-bold font-sans transition-all active:scale-95 shadow-lg shadow-[#39FF14]/10 flex items-center gap-2 ${registering ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    <Plus size={14} /> Confirmar Pré-cadastro do Aluno
+                    {registering ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span>Criando Usuário no Firebase...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={14} />
+                        <span>Confirmar Pré-cadastro do Aluno</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

@@ -28,6 +28,13 @@ export interface Student {
   isProfileComplete?: boolean;
   accessMethod?: 'google' | 'password';
   paymentDetailsConfirmed?: boolean;
+  // Portuguese mappings for absolute compatibility
+  nome?: string;
+  telefone?: string;
+  statusAguardando?: string;
+  plano?: string;
+  onboarding?: string | boolean;
+  uid?: string;
 }
 
 export interface Exercise {

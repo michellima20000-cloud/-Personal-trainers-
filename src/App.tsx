@@ -20,8 +20,10 @@ import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 
 import { deleteDoc, doc, collection, onSnapshot } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { 
   db,
+  auth,
   initializeAnonymousAuth, 
   fetchStudents, fetchStudent, saveStudent,
   fetchSheets, saveSheet,
@@ -1028,13 +1030,51 @@ export default function App() {
       });
   };
   
-  const handleAddStudent = async (std: Student) => {
+  const handleAddStudent = async (std: Student): Promise<Student> => {
+    if (!std.email || !std.password) {
+      throw new Error("E-mail e senha são obrigatórios para a criação do usuário no Firebase Auth.");
+    }
+
+    const emailClean = std.email.trim().toLowerCase();
+    const passClean = std.password.trim();
+
+    addSyncLog(`[Firebase] Criando credenciais no Firebase Authentication para: "${emailClean}"...`);
+    
+    let uid = '';
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, emailClean, passClean);
+      uid = userCredential.user.uid;
+      addSyncLog(`[Firebase Auth] Usuário criado com sucesso no Authentication. UID: ${uid}`);
+    } catch (authCreateErr: any) {
+      console.error("[Firebase Auth Error] Erro ao criar conta de usuário:", authCreateErr);
+      if (authCreateErr.code === 'auth/email-already-in-use') {
+        throw new Error(`O e-mail "${emailClean}" já está cadastrado no sistema do Portal. Use outro e-mail ou verifique os dados.`);
+      } else if (authCreateErr.code === 'auth/weak-password') {
+        throw new Error(`A senha informada é considerada fraca pelo Firebase Auth (mínimo de 6 caracteres).`);
+      } else {
+        throw new Error(`Falha no Firebase Authentication: ${authCreateErr.message || authCreateErr}`);
+      }
+    }
+
+    // Now modify the std object to use this UID as reference for both Firestore and its object id
+    std.id = uid;
+    std.uid = uid;
+    std.email = emailClean;
+    
+    // Set mapped Portuguese fields requested
+    std.nome = std.name;
+    std.telefone = std.phoneWhatsApp || '';
+    std.plano = std.plan;
+    std.status = std.status;
+    std.onboarding = std.isProfileComplete ? 'completo' : 'pendente';
+
     if (!std.trainerId || std.trainerId === 't_default') {
       const firstReal = trainers.find(t => t.id !== 't_default');
       std.trainerId = (activeTrainer && activeTrainer.id !== 't_default') 
         ? activeTrainer.id 
         : (firstReal?.id || trainers[0]?.id || 't_default');
     }
+
     const updated = [...students, std];
     setStudents(updated);
     
@@ -1079,22 +1119,24 @@ export default function App() {
     // Persist to local storage synchronously and immediately
     saveState(updated, updatedSheets, updatedEvol, agenda, updatedChats, updatedNotifs, revenueLogs);
 
-    // Persist to Cloud asynchronously in the background so it does not block execution block
-    addSyncLog(`[Firebase] Iniciando persistência de "${std.name}" em nuvem (segundo plano)...`);
-    Promise.all([
-      saveStudent(std),
-      saveSheet(std.id, initSheet),
-      saveEvolutionRecord(std.id, initRecord),
-      saveChatMessage(std.id, initChat),
-      saveNotification(initNotif)
-    ])
-      .then(() => {
-        addSyncLog(`[Firebase] Novo aluno cadastrado e sincronizado com sucesso.`);
-      })
-      .catch((err) => {
-        console.error("Firebase background save failed:", err);
-        addSyncLog(`[Error] Falha ao persistir cadastros no Firestore.`);
-      });
+    // Persist to Cloud synchronously so that we don't return success when write fails or starts late
+    addSyncLog(`[Firebase] Gravando dados do aluno e histórico no Firestore (UID: ${uid})...`);
+    try {
+      await Promise.all([
+        saveStudent(std),
+        saveSheet(std.id, initSheet),
+        saveEvolutionRecord(std.id, initRecord),
+        saveChatMessage(std.id, initChat),
+        saveNotification(initNotif)
+      ]);
+      addSyncLog(`[Firebase] Aluno "${std.name}" persistido com sucesso no Firestore.`);
+    } catch (saveErr: any) {
+      console.error("[Firebase Save Failure] Falha ao persistir no Firestore:", saveErr);
+      addSyncLog(`[Error] Falha ao persistir cadastros do aluno no Firestore.`);
+      throw new Error(`Seu usuário foi criado no Firebase Auth, mas ocorreu um erro ao salvar o perfil no Firestore: ${saveErr.message || saveErr}`);
+    }
+
+    return std;
   };
 
   const handleUpdateStudent = async (id: string, data: Partial<Student>) => {
