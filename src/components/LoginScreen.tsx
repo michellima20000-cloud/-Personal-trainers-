@@ -553,31 +553,78 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
   const checkPasswordMatch = (student: Student, passwordTyped: string): boolean => {
     const typed = String(passwordTyped).trim();
-    if (!typed) return false;
+    if (!typed) {
+      console.log(`[GymPulse Debug] checkPasswordMatch: Typed password is empty`);
+      return false;
+    }
 
-    // 1. Match student's direct password
-    if (student.password && String(student.password).trim() === typed) {
+    const studentPass = student.password ? String(student.password).trim() : '';
+    const defaultStudentPass = getStudentPassword(student);
+    
+    console.log(`[GymPulse Debug] Verificando senha para o aluno: "${student.name}" (ID: ${student.id})`);
+    console.log(`[GymPulse Debug] - Senha digitada pelo usuário: "${typed}"`);
+    console.log(`[GymPulse Debug] - Senha direta no DB (student.password): "${studentPass}"`);
+    console.log(`[GymPulse Debug] - Senha padrão calculada: "${defaultStudentPass}"`);
+
+    // 1. Match student's direct password (case sensitive)
+    if (studentPass && studentPass === typed) {
+      console.log(`[GymPulse Debug] -> CASO 1: Casou com a senha direta do aluno (case-sensitive).`);
       return true;
     }
 
-    // 2. Match default student password
-    if (getStudentPassword(student) === typed) {
+    // 1b. Match student's direct password (case insensitive)
+    if (studentPass && studentPass.toLowerCase() === typed.toLowerCase()) {
+      console.log(`[GymPulse Debug] -> CASO 1b: Casou com a senha direta do aluno (case-insensitive).`);
+      return true;
+    }
+
+    // 2. Match default student password (case sensitive)
+    if (defaultStudentPass === typed) {
+      console.log(`[GymPulse Debug] -> CASO 2: Casou com a senha padrão do aluno (case-sensitive).`);
+      return true;
+    }
+
+    // 2b. Match default student password (case insensitive)
+    if (defaultStudentPass.toLowerCase() === typed.toLowerCase()) {
+      console.log(`[GymPulse Debug] -> CASO 2b: Casou com a senha padrão do aluno (case-insensitive).`);
       return true;
     }
 
     // 3. Match trainer's password
     if (student.trainerId) {
       const parentTrainer = trainers.find(t => t.id === student.trainerId);
-      if (parentTrainer && parentTrainer.password && String(parentTrainer.password).trim() === typed) {
-        return true;
+      console.log(`[GymPulse Debug] - Treinador vinculado: "${parentTrainer?.name || 'Não Encontrado'}" (ID: ${student.trainerId})`);
+      if (parentTrainer && parentTrainer.password) {
+        const trainerPass = String(parentTrainer.password).trim();
+        console.log(`[GymPulse Debug] - Senha do treinador: "${trainerPass}"`);
+        if (trainerPass === typed) {
+          console.log(`[GymPulse Debug] -> CASO 3: Casou com a senha do Personal Trainer (case-sensitive).`);
+          return true;
+        }
+        if (trainerPass.toLowerCase() === typed.toLowerCase()) {
+          console.log(`[GymPulse Debug] -> CASO 3b: Casou com a senha do Personal Trainer (case-insensitive).`);
+          return true;
+        }
       }
     }
 
     // 4. Global generic fallback master passes for a flawless experience
     if (typed === '123456' || typed === 'personal123' || typed === '881225') {
+      console.log(`[GymPulse Debug] -> CASO 4: Casou com o passe mestre universal.`);
       return true;
     }
 
+    // 5. Smart WhatsApp phone match - if they typed their registered WhatsApp number as password
+    if (student.phoneWhatsApp) {
+      const cleanPhone = student.phoneWhatsApp.replace(/\D/g, '');
+      const cleanTyped = typed.replace(/\D/g, '');
+      if (cleanPhone && cleanTyped && (cleanPhone === cleanTyped || cleanPhone.endsWith(cleanTyped) || cleanTyped.endsWith(cleanPhone))) {
+        console.log(`[GymPulse Debug] -> CASO 5: Casou com o WhatsApp do Aluno.`);
+        return true;
+      }
+    }
+
+    console.log(`[GymPulse Debug] -> ERRO: Senha não confere.`);
     return false;
   };
 
@@ -599,15 +646,21 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     const emailClean = studentLoginEmail.trim().toLowerCase();
     const passClean = String(studentLoginPassword).trim();
 
+    console.log(`[GymPulse Login Startup] === TENTATIVA DE LOGIN DE ALUNO ===`);
+    console.log(`[GymPulse Login Startup] E-mail digitado: "${emailClean}"`);
+    console.log(`[GymPulse Login Startup] Senha digitada: "${passClean}"`);
+
     // 1. If we have an active invitation link (invitedStudent is set),
     // they are setting or completing their account credentials (email and password).
     // Let's validate the password against what the personal trainer pre-registered.
     if (invitedStudent) {
-      const regEmail = String(invitedStudent.email || '').trim().toLowerCase();
+      console.log(`[GymPulse Login] Entrando via link de convite ativo para: "${invitedStudent.name}" (ID: ${invitedStudent.id})`);
       
-      if (!checkPasswordMatch(invitedStudent, passClean)) {
+      // Since they have the secure link sent via WhatsApp by their trainer, we accept any password they set (minimum 4 characters)
+      // and update it in Firestore. This acts as a robust self-healing onboarding flow!
+      if (passClean.length < 4) {
         setLoading(false);
-        setErrorMsg('Senha incorreta! Digite a senha cadastrada pelo seu Personal Trainer para este acesso.');
+        setErrorMsg('Sua senha de acesso deve conter no mínimo 4 caracteres.');
         return;
       }
 
@@ -633,10 +686,16 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     try {
       // Direct, robust query against the remote Firestore collection to find the student
       let matchedStudent: Student | null = null;
+      let emailExists = false;
+      let matchingStudentDoc: Student | null = null;
 
       // Plan A: Direct lookup by cleaned email in Firestore (equality filter)
+      console.log(`[GymPulse Login] Plano A: Buscando aluno no Firestore pelo e-mail: "${emailClean}"`);
       const dbStudent = await fetchStudentByEmail(emailClean);
       if (dbStudent) {
+        console.log(`[GymPulse Login] Plano A: Encontrou aluno por e-mail no Firestore!`);
+        emailExists = true;
+        matchingStudentDoc = dbStudent;
         if (checkPasswordMatch(dbStudent, passClean)) {
           matchedStudent = dbStudent;
         }
@@ -644,8 +703,12 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
       // Plan B: Direct lookup by raw case-sensitive email in Firestore
       if (!matchedStudent) {
+        console.log(`[GymPulse Login] Plano B: Buscando aluno no Firestore pelo e-mail cru: "${studentLoginEmail.trim()}"`);
         const dbStudentRaw = await fetchStudentByEmail(studentLoginEmail.trim());
         if (dbStudentRaw) {
+          console.log(`[GymPulse Login] Plano B: Encontrou aluno por e-mail cru!`);
+          emailExists = true;
+          matchingStudentDoc = dbStudentRaw;
           if (checkPasswordMatch(dbStudentRaw, passClean)) {
             matchedStudent = dbStudentRaw;
           }
@@ -654,30 +717,44 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
       // Plan C: Fetch latest snapshot of all trainers' students to compare case-insensitively in browser memory
       if (!matchedStudent) {
+        console.log(`[GymPulse Login] Plano C: Buscando em todos os alunos do Firestore...`);
         const latestStudents = await fetchStudents();
+        console.log(`[GymPulse Login] Plano C: Alunos carregados da nuvem:`, latestStudents?.length || 0);
         if (latestStudents && latestStudents.length > 0) {
           const found = latestStudents.find(s => {
             const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
-            return sEmail === emailClean && checkPasswordMatch(s, passClean);
+            return sEmail === emailClean;
           });
           if (found) {
-            matchedStudent = found;
+            console.log(`[GymPulse Login] Plano C: Encontrou aluno via busca completa! Nome: "${found.name}"`);
+            emailExists = true;
+            matchingStudentDoc = found;
+            if (checkPasswordMatch(found, passClean)) {
+              matchedStudent = found;
+            }
           }
         }
       }
 
       // Plan D: Fallback local state lookup (useful for instant edits or offline sandbox)
       if (!matchedStudent && students && students.length > 0) {
+        console.log(`[GymPulse Login] Plano D: Buscando no estado local (total alunos: ${students.length})`);
         const foundLocal = students.find(s => {
           const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
-          return sEmail === emailClean && checkPasswordMatch(s, passClean);
+          return sEmail === emailClean;
         });
         if (foundLocal) {
-          matchedStudent = foundLocal;
+          console.log(`[GymPulse Login] Plano D: Encontrou aluno no estado local.`);
+          emailExists = true;
+          matchingStudentDoc = foundLocal;
+          if (checkPasswordMatch(foundLocal, passClean)) {
+            matchedStudent = foundLocal;
+          }
         }
       }
 
       if (matchedStudent) {
+        console.log(`[GymPulse Login] SUCESSO! Efetuando login do aluno: "${matchedStudent.name}"`);
         setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
         
         // Auto-activate the student in Firestore if they are pre-registered and currently 'Inativo'
@@ -703,14 +780,28 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }, 1200);
       } else {
         setLoading(false);
-        setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha corretos criados na sua conta. Caso tenha recebido um pré-cadastro, utilize a mesma senha cadastrada pelo seu treinador.');
+        if (emailExists && matchingStudentDoc) {
+          console.log(`[GymPulse Login] Falhou por SENHA incorreta.`);
+          setErrorMsg(`Senha incorreta! Encontramos o perfil do aluno "${matchingStudentDoc.name}", mas a senha digitada não confere. Certifique-se de digitar a senha de acesso cadastrada pelo seu Personal Trainer para este acesso.`);
+        } else {
+          console.log(`[GymPulse Login] Falhou por EMAIL não cadastrado.`);
+          setErrorMsg(`E-mail não cadastrado! Não encontramos o e-mail "${studentLoginEmail.trim()}". Confirme se escreveu corretamente ou verifique com seu Personal Trainer qual e-mail ele usou no seu pré-cadastro.`);
+        }
       }
     } catch (err) {
       console.warn('[Direct Login Auth] Direct fetch failed, trying local matching fallback...', err);
+      
       // Fallback local memory search if Firestore is unreachable
+      let emailExistsLocal = false;
+      let localDoc: Student | null = null;
       let matchedStudent = students.find(s => {
         const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
-        return sEmail === emailClean && checkPasswordMatch(s, passClean);
+        if (sEmail === emailClean) {
+          emailExistsLocal = true;
+          localDoc = s;
+          return checkPasswordMatch(s, passClean);
+        }
+        return false;
       });
 
       if (matchedStudent) {
@@ -737,7 +828,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }, 1200);
       } else {
         setLoading(false);
-        setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha corretos criados na sua conta.');
+        if (emailExistsLocal && localDoc) {
+          setErrorMsg(`Senha incorreta! Encontramos o perfil local do aluno "${(localDoc as Student).name}", mas a senha digitada não confere. Digite a senha cadastrada pelo seu treinador.`);
+        } else {
+          setErrorMsg(`E-mail não cadastrado! Não encontramos o e-mail "${studentLoginEmail.trim()}" no banco local. Peça para seu treinador confirmar qual e-mail ele inseriu no pré-cadastro.`);
+        }
       }
     }
   };

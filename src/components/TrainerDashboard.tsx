@@ -1604,14 +1604,24 @@ export default function TrainerDashboard({
                                 />
                               </div>
                             </div>
-                            <div className="grid grid-cols-1 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">WhatsApp</label>
                                 <input 
                                   type="text" 
                                   value={tempStudentPhone}
                                   onChange={(e) => setTempStudentPhone(e.target.value)}
-                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-[#39FF14] outline-none font-sans"
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-[#39FF14] outline-none font-sans font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-neutral-500 uppercase font-mono mb-1">Senha de Acesso do Aluno</label>
+                                <input 
+                                  type="text" 
+                                  value={tempStudentPassword}
+                                  onChange={(e) => setTempStudentPassword(e.target.value)}
+                                  placeholder="Ex: 123456"
+                                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none font-sans font-mono"
                                 />
                               </div>
                             </div>
