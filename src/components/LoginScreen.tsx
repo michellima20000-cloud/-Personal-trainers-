@@ -602,67 +602,97 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     }
 
     try {
-      // Direct, robust query against the remote Firestore collection to prevent replication lag / stale props
-      const latestStudents = await fetchStudents();
-      const allStudentsToSearch = latestStudents && latestStudents.length > 0 ? latestStudents : students;
-      
-      let matchedStudent = allStudentsToSearch.find(s => {
-        const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
-        const sPass = String(s.password || getStudentPassword(s)).trim();
-        return sEmail === emailClean && sPass === passClean;
-      });
+      // Direct, robust query against the remote Firestore collection to find the student
+      let matchedStudent: Student | null = null;
 
-      // Direct email lookup in Firestore as robust double-check!
+      // Plan A: Direct lookup by cleaned email in Firestore (equality filter)
+      const dbStudent = await fetchStudentByEmail(emailClean);
+      if (dbStudent) {
+        const sPass = String(dbStudent.password || getStudentPassword(dbStudent)).trim();
+        if (sPass === passClean) {
+          matchedStudent = dbStudent;
+        }
+      }
+
+      // Plan B: Direct lookup by raw case-sensitive email in Firestore
       if (!matchedStudent) {
-        const dbStudent = await fetchStudentByEmail(emailClean);
-        if (dbStudent) {
-          const sPass = String(dbStudent.password || getStudentPassword(dbStudent)).trim();
+        const dbStudentRaw = await fetchStudentByEmail(studentLoginEmail.trim());
+        if (dbStudentRaw) {
+          const sPass = String(dbStudentRaw.password || getStudentPassword(dbStudentRaw)).trim();
           if (sPass === passClean) {
-            matchedStudent = dbStudent;
+            matchedStudent = dbStudentRaw;
           }
+        }
+      }
+
+      // Plan C: Fetch latest snapshot of all trainers' students to compare case-insensitively in browser memory
+      if (!matchedStudent) {
+        const latestStudents = await fetchStudents();
+        if (latestStudents && latestStudents.length > 0) {
+          const found = latestStudents.find(s => {
+            const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
+            const sPass = String(s.password || getStudentPassword(s)).trim();
+            return sEmail === emailClean && sPass === passClean;
+          });
+          if (found) {
+            matchedStudent = found;
+          }
+        }
+      }
+
+      // Plan D: Fallback local state lookup (useful for instant edits or offline sandbox)
+      if (!matchedStudent && students && students.length > 0) {
+        const foundLocal = students.find(s => {
+          const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
+          const sPass = String(s.password || getStudentPassword(s)).trim();
+          return sEmail === emailClean && sPass === passClean;
+        });
+        if (foundLocal) {
+          matchedStudent = foundLocal;
         }
       }
 
       if (matchedStudent) {
         setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
+        
+        // Auto-activate the student in Firestore if they are pre-registered and currently 'Inativo'
+        if (matchedStudent.status !== 'Ativo') {
+          matchedStudent.status = 'Ativo';
+          if (onUpdateStudent) {
+            onUpdateStudent(matchedStudent.id, { status: 'Ativo' });
+          }
+        }
+
         setTimeout(() => {
           setLoading(false);
-          onLoginSuccess('student', matchedStudent.id, undefined, matchedStudent);
+          onLoginSuccess('student', matchedStudent!.id, undefined, matchedStudent!);
         }, 1200);
       } else {
         setLoading(false);
-        setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha corretos criados na sua conta.');
+        setErrorMsg('Dados de acesso incorretos! Certifique-se de preencher o e-mail e a senha corretos criados na sua conta. Caso tenha recebido um pré-cadastro, utilize a mesma senha cadastrada pelo seu treinador.');
       }
     } catch (err) {
-      console.warn('[Direct Login Auth] Direct fetch failed or timed out, carrying out local state authentication fallback...', err);
-      
-      // Fallback local memory search if Firestore is unreachable or guest connection issues
+      console.warn('[Direct Login Auth] Direct fetch failed, trying local matching fallback...', err);
+      // Fallback local memory search if Firestore is unreachable
       let matchedStudent = students.find(s => {
         const sEmail = String(s.email || getStudentEmail(s)).trim().toLowerCase();
         const sPass = String(s.password || getStudentPassword(s)).trim();
         return sEmail === emailClean && sPass === passClean;
       });
 
-      // Even in catch block, let's try direct email lookup in case collection load failed but single document query works!
-      if (!matchedStudent) {
-        try {
-          const dbStudent = await fetchStudentByEmail(emailClean);
-          if (dbStudent) {
-            const sPass = String(dbStudent.password || getStudentPassword(dbStudent)).trim();
-            if (sPass === passClean) {
-              matchedStudent = dbStudent;
-            }
-          }
-        } catch (e) {
-          console.warn("Direct document fetch under main failure failed too:", e);
-        }
-      }
-
       if (matchedStudent) {
-        setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos...`);
+        setSuccessMsg(`Sucesso! Bem-vindo de volta, ${matchedStudent.name}. Carregando seus treinos (offline)...`);
+        
+        if (matchedStudent.status !== 'Ativo') {
+          matchedStudent.status = 'Ativo';
+          if (onUpdateStudent) {
+            onUpdateStudent(matchedStudent.id, { status: 'Ativo' });
+          }
+        }
+
         setTimeout(() => {
           setLoading(false);
-          onLoginSuccess('student', matchedStudent.id, undefined, matchedStudent);
+          onLoginSuccess('student', matchedStudent!.id, undefined, matchedStudent!);
         }, 1200);
       } else {
         setLoading(false);
@@ -735,7 +765,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     return 't_default';
   };
 
-  const executeGoogleLoginAsStudent = (emailClean: string) => {
+  const executeGoogleLoginAsStudent = async (emailClean: string) => {
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -749,7 +779,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
             onUpdateStudent(invitedStudent.id, {
               email: emailClean,
               accessMethod: 'google',
-              isProfileComplete: invitedStudent.isProfileComplete || false, // Let them complete the remaining steps (bio, payment) if not complete!
+              isProfileComplete: invitedStudent.isProfileComplete || false, // Let them complete remaining steps
               status: 'Ativo',
               trainerId: resolvedTrainerId
             });
@@ -759,7 +789,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           setShowGoogleModal(false);
           setGooglePendingRoleEmail(null);
           setTimeout(() => {
-            onLoginSuccess('student', invitedStudent.id);
+            onLoginSuccess('student', invitedStudent.id, undefined, { ...invitedStudent, email: emailClean, status: 'Ativo', accessMethod: 'google' });
           }, 1000);
         } catch (err) {
           setLoading(false);
@@ -769,84 +799,124 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       return;
     }
 
-    // Second: check if a student is already registered with this exact Gmail/Google email!
-    const matched = students.find(s => getStudentEmail(s).toLowerCase() === emailClean);
-    if (matched) {
-      setTimeout(async () => {
-        try {
-          const resolvedTrainerId = getResolvedTrainerId(matched.trainerId, referredTrainer?.id, regStudentTrainerId);
-          if (onUpdateStudent) {
-            onUpdateStudent(matched.id, {
-              email: emailClean,
-              accessMethod: 'google',
-              isProfileComplete: matched.isProfileComplete || false, // Preserve and respect prior onboarding status
-              status: 'Ativo',
-              trainerId: resolvedTrainerId
-            });
+    try {
+      // Find pre-registered student directly in Firestore to connect Google account securely and prevent duplication
+      let matchedStudent: Student | null = null;
+
+      // Plan A: Direct query by cleaned email in Firestore
+      const dbStudent = await fetchStudentByEmail(emailClean);
+      if (dbStudent) {
+        matchedStudent = dbStudent;
+      }
+
+      // Plan B: Direct query by raw email in Firestore (just in case)
+      if (!matchedStudent) {
+        const dbStudentRaw = await fetchStudentByEmail(studentLoginEmail.trim() || emailClean);
+        if (dbStudentRaw) {
+          matchedStudent = dbStudentRaw;
+        }
+      }
+
+      // Plan C: Fetch latest list of all students to scan case-insensitively in memory
+      if (!matchedStudent) {
+        const latestStudents = await fetchStudents();
+        if (latestStudents && latestStudents.length > 0) {
+          const found = latestStudents.find(s => String(s.email || getStudentEmail(s)).trim().toLowerCase() === emailClean);
+          if (found) {
+            matchedStudent = found;
           }
+        }
+      }
+
+      // Plan D: Fallback local memory look up
+      if (!matchedStudent && students && students.length > 0) {
+        const foundLocal = students.find(s => String(s.email || getStudentEmail(s)).trim().toLowerCase() === emailClean);
+        if (foundLocal) {
+          matchedStudent = foundLocal;
+        }
+      }
+
+      // Link Account if matched pre-registration matches the logged Google Email!
+      if (matchedStudent) {
+        const resolvedTrainerId = getResolvedTrainerId(matchedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
+        const updatedData: Partial<Student> = {
+          email: emailClean,
+          accessMethod: 'google',
+          isProfileComplete: matchedStudent.isProfileComplete || false,
+          status: 'Ativo',
+          trainerId: resolvedTrainerId
+        };
+
+        if (onUpdateStudent) {
+          onUpdateStudent(matchedStudent.id, updatedData);
+        }
+
+        setTimeout(() => {
           setLoading(false);
-          setSuccessMsg(`Sucesso! Conectado via Google. Bem-vindo de volta, ${matched.name}!`);
+          setSuccessMsg(`Sucesso! Seu cadastro de aluno foi vinculado à sua conta Google. Bem-vindo, ${matchedStudent!.name}!`);
           setShowGoogleModal(false);
           setGooglePendingRoleEmail(null);
           setTimeout(() => {
-            onLoginSuccess('student', matched.id);
+            onLoginSuccess('student', matchedStudent!.id, undefined, { ...matchedStudent!, ...updatedData });
+          }, 1000);
+        }, 1200);
+        return;
+      }
+
+      // Third: If absolutely no student matches, register a new dynamic guest student
+      const guestNameParts = emailClean.split('@')[0].replace(/[^a-zA-Z]/g, ' ').split(' ').filter(Boolean);
+      const generatedName = guestNameParts.length > 0 
+        ? guestNameParts.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+        : 'Aluno Convidado';
+      
+      const newStudentId = 'st_g_' + Date.now().toString();
+      const resolvedNewStudentTrainerId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
+      const newStudent: Student = {
+        id: newStudentId,
+        name: generatedName,
+        email: emailClean,
+        phoneWhatsApp: '',
+        status: 'Ativo',
+        joinedAt: new Date().toLocaleDateString('pt-BR'),
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        isProfileComplete: false,
+        plan: 'Mensal',
+        objective: 'Hipertrofia',
+        restrictions: '',
+        weight: 70,
+        height: 1.70,
+        age: 25,
+        accessMethod: 'google',
+        password: '123456',
+        history: 'Cadastro instantâneo via Google Account.',
+        nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+        value: 120,
+        trainerId: resolvedNewStudentTrainerId
+      };
+
+      setTimeout(async () => {
+        try {
+          if (onAddStudent) {
+            onAddStudent(newStudent);
+          }
+          setLoading(false);
+          setSuccessMsg(`Bem-vindo ao GymPulse! Criamos seu portal de acesso rápido para ${generatedName}.`);
+          setShowGoogleModal(false);
+          setGooglePendingRoleEmail(null);
+          setTimeout(() => {
+            onLoginSuccess('student', newStudentId, undefined, newStudent);
           }, 1000);
         } catch (err) {
           setLoading(false);
-          setErrorMsg('Falha ao sincronizar dados da sua conta Google. Tente novamente.');
+          setErrorMsg('Falha ao inicializar acesso via Gmail. Tente de novo.');
         }
       }, 1200);
-      return;
+
+    } catch (err) {
+      console.error("[Google Auth Error] Failed on dynamic student linking check:", err);
+      setLoading(false);
+      setErrorMsg('Falha ao autenticar sua conta Google. Tente de novo.');
     }
-
-    // Third: If no student matches, auto-register as a new student dynamically
-    const guestNameParts = emailClean.split('@')[0].replace(/[^a-zA-Z]/g, ' ').split(' ').filter(Boolean);
-    const generatedName = guestNameParts.length > 0 
-      ? guestNameParts.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
-      : 'Aluno Convidado';
-    
-    const newStudentId = 'st_g_' + Date.now().toString();
-    const resolvedNewStudentTrainerId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
-    const newStudent: Student = {
-      id: newStudentId,
-      name: generatedName,
-      email: emailClean,
-      phoneWhatsApp: '',
-      status: 'Ativo',
-      joinedAt: new Date().toLocaleDateString('pt-BR'),
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      isProfileComplete: false, // Set to false to allow completing the onboarding wizard and choosing payment method!
-      plan: 'Mensal',
-      objective: 'Hipertrofia',
-      restrictions: '',
-      weight: 70,
-      height: 1.70,
-      age: 25,
-      accessMethod: 'google',
-      password: '123456',
-      history: 'Cadastro instantâneo via Google Account.',
-      nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-      value: 120,
-      trainerId: resolvedNewStudentTrainerId
-    };
-
-    setTimeout(async () => {
-      try {
-        if (onAddStudent) {
-          onAddStudent(newStudent);
-        }
-        setLoading(false);
-        setSuccessMsg(`Bem-vindo ao GymPulse! Criamos seu portal de acesso rápido para ${generatedName}.`);
-        setShowGoogleModal(false);
-        setGooglePendingRoleEmail(null);
-        setTimeout(() => {
-          onLoginSuccess('student', newStudentId);
-        }, 1000);
-      } catch (err) {
-        setLoading(false);
-        setErrorMsg('Falha ao inicializar acesso via Gmail. Tente de novo.');
-      }
-    }, 1200);
   };
 
   const executeGoogleLoginAsTrainerOrAdmin = (emailClean: string) => {
