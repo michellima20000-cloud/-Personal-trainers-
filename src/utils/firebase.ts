@@ -10,16 +10,35 @@ import { Student, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppN
 // Initialize App and SDK exports with environment variables fallback
 const metaEnv = (import.meta as any).env || {};
 
-const config = {
-  apiKey: (metaEnv.VITE_FIREBASE_API_KEY as string) || firebaseConfig.apiKey,
-  authDomain: (metaEnv.VITE_FIREBASE_AUTH_DOMAIN as string) || firebaseConfig.authDomain,
-  projectId: (metaEnv.VITE_FIREBASE_PROJECT_ID as string) || firebaseConfig.projectId,
-  storageBucket: (metaEnv.VITE_FIREBASE_STORAGE_BUCKET as string) || firebaseConfig.storageBucket,
-  messagingSenderId: (metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || firebaseConfig.messagingSenderId,
-  appId: (metaEnv.VITE_FIREBASE_APP_ID as string) || firebaseConfig.appId,
-  measurementId: (metaEnv.VITE_FIREBASE_MEASUREMENT_ID as string) || (firebaseConfig as any).measurementId,
-  databaseURL: (metaEnv.VITE_FIREBASE_DATABASE_URL as string) || (firebaseConfig as any).databaseURL,
+const getEnvValue = (envVal: any, fallback: string): string => {
+  if (envVal === undefined || envVal === null) return fallback;
+  const s = String(envVal).trim();
+  if (
+    s === '' ||
+    s === 'undefined' ||
+    s === 'null' ||
+    s.startsWith('YOUR_') ||
+    s.startsWith('MY_') ||
+    s.includes('<') ||
+    s.includes('>')
+  ) {
+    return fallback;
+  }
+  return s;
 };
+
+const config = {
+  apiKey: getEnvValue(metaEnv.VITE_FIREBASE_API_KEY, firebaseConfig.apiKey),
+  authDomain: getEnvValue(metaEnv.VITE_FIREBASE_AUTH_DOMAIN, firebaseConfig.authDomain),
+  projectId: getEnvValue(metaEnv.VITE_FIREBASE_PROJECT_ID, firebaseConfig.projectId),
+  storageBucket: getEnvValue(metaEnv.VITE_FIREBASE_STORAGE_BUCKET, firebaseConfig.storageBucket),
+  messagingSenderId: getEnvValue(metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID, firebaseConfig.messagingSenderId),
+  appId: getEnvValue(metaEnv.VITE_FIREBASE_APP_ID, firebaseConfig.appId),
+  measurementId: getEnvValue(metaEnv.VITE_FIREBASE_MEASUREMENT_ID, (firebaseConfig as any).measurementId || ''),
+  databaseURL: getEnvValue(metaEnv.VITE_FIREBASE_DATABASE_URL, (firebaseConfig as any).databaseURL || ''),
+};
+
+console.log("[Firebase Config Debug] API Key:", config.apiKey ? "PRESENT (length " + config.apiKey.length + ")" : "MISSING");
 
 const app = initializeApp(config);
 
