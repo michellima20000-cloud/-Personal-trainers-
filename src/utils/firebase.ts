@@ -10,7 +10,7 @@ import { Student, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppN
 // Initialize App and SDK exports with environment variables fallback
 const metaEnv = (import.meta as any).env || {};
 
-const getEnvValue = (envVal: any, fallback: string): string => {
+const getEnvValue = (envVal: any, fallback: string, isApiKey = false): string => {
   if (envVal === undefined || envVal === null) return fallback;
   const s = String(envVal).trim();
   if (
@@ -20,15 +20,22 @@ const getEnvValue = (envVal: any, fallback: string): string => {
     s.startsWith('YOUR_') ||
     s.startsWith('MY_') ||
     s.includes('<') ||
-    s.includes('>')
+    s.includes('>') ||
+    s.toLowerCase().includes('placeholder') ||
+    s.toLowerCase().includes('apikey') ||
+    s.toLowerCase().includes('your_') ||
+    s.toLowerCase().includes('my_')
   ) {
+    return fallback;
+  }
+  if (isApiKey && !s.startsWith('AIza')) {
     return fallback;
   }
   return s;
 };
 
 const config = {
-  apiKey: getEnvValue(metaEnv.VITE_FIREBASE_API_KEY, firebaseConfig.apiKey),
+  apiKey: getEnvValue(metaEnv.VITE_FIREBASE_API_KEY, firebaseConfig.apiKey, true),
   authDomain: getEnvValue(metaEnv.VITE_FIREBASE_AUTH_DOMAIN, firebaseConfig.authDomain),
   projectId: getEnvValue(metaEnv.VITE_FIREBASE_PROJECT_ID, firebaseConfig.projectId),
   storageBucket: getEnvValue(metaEnv.VITE_FIREBASE_STORAGE_BUCKET, firebaseConfig.storageBucket),
@@ -38,7 +45,7 @@ const config = {
   databaseURL: getEnvValue(metaEnv.VITE_FIREBASE_DATABASE_URL, (firebaseConfig as any).databaseURL || ''),
 };
 
-console.log("[Firebase Config Debug] API Key:", config.apiKey ? "PRESENT (length " + config.apiKey.length + ")" : "MISSING");
+console.log("[Firebase Config Debug] API Key:", config.apiKey ? "PRESENT (length " + config.apiKey.length + ", starts with " + config.apiKey.substring(0, 6) + ")" : "MISSING");
 
 const app = initializeApp(config);
 
