@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Student, Trainer, PlanType } from '../types';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
-import { fetchStudents, fetchStudent, fetchStudentByEmail, auth, saveStudent, db } from '../utils/firebase';
+import { fetchStudents, fetchStudent, fetchStudentByEmail, auth, saveStudent, db, saveSheet, saveEvolutionRecord, saveChatMessage, fetchSheets, fetchAllEvolutionRecords, fetchAllChatMessages } from '../utils/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { deleteDoc, doc } from 'firebase/firestore';
 
@@ -15,7 +15,7 @@ interface LoginScreenProps {
   students: Student[];
   trainers: Trainer[];
   onLoginSuccess: (role: 'trainer' | 'student' | 'admin', studentId?: string, loggedInTrainer?: Trainer, loggedInStudent?: Student) => void;
-  onAddStudent: (student: Student) => void;
+  onAddStudent: (student: Student) => any;
   onAddTrainer: (trainer: Trainer) => void;
   onUpdateStudent?: (id: string, data: Partial<Student>) => void;
 }
@@ -760,6 +760,44 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
             };
             await saveStudent(mappedStudent);
             
+            // Migrar Planilha de Treinos
+            try {
+              const allSheets = await fetchSheets();
+              const studentOldSheet = allSheets[dbStudent.id];
+              if (studentOldSheet) {
+                await saveSheet(uid, studentOldSheet);
+                await deleteDoc(doc(db, 'sheets', dbStudent.id));
+              }
+            } catch (sheetMigrateErr) {
+              console.warn("[GymPulse Login] Erro ao migrar planilha de treino anterior:", sheetMigrateErr);
+            }
+
+            // Migrar Registros de Evolução
+            try {
+              const evolRecords = await fetchAllEvolutionRecords(dbStudent.id);
+              if (evolRecords && evolRecords.length > 0) {
+                for (const record of evolRecords) {
+                  await saveEvolutionRecord(uid, record);
+                  await deleteDoc(doc(db, 'students', dbStudent.id, 'evolution', record.id));
+                }
+              }
+            } catch (evolMigrateErr) {
+              console.warn("[GymPulse Login] Erro ao migrar registros de evolução anteriores:", evolMigrateErr);
+            }
+
+            // Migrar Mensagens do Chat
+            try {
+              const chatMsgs = await fetchAllChatMessages(dbStudent.id);
+              if (chatMsgs && chatMsgs.length > 0) {
+                for (const message of chatMsgs) {
+                  await saveChatMessage(uid, message);
+                  await deleteDoc(doc(db, 'students', dbStudent.id, 'chats', message.id));
+                }
+              }
+            } catch (chatMigrateErr) {
+              console.warn("[GymPulse Login] Erro ao migrar mensagens de chat anteriores:", chatMigrateErr);
+            }
+
             try {
               await deleteDoc(doc(db, 'students', dbStudent.id));
               await deleteDoc(doc(db, 'alunos', dbStudent.id));
@@ -796,13 +834,30 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           onLoginSuccess('student', matchedStudent!.id, undefined, matchedStudent!);
         }, 1200);
       } else {
-        setLoading(false);
-        setErrorMsg('Usuário autenticado no Firebase, mas nenhum perfil de Aluno correspondente no Firestore foi encontrado. Solicite assistência para seu Personal.');
+        // Fallback: Se o usuário logou no Firebase Auth com sucesso, mas o documento Firestore não existe ou não foi sincronizado ainda, busque no array local
+        console.log(`[GymPulse Login] Perfil não encontrado no Firestore para UID ${uid}. Buscando fallback no cache local...`);
+        const localMatch = students.find(s => String(s.email || getStudentEmail(s)).trim().toLowerCase() === emailClean);
+        if (localMatch) {
+          matchedStudent = localMatch;
+          setSuccessMsg(`Sucesso! Carregando seus treinos locais (sincronização pendente)...`);
+          
+          if (onUpdateStudent) {
+            onUpdateStudent(matchedStudent.id, { status: 'Ativo', password: passClean });
+          }
+
+          setTimeout(() => {
+            setLoading(false);
+            onLoginSuccess('student', matchedStudent!.id, undefined, matchedStudent!);
+          }, 1200);
+        } else {
+          setLoading(false);
+          setErrorMsg('Usuário autenticado no Firebase, mas seu perfil de Aluno correspondente no banco de dados e no ambiente local não foi localizado. Solicite assistência para seu Personal.');
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('[Direct Login Auth] Direct fetch failed, trying local matching fallback...', err);
       
-      // Fallback local memory search if Firestore is unreachable
+      // Fallback local memory search if Firestore is unreachable or threw an exception
       let emailExistsLocal = false;
       let localDoc: Student | null = null;
       let matchedStudent = students.find(s => {
@@ -840,9 +895,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       } else {
         setLoading(false);
         if (emailExistsLocal && localDoc) {
-          setErrorMsg(`Senha incorreta! Encontramos o perfil local do aluno "${(localDoc as Student).name}", mas a senha digitada não confere. Digite a senha cadastrada pelo seu treinador.`);
+          setErrorMsg(`Senha incorreta! Encontramos o perfil do aluno "${(localDoc as Student).name}", mas a senha digitada não confere. Digite a senha cadastrada pelo seu treinador.`);
         } else {
-          setErrorMsg(`E-mail não cadastrado! Não encontramos o e-mail "${studentLoginEmail.trim()}" no banco local. Peça para seu treinador confirmar qual e-mail ele inseriu no pré-cadastro.`);
+          setErrorMsg(`E-mail ou credencial inválida! Não localizamos cadastro ativo para "${studentLoginEmail.trim()}" no banco local ou em nuvem.`);
         }
       }
     }
@@ -1203,7 +1258,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     }
   };
 
-  const handleStudentSelfRegistration = (e: React.FormEvent) => {
+  const handleStudentSelfRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -1218,14 +1273,14 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       return;
     }
 
-    if (!regStudentPassword.trim() || regStudentPassword.length < 4) {
-      setErrorMsg('Por favor, informe uma senha operacional de pelo menos 4 dígitos para seu login.');
+    if (!regStudentPassword.trim() || regStudentPassword.length < 6) {
+      setErrorMsg('A Senha de acesso deve conter no mínimo 6 caracteres para os padrões de segurança do Firebase.');
       return;
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const studentId = 's_' + Date.now();
+    try {
+      const tempStudentId = 's_temp_' + Date.now();
       
       // Select the linked trainer: either the referredTrainer from invitation link, or matched by typed name, or first/general
       let finalTrainerId: string | undefined = undefined;
@@ -1253,7 +1308,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       }
 
       const createdStudent: Student = {
-        id: studentId,
+        id: tempStudentId,
         name: regName.trim(),
         email: regStudentEmail.trim().toLowerCase(),
         password: regStudentPassword,
@@ -1275,17 +1330,23 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         phoneWhatsApp: regPhone.trim() || undefined
       };
 
-      onAddStudent(createdStudent);
+      const finalStudent = await onAddStudent(createdStudent);
+      const studentId = finalStudent?.id || finalStudent?.uid || tempStudentId;
+
       setLoading(false);
       setSuccessMsg(`Cadastro efetuado! Bem-vindo(a), ${createdStudent.name}. Logando diretamente...`);
       setTimeout(() => {
-        onLoginSuccess('student', studentId);
+        onLoginSuccess('student', studentId, undefined, finalStudent || { ...createdStudent, id: studentId });
         setRegAvatar('');
         setRegStudentEmail('');
         setRegStudentPassword('');
         setRegPhone('');
-      }, 1300);
-    }, 1000);
+      }, 1000);
+    } catch (err: any) {
+      setLoading(false);
+      console.error("[Student Self Registration Error]:", err);
+      setErrorMsg(err.message || 'Falha ao efetuar seu cadastro seguro no Firebase.');
+    }
   };
 
   return (

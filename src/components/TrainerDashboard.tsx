@@ -2090,7 +2090,38 @@ export default function TrainerDashboard({
                       type="text" 
                       required
                       value={newStudent.name}
-                      onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
+                      onChange={(e) => {
+                        const nameVal = e.target.value;
+                        const nameSlug = nameVal
+                          .trim()
+                          .toLowerCase()
+                          .normalize('NFD')
+                          .replace(/[\u0300-\u036f]/g, '')
+                          .replace(/[^a-z0-9 ]/g, '')
+                          .replace(/\s+/g, '.');
+                        
+                        const updatedFields: any = { name: nameVal };
+                        
+                        const prevSlug = newStudent.name
+                          .trim()
+                          .toLowerCase()
+                          .normalize('NFD')
+                          .replace(/[\u0300-\u036f]/g, '')
+                          .replace(/[^a-z0-9 ]/g, '')
+                          .replace(/\s+/g, '.');
+                        
+                        const prevAutoEmail = prevSlug ? `${prevSlug}@portal.com` : '';
+                        
+                        if (!newStudent.email || newStudent.email === '' || newStudent.email === prevAutoEmail) {
+                          updatedFields.email = nameSlug ? `${nameSlug}@portal.com` : '';
+                        }
+                        
+                        if (!newStudent.password || newStudent.password === '' || newStudent.password === '123456') {
+                          updatedFields.password = '123456';
+                        }
+                        
+                        setNewStudent(prev => ({ ...prev, ...updatedFields }));
+                      }}
                       placeholder="Ex: Ana Silva" 
                       className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#39FF14] text-white rounded-xl px-4 py-3 text-xs outline-none transition"
                     />

@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { initializeApp, getApp, getApps } from 'firebase/app';
+import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { 
   getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   getDocFromServer, query, where, limit
@@ -77,6 +77,46 @@ export const db = databaseId
   ? getFirestore(app, databaseId)
   : getFirestore(app);
 export const auth = getAuth(app);
+
+// Secondary Isolated Firebase App for administrative registration of Students
+let registrationApp;
+try {
+  const activeApps = getApps();
+  const existingRegApp = activeApps.find(a => a.name === 'RegistrationApp');
+  if (existingRegApp) {
+    registrationApp = existingRegApp;
+  } else {
+    registrationApp = initializeApp(config, 'RegistrationApp');
+  }
+} catch (err) {
+  console.error("Failed to initialize or resolve RegistrationApp, falling back to main app details", err);
+}
+
+export const registrationAuth = registrationApp ? getAuth(registrationApp) : null;
+
+export async function registerAuthUser(email: string, pass: string) {
+  const targetAuth = registrationAuth || auth;
+  const cleanEmail = email.trim().toLowerCase();
+  console.log(`[Firebase Auth Registration] Registering user ${cleanEmail} using ${registrationAuth ? "RegistrationAuth" : "default Auth"}`);
+  try {
+    const userCredential = await createUserWithEmailAndPassword(targetAuth, cleanEmail, pass);
+    return userCredential.user;
+  } catch (error: any) {
+    if (error && error.code === 'auth/email-already-in-use') {
+      console.log(`[Firebase Auth Registration] Email ${cleanEmail} is already in use. Attempting login verification link...`);
+      try {
+        const userCredential = await signInWithEmailAndPassword(targetAuth, cleanEmail, pass);
+        console.log(`[Firebase Auth Registration] Successfully verified and linked existing user UID: ${userCredential.user.uid}`);
+        return userCredential.user;
+      } catch (loginErr: any) {
+        console.error(`[Firebase Auth Registration] Login link failed:`, loginErr);
+        // Throw the original email already in use error if verification failed
+        throw error;
+      }
+    }
+    throw error;
+  }
+}
 
 // Sign-in Anonymously on bootstrap
 export async function initializeAnonymousAuth(): Promise<void> {
@@ -332,9 +372,11 @@ export async function saveStudent(student: Student): Promise<void> {
       nome: student.name,
       telefone: student.phoneWhatsApp || '',
     };
-    // Save to both collections to guarantee alignment with custom user workflows
-    await setDoc(doc(db, 'students', student.id), cleanUndefined(mappedStudent));
-    await setDoc(doc(db, 'alunos', student.id), cleanUndefined(mappedStudent));
+    // Save to both collections in parallel to speed up operation
+    await Promise.all([
+      setDoc(doc(db, 'students', student.id), cleanUndefined(mappedStudent)),
+      setDoc(doc(db, 'alunos', student.id), cleanUndefined(mappedStudent))
+    ]);
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, p);
   }

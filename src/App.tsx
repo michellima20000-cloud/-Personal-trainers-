@@ -20,12 +20,11 @@ import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 
 import { deleteDoc, doc, collection, onSnapshot } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { 
   db,
   auth,
-  initializeAnonymousAuth, 
-  fetchStudents, fetchStudent, saveStudent,
+  initializeAnonymousAuth, registerAuthUser,
+  fetchStudents, fetchStudent, fetchStudentByEmail, saveStudent,
   fetchSheets, saveSheet,
   fetchAllEvolutionRecords, saveEvolutionRecord,
   fetchAllChatMessages, saveChatMessage,
@@ -244,14 +243,14 @@ export default function App() {
             fetchedMarketingPlans,
             fetchedTrainers
           ] = await Promise.all([
-            fetchStudents(),
-            fetchSheets(),
-            fetchAgendaEvents(),
-            fetchNotifications(),
-            fetchRevenueLogs(),
-            fetchAccessLogs(),
-            fetchMarketingPlans(),
-            fetchTrainers()
+            fetchStudents().catch(err => { console.error("fetchStudents failed:", err); return []; }),
+            fetchSheets().catch(err => { console.error("fetchSheets failed:", err); return {}; }),
+            fetchAgendaEvents().catch(err => { console.error("fetchAgendaEvents failed:", err); return []; }),
+            fetchNotifications().catch(err => { console.error("fetchNotifications failed:", err); return []; }),
+            fetchRevenueLogs().catch(err => { console.error("fetchRevenueLogs failed:", err); return []; }),
+            fetchAccessLogs().catch(err => { console.error("fetchAccessLogs failed:", err); return []; }),
+            fetchMarketingPlans().catch(err => { console.error("fetchMarketingPlans failed:", err); return []; }),
+            fetchTrainers().catch(err => { console.error("fetchTrainers failed:", err); return []; })
           ]);
           return {
             students: fetchedStudents || [],
@@ -1042,13 +1041,19 @@ export default function App() {
     
     let uid = '';
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, emailClean, passClean);
-      uid = userCredential.user.uid;
+      const user = await registerAuthUser(emailClean, passClean);
+      uid = user.uid;
       addSyncLog(`[Firebase Auth] Usuário criado com sucesso no Authentication. UID: ${uid}`);
     } catch (authCreateErr: any) {
       console.error("[Firebase Auth Error] Erro ao criar conta de usuário:", authCreateErr);
       if (authCreateErr.code === 'auth/email-already-in-use') {
-        throw new Error(`O e-mail "${emailClean}" já está cadastrado no sistema do Portal. Use outro e-mail ou verifique os dados.`);
+        const found = await fetchStudentByEmail(emailClean);
+        if (found) {
+          throw new Error(`O e-mail "${emailClean}" já está cadastrado no sistema do Portal pertencente a ${found.name || 'outro aluno'}. Use outro e-mail ou verifique os dados.`);
+        } else {
+          addSyncLog(`[Sync] E-mail "${emailClean}" já cadastrado no Auth, mas sem perfil no banco. Criando perfil associado para vinculação automática...`);
+          uid = 'st_link_' + Date.now().toString();
+        }
       } else if (authCreateErr.code === 'auth/weak-password') {
         throw new Error(`A senha informada é considerada fraca pelo Firebase Auth (mínimo de 6 caracteres).`);
       } else {
@@ -1119,8 +1124,8 @@ export default function App() {
     // Persist to local storage synchronously and immediately
     saveState(updated, updatedSheets, updatedEvol, agenda, updatedChats, updatedNotifs, revenueLogs);
 
-    // Persist to Cloud synchronously so that we don't return success when write fails or starts late
-    addSyncLog(`[Firebase] Gravando dados do aluno e histórico no Firestore (UID: ${uid})...`);
+    // Save to Cloud securely and await completion so we can guarantee data consistency!
+    addSyncLog(`[Firebase] Iniciando persistência de dados do aluno no Firestore (UID: ${uid})...`);
     try {
       await Promise.all([
         saveStudent(std),
@@ -1129,11 +1134,11 @@ export default function App() {
         saveChatMessage(std.id, initChat),
         saveNotification(initNotif)
       ]);
-      addSyncLog(`[Firebase] Aluno "${std.name}" persistido com sucesso no Firestore.`);
+      addSyncLog(`[Firebase] Aluno "${std.name}" e dados complementares persistidos com sucesso no Firestore.`);
     } catch (saveErr: any) {
       console.error("[Firebase Save Failure] Falha ao persistir no Firestore:", saveErr);
-      addSyncLog(`[Error] Falha ao persistir cadastros do aluno no Firestore.`);
-      throw new Error(`Seu usuário foi criado no Firebase Auth, mas ocorreu um erro ao salvar o perfil no Firestore: ${saveErr.message || saveErr}`);
+      addSyncLog(`[Error] Falha ao salvar os dados complementares de "${std.name}" no Firestore.`);
+      throw new Error(`O usuário foi cadastrado na autenticação, mas não foi possível persistir seus dados no banco Firestore. Detalhes: ${saveErr.message || saveErr}`);
     }
 
     return std;
