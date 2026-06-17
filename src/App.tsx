@@ -1124,22 +1124,22 @@ export default function App() {
     // Persist to local storage synchronously and immediately
     saveState(updated, updatedSheets, updatedEvol, agenda, updatedChats, updatedNotifs, revenueLogs);
 
-    // Save to Cloud securely and await completion so we can guarantee data consistency!
-    addSyncLog(`[Firebase] Iniciando persistência de dados do aluno no Firestore (UID: ${uid})...`);
-    try {
-      await Promise.all([
-        saveStudent(std),
-        saveSheet(std.id, initSheet),
-        saveEvolutionRecord(std.id, initRecord),
-        saveChatMessage(std.id, initChat),
-        saveNotification(initNotif)
-      ]);
-      addSyncLog(`[Firebase] Aluno "${std.name}" e dados complementares persistidos com sucesso no Firestore.`);
-    } catch (saveErr: any) {
-      console.error("[Firebase Save Failure] Falha ao persistir no Firestore:", saveErr);
-      addSyncLog(`[Error] Falha ao salvar os dados complementares de "${std.name}" no Firestore.`);
-      throw new Error(`O usuário foi cadastrado na autenticação, mas não foi possível persistir seus dados no banco Firestore. Detalhes: ${saveErr.message || saveErr}`);
-    }
+    // Save to Cloud securely in the background so that the UI updates instantly and feels blazingly fast!
+    addSyncLog(`[Firebase] Iniciando persistência de dados do aluno no Firestore em segundo plano (UID: ${uid})...`);
+    Promise.all([
+      saveStudent(std),
+      saveSheet(std.id, initSheet),
+      saveEvolutionRecord(std.id, initRecord),
+      saveChatMessage(std.id, initChat),
+      saveNotification(initNotif)
+    ])
+      .then(() => {
+        addSyncLog(`[Firebase] Aluno "${std.name}" e dados de suporte (ficha, evolução, chat, notificações) persistidos com sucesso no Firestore.`);
+      })
+      .catch((saveErr: any) => {
+        console.error("[Firebase Save Failure] Falha ao persistir no Firestore (Background):", saveErr);
+        addSyncLog(`[Error] Falha ao persistir os dados complementares de "${std.name}" no Firestore em segundo plano.`);
+      });
 
     return std;
   };
