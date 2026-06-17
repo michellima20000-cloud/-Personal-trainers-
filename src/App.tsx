@@ -1047,7 +1047,12 @@ export default function App() {
     } catch (authCreateErr: any) {
       console.error("[Firebase Auth Error] Erro ao criar conta de usuário:", authCreateErr);
       if (authCreateErr.code === 'auth/email-already-in-use') {
-        const found = await fetchStudentByEmail(emailClean);
+        let found = null;
+        try {
+          found = await fetchStudentByEmail(emailClean);
+        } catch (fetchErr) {
+          console.warn("Could not check existing profile by email in handleAddStudent:", fetchErr);
+        }
         if (found) {
           throw new Error(`O e-mail "${emailClean}" já está cadastrado no sistema do Portal pertencente a ${found.name || 'outro aluno'}. Use outro e-mail ou verifique os dados.`);
         } else {

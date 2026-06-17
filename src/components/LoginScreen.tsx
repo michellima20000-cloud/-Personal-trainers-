@@ -897,7 +897,23 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         if (emailExistsLocal && localDoc) {
           setErrorMsg(`Senha incorreta! Encontramos o perfil do aluno "${(localDoc as Student).name}", mas a senha digitada não confere. Digite a senha cadastrada pelo seu treinador.`);
         } else {
-          setErrorMsg(`E-mail ou credencial inválida! Não localizamos cadastro ativo para "${studentLoginEmail.trim()}" no banco local ou em nuvem.`);
+          let systemErrorDesc = '';
+          if (err) {
+            try {
+              if (typeof err === 'object') {
+                systemErrorDesc = err.message || JSON.stringify(err);
+              } else {
+                systemErrorDesc = String(err);
+              }
+            } catch (jsonErr) {
+              systemErrorDesc = String(err);
+            }
+          }
+          if (systemErrorDesc && !systemErrorDesc.toLowerCase().includes('not-found') && !systemErrorDesc.toLowerCase().includes('inexist')) {
+            setErrorMsg(`Falha ao obter perfil em nuvem: ${systemErrorDesc}. Entre em contato com seu Personal.`);
+          } else {
+            setErrorMsg(`E-mail ou credencial inválida! Não localizamos cadastro ativo para "${studentLoginEmail.trim()}" no banco local ou em nuvem.`);
+          }
         }
       }
     }
