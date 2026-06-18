@@ -1476,25 +1476,40 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       let finalTrainerId: string | undefined = undefined;
       let chosenTrainerName = 'Consultoria Geral';
 
-      if (referredTrainer) {
-        finalTrainerId = referredTrainer.id;
-        chosenTrainerName = referredTrainer.name;
-      } else if (regStudentTrainerNameInput.trim()) {
-        const typedClean = regStudentTrainerNameInput.trim().toLowerCase();
-        const matchedTrainer = trainers.find(
-          t => t.name.toLowerCase().includes(typedClean) || typedClean.includes(t.name.toLowerCase())
-        );
-        if (matchedTrainer) {
-          finalTrainerId = matchedTrainer.id;
-          chosenTrainerName = matchedTrainer.name;
-        } else {
-          // If typed name doesn't match a stored trainer, associate with first trainer but record the trainer name
-          finalTrainerId = trainers.find(t => t.id !== 't_default')?.id || trainers[0]?.id || 't_default';
-          chosenTrainerName = regStudentTrainerNameInput.trim();
+      // 1. Prioritize dynamic trainer from invite URL / local storage cache
+      const urlResolvedId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
+      if (urlResolvedId && urlResolvedId !== 't_default') {
+        const foundTrainer = trainers.find(t => t.id === urlResolvedId);
+        if (foundTrainer) {
+          finalTrainerId = foundTrainer.id;
+          chosenTrainerName = foundTrainer.name;
+          console.log(`[GymPulse Invite/SelfReg] URL/Storage trainerId resolvido dinamicamente: "${foundTrainer.name}" (ID: ${foundTrainer.id})`);
         }
-      } else {
-        finalTrainerId = trainers.find(t => t.id !== 't_default')?.id || trainers[0]?.id || 't_default';
-        chosenTrainerName = trainers.find(t => t.id !== 't_default')?.name || trainers[0]?.name || 'Consultoria Geral';
+      }
+
+      // 2. Fallbacks
+      if (!finalTrainerId) {
+        if (referredTrainer) {
+          finalTrainerId = referredTrainer.id;
+          chosenTrainerName = referredTrainer.name;
+        } else if (regStudentTrainerNameInput.trim()) {
+          const typedClean = regStudentTrainerNameInput.trim().toLowerCase();
+          const matchedTrainer = trainers.find(
+            t => t.name.toLowerCase().includes(typedClean) || typedClean.includes(t.name.toLowerCase())
+          );
+          if (matchedTrainer) {
+            finalTrainerId = matchedTrainer.id;
+            chosenTrainerName = matchedTrainer.name;
+          } else {
+            // If typed name doesn't match a stored trainer, associate with first trainer but record the trainer name
+            finalTrainerId = trainers.find(t => t.id !== 't_default')?.id || trainers[0]?.id || 't_default';
+            chosenTrainerName = regStudentTrainerNameInput.trim();
+          }
+        } else {
+          finalTrainerId = trainers.find(t => t.id !== 't_default')?.id || trainers[0]?.id || 't_default';
+          const foundT = trainers.find(t => t.id === finalTrainerId);
+          chosenTrainerName = foundT ? foundT.name : 'Consultoria Geral';
+        }
       }
 
       const createdStudent: Student = {

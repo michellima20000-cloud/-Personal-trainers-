@@ -1037,11 +1037,31 @@ export default function App() {
     const emailClean = std.email.trim().toLowerCase();
     const passClean = std.password.trim();
 
+    // 1. Resolve dynamic trainerId dynamically from URL or cached local storage if not provided on payload
+    let resolvedTrainerId = std.trainerId;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlTrainerId = params.get('trainerId') || localStorage.getItem('gympulse_referred_trainer_id_raw');
+      if (urlTrainerId && (!resolvedTrainerId || resolvedTrainerId === 't_default')) {
+        const matched = trainers.find(t => 
+          (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
+          t.id.toLowerCase() === urlTrainerId.toLowerCase() ||
+          (t.email || '').split('@')[0].toLowerCase() === urlTrainerId.toLowerCase()
+        );
+        if (matched) {
+          resolvedTrainerId = matched.id;
+          console.log(`[GymPulse App/Firebase Login] Capturado e resolvido trainerId da URL/Storage com sucesso: "${matched.name}" (ID: ${matched.id})`);
+        }
+      }
+    }
+
+    const finalTrainerIdToAssign = resolvedTrainerId || (activeTrainer && activeTrainer.id !== 't_default' ? activeTrainer.id : 't_default');
+
     const profileMetaObj = {
       name: std.name,
       plan: std.plan,
       phone: std.phoneWhatsApp || '',
-      trainerId: std.trainerId || (activeTrainer && activeTrainer.id !== 't_default' ? activeTrainer.id : 't_default'),
+      trainerId: finalTrainerIdToAssign,
       joinedAt: std.joinedAt,
       weight: std.weight,
       height: std.height,
@@ -1091,12 +1111,8 @@ export default function App() {
     std.status = std.status;
     std.onboarding = std.isProfileComplete ? 'completo' : 'pendente';
 
-    if (!std.trainerId || std.trainerId === 't_default') {
-      const firstReal = trainers.find(t => t.id !== 't_default');
-      std.trainerId = (activeTrainer && activeTrainer.id !== 't_default') 
-        ? activeTrainer.id 
-        : (firstReal?.id || trainers[0]?.id || 't_default');
-    }
+    std.trainerId = finalTrainerIdToAssign;
+    console.log(`[GymPulse App/Firebase saveState] Aluno registrado vinculando definitivamente ao trainerId: "${std.trainerId}"`);
 
     const updated = [...students, std];
     setStudents(updated);
