@@ -1012,7 +1012,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
         // Final safe resolution to prioritize URL invite trainer or stored referrer over defaults
         autoTrainerId = getResolvedTrainerId(autoTrainerId, referredTrainer?.id, regStudentTrainerId);
-        console.log(`[GymPulse Link / Auto-Criar] Associando aluno "${autoName}" ao Personal Coach ID: "${autoTrainerId}"`);
+        const resolvedTrainerName = trainers.find(t => t.id === autoTrainerId)?.name || referredTrainer?.name || 'Consultoria Geral';
+        console.log(`[GymPulse Link / Auto-Criar] Associando aluno "${autoName}" ao Personal Coach ID: "${autoTrainerId}" (${resolvedTrainerName})`);
 
         const autoStudent: Student = {
           id: uid,
@@ -1031,6 +1032,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           plano: autoPlan,
           status: 'Ativo',
           trainerId: autoTrainerId,
+          trainerName: resolvedTrainerName,
+          nomePersonal: resolvedTrainerName,
           joinedAt: new Date().toLocaleDateString('pt-BR'),
           createdAt: new Date().toISOString(),
           avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',

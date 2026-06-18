@@ -1112,7 +1112,15 @@ export default function App() {
     std.onboarding = std.isProfileComplete ? 'completo' : 'pendente';
 
     std.trainerId = finalTrainerIdToAssign;
-    console.log(`[GymPulse App/Firebase saveState] Aluno registrado vinculando definitivamente ao trainerId: "${std.trainerId}"`);
+    const trainerObj = trainers.find(t => t.id === finalTrainerIdToAssign);
+    if (trainerObj) {
+      std.trainerName = trainerObj.name;
+      std.nomePersonal = trainerObj.name;
+    } else {
+      std.trainerName = std.trainerName || 'Consultoria Geral';
+      std.nomePersonal = std.nomePersonal || 'Consultoria Geral';
+    }
+    console.log(`[GymPulse App/Firebase saveState] Aluno registrado vinculando definitivamente ao trainerId: "${std.trainerId}" (${std.trainerName})`);
 
     const updated = [...students, std];
     setStudents(updated);
