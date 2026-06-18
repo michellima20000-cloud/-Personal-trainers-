@@ -1,8 +1,8 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { 
   getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  getDocFromServer, query, where, limit
+  getDocFromServer, query, where, limit, enableIndexedDbPersistence
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Student, TrainingSheet, EvolutionRecord, AgendaEvent, ChatMessage, AppNotification, RevenueLog, AccessLog, MarketingPlan, Trainer } from '../types';
@@ -76,6 +76,19 @@ console.log("[Firebase Initialization] Project ID:", config.projectId, "Database
 export const db = databaseId
   ? getFirestore(app, databaseId)
   : getFirestore(app);
+
+if (typeof window !== 'undefined') {
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      console.warn('[Firestore Caching] Multiple tabs open; offline persistence enabled in the first tab.');
+    } else if (err.code === 'unimplemented') {
+      console.warn('[Firestore Caching] Current browser browser does not support IndexedDB local caching.');
+    } else {
+      console.warn('[Firestore Caching] Custom persistence error:', err);
+    }
+  });
+}
+
 export const auth = getAuth(app);
 
 // Secondary Isolated Firebase App for administrative registration of Students
@@ -94,20 +107,38 @@ try {
 
 export const registrationAuth = registrationApp ? getAuth(registrationApp) : null;
 
-export async function registerAuthUser(email: string, pass: string) {
+export async function registerAuthUser(email: string, pass: string, profileMeta?: string) {
   const targetAuth = registrationAuth || auth;
   const cleanEmail = email.trim().toLowerCase();
   console.log(`[Firebase Auth Registration] Registering user ${cleanEmail} using ${registrationAuth ? "RegistrationAuth" : "default Auth"}`);
   try {
     const userCredential = await createUserWithEmailAndPassword(targetAuth, cleanEmail, pass);
-    return userCredential.user;
+    const u = userCredential.user;
+    console.log(`[UID Criado] Usuário registrado com sucesso no Firebase Auth. UID: ${u.uid}, Email: ${cleanEmail}`);
+    if (profileMeta) {
+      try {
+        await updateProfile(u, { displayName: profileMeta });
+        console.log("[Firebase Auth Registration] Profile meta successfully updated for user:", u.uid);
+      } catch (profileErr) {
+        console.error("[Firebase Auth Registration] Failed to set display name payload:", profileErr);
+      }
+    }
+    return u;
   } catch (error: any) {
     if (error && error.code === 'auth/email-already-in-use') {
       console.log(`[Firebase Auth Registration] Email ${cleanEmail} is already in use. Attempting login verification link...`);
       try {
         const userCredential = await signInWithEmailAndPassword(targetAuth, cleanEmail, pass);
-        console.log(`[Firebase Auth Registration] Successfully verified and linked existing user UID: ${userCredential.user.uid}`);
-        return userCredential.user;
+        const u = userCredential.user;
+        console.log(`[UID Criado] Usuário associado obtido via Autenticação Firebase do login. UID: ${u.uid}, Email: ${cleanEmail}`);
+        if (profileMeta) {
+          try {
+            await updateProfile(u, { displayName: profileMeta });
+          } catch (profileErr) {
+            console.warn("[Firebase Auth Registration] Failed to set display name on verification login link:", profileErr);
+          }
+        }
+        return u;
       } catch (loginErr: any) {
         console.error(`[Firebase Auth Registration] Login link failed:`, loginErr);
         // Throw the original email already in use error if verification failed
@@ -253,7 +284,20 @@ export function addFirestoreErrorLog(errInfo: FirestoreErrorInfo): void {
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): void {
+  const isOff = (() => {
+    if (!error) return false;
+    const msg = error instanceof Error ? error.message : String(error);
+    const mLower = msg.toLowerCase();
+    return (
+      mLower.includes('offline') ||
+      mLower.includes('network') ||
+      mLower.includes('failed to get document') ||
+      mLower.includes('unreachable') ||
+      mLower.includes('could not connect')
+    );
+  })();
+
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -271,6 +315,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   addFirestoreErrorLog(errInfo);
+  
+  if (isOff) {
+    console.warn(`[Firestore Offline Cache Mode] Silencing offline exception for path ${path}. Operation: ${operationType}`, errInfo.error);
+    return;
+  }
+
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
@@ -309,6 +359,7 @@ export async function fetchStudents(): Promise<Student[]> {
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return [];
   }
 }
 
@@ -317,18 +368,22 @@ export async function fetchStudent(studentId: string): Promise<Student | null> {
   try {
     const snap = await getDoc(doc(db, 'students', studentId));
     if (snap.exists()) {
-      return snap.data() as Student;
+      const data = snap.data() as Student;
+      console.log(`[Documento Carregado] Aluno carregado com sucesso do Firestore (students). UID: ${studentId}`, data);
+      return data;
     }
     // Fallback to 'alunos' collection
     const snapAlunos = await getDoc(doc(db, 'alunos', studentId));
     if (snapAlunos.exists()) {
       const data = snapAlunos.data() as Student;
+      console.log(`[Documento Carregado] Aluno carregado com sucesso do Firestore (alunos). UID: ${studentId}`, data);
       return {
         ...data,
         name: data.name || data.nome || 'Aluno',
         phoneWhatsApp: data.phoneWhatsApp || data.telefone || ''
       };
     }
+    console.log(`[GymPulse DB] Aluno não encontrado no Firestore para UID: ${studentId}`);
     return null;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
@@ -369,9 +424,40 @@ export async function saveStudent(student: Student): Promise<void> {
   try {
     const mappedStudent = {
       ...student,
+      id: student.id,
+      uid: student.uid || student.id,
+      name: student.name,
       nome: student.name,
+      email: student.email,
+      phoneWhatsApp: student.phoneWhatsApp || '',
       telefone: student.phoneWhatsApp || '',
+      age: student.age || 25,
+      weight: student.weight || 70,
+      height: student.height || 1.70,
+      objective: student.objective || 'Hipertrofia',
+      plan: student.plan || 'Mensal',
+      plano: student.plan || 'Mensal',
+      status: student.status || 'Ativo',
+      trainerId: student.trainerId || 't_default',
+      createdAt: student.createdAt || student.joinedAt || new Date().toISOString()
     };
+    
+    console.log(`[Documento Salvo] Aluno persistido no Firestore (caminho: ${p}). ID: ${student.id}, UID: ${mappedStudent.uid}`, {
+      id: mappedStudent.id,
+      uid: mappedStudent.uid,
+      name: mappedStudent.name,
+      email: mappedStudent.email,
+      phoneWhatsApp: mappedStudent.phoneWhatsApp,
+      age: mappedStudent.age,
+      weight: mappedStudent.weight,
+      height: mappedStudent.height,
+      objective: mappedStudent.objective,
+      plan: mappedStudent.plan,
+      status: mappedStudent.status,
+      trainerId: mappedStudent.trainerId,
+      createdAt: mappedStudent.createdAt
+    });
+
     // Save to both collections in parallel to speed up operation
     await Promise.all([
       setDoc(doc(db, 'students', student.id), cleanUndefined(mappedStudent)),
@@ -394,6 +480,7 @@ export async function fetchSheets(): Promise<Record<string, TrainingSheet>> {
     return sheetsMap;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return {};
   }
 }
 
@@ -418,6 +505,7 @@ export async function fetchAllEvolutionRecords(studentId: string): Promise<Evolu
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return [];
   }
 }
 
@@ -442,6 +530,7 @@ export async function fetchAllChatMessages(studentId: string): Promise<ChatMessa
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return [];
   }
 }
 
@@ -466,6 +555,7 @@ export async function fetchAgendaEvents(): Promise<AgendaEvent[]> {
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return [];
   }
 }
 
@@ -499,6 +589,7 @@ export async function fetchNotifications(): Promise<AppNotification[]> {
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return [];
   }
 }
 
@@ -523,6 +614,7 @@ export async function fetchRevenueLogs(): Promise<RevenueLog[]> {
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return [];
   }
 }
 
@@ -547,6 +639,7 @@ export async function fetchAccessLogs(): Promise<AccessLog[]> {
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return [];
   }
 }
 
@@ -571,6 +664,7 @@ export async function fetchMarketingPlans(): Promise<MarketingPlan[]> {
     return list;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, p);
+    return [];
   }
 }
 

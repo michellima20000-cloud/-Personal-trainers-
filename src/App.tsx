@@ -1037,11 +1037,25 @@ export default function App() {
     const emailClean = std.email.trim().toLowerCase();
     const passClean = std.password.trim();
 
+    const profileMetaObj = {
+      name: std.name,
+      plan: std.plan,
+      phone: std.phoneWhatsApp || '',
+      trainerId: std.trainerId || (activeTrainer && activeTrainer.id !== 't_default' ? activeTrainer.id : 't_default'),
+      joinedAt: std.joinedAt,
+      weight: std.weight,
+      height: std.height,
+      gender: std.gender,
+      objective: std.objective,
+      observations: std.observations
+    };
+    const profileMeta = JSON.stringify(profileMetaObj);
+
     addSyncLog(`[Firebase] Criando credenciais no Firebase Authentication para: "${emailClean}"...`);
     
     let uid = '';
     try {
-      const user = await registerAuthUser(emailClean, passClean);
+      const user = await registerAuthUser(emailClean, passClean, profileMeta);
       uid = user.uid;
       addSyncLog(`[Firebase Auth] Usuário criado com sucesso no Authentication. UID: ${uid}`);
     } catch (authCreateErr: any) {
@@ -1054,10 +1068,9 @@ export default function App() {
           console.warn("Could not check existing profile by email in handleAddStudent:", fetchErr);
         }
         if (found) {
-          throw new Error(`O e-mail "${emailClean}" já está cadastrado no sistema do Portal pertencente a ${found.name || 'outro aluno'}. Use outro e-mail ou verifique os dados.`);
+          throw new Error(`O e-mail "${emailClean}" já está cadastrado no sistema do Portal pertencente a ${found.name || 'outro aluno'}. Use outro e-mail para cadastrar.`);
         } else {
-          addSyncLog(`[Sync] E-mail "${emailClean}" já cadastrado no Auth, mas sem perfil no banco. Criando perfil associado para vinculação automática...`);
-          uid = 'st_link_' + Date.now().toString();
+          throw new Error(`O e-mail "${emailClean}" já está cadastrado no Firebase Auth. O aluno pode fazer login diretamente com esse e-mail para criar seu perfil automaticamente.`);
         }
       } else if (authCreateErr.code === 'auth/weak-password') {
         throw new Error(`A senha informada é considerada fraca pelo Firebase Auth (mínimo de 6 caracteres).`);
@@ -1458,6 +1471,8 @@ export default function App() {
     }
     
     let trainerToSet: Trainer | null = null;
+    let finalStudents = [...students];
+
     if (enteredRole === 'trainer') {
       trainerToSet = loggedInTrainer || trainers[0] || null;
       setActiveTrainer(trainerToSet);
@@ -1466,22 +1481,22 @@ export default function App() {
       
       // If we got the direct student object from LoginScreen (which queried Firestore directly),
       // we can merge it into the students state if it's missing or update it to match the login credentials!
-      let activeStudent = students.find(s => s.id === targetStudentId);
+      let activeStudent = finalStudents.find(s => s.id === targetStudentId);
       if (!activeStudent && loggedInStudent) {
         activeStudent = loggedInStudent;
-        setStudents(prev => {
-          if (!prev.some(s => s.id === loggedInStudent.id)) {
-            return [...prev, loggedInStudent];
-          }
-          return prev;
-        });
+        if (!finalStudents.some(s => s.id === loggedInStudent.id)) {
+          finalStudents = [...finalStudents, loggedInStudent];
+          setStudents(finalStudents);
+        }
       }
 
-      if (activeStudent && activeStudent.status !== 'Ativo') {
-        activeStudent.status = 'Ativo';
-        saveStudent(activeStudent).catch(err => {
-          console.error("Failed to auto-activate student on success login:", err);
-        });
+      if (activeStudent) {
+        if (activeStudent.status !== 'Ativo') {
+          activeStudent.status = 'Ativo';
+          saveStudent(activeStudent).catch(err => {
+            console.error("Failed to auto-activate student on success login:", err);
+          });
+        }
       }
       
       let foundTrainerId: string | undefined = undefined;
@@ -1528,8 +1543,8 @@ export default function App() {
       // Auto-bind student to trainer persistently in the database if there is a mismatch or missing trainerId!
       if (activeStudent && trainerToSet && activeStudent.trainerId !== trainerToSet.id) {
         const updatedStudent = { ...activeStudent, trainerId: trainerToSet.id };
-        const updatedStudents = students.map(s => s.id === activeStudent.id ? updatedStudent : s);
-        setStudents(updatedStudents);
+        finalStudents = finalStudents.map(s => s.id === activeStudent.id ? updatedStudent : s);
+        setStudents(finalStudents);
         saveStudent(updatedStudent).then(() => {
           addSyncLog(`[Firebase] Vinculando Aluno "${activeStudent.name}" ao Personal Coach "${trainerToSet?.name}" com sucesso.`);
         }).catch(err => {
@@ -1544,7 +1559,7 @@ export default function App() {
     setOriginalAdminSession(enteredRole === 'admin');
     
     saveState(
-      students,
+      finalStudents,
       sheets,
       evolution,
       agenda,

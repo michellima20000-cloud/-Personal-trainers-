@@ -5,7 +5,7 @@ import {
   DollarSign, CheckSquare, Sparkle, QrCode, Clipboard, Star, Zap, Award,
   Camera, Upload, UserCheck
 } from 'lucide-react';
-import { Student, Trainer, PlanType } from '../types';
+import { Student, Trainer, PlanType, Objective } from '../types';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
 import { fetchStudents, fetchStudent, fetchStudentByEmail, auth, saveStudent, db, saveSheet, saveEvolutionRecord, saveChatMessage, fetchSheets, fetchAllEvolutionRecords, fetchAllChatMessages } from '../utils/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -706,19 +706,68 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
     let matchedStudent: Student | null = null;
     let uid = '';
+    let userCredential: any = null;
     
+    let authFallbackStudent: Student | null = null;
     try {
       console.log(`[GymPulse Login] Autenticando aluno no Firebase Auth: "${emailClean}"`);
-      const userCredential = await signInWithEmailAndPassword(auth, emailClean, passClean);
+      userCredential = await signInWithEmailAndPassword(auth, emailClean, passClean);
       uid = userCredential.user.uid;
       console.log(`[GymPulse Auth] Autenticado com sucesso. UID: ${uid}`);
+      
+      const displayName = userCredential.user.displayName;
+      if (displayName && displayName.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(displayName);
+          if (parsed && parsed.name) {
+            authFallbackStudent = {
+              id: uid,
+              uid: uid,
+              email: emailClean,
+              password: passClean,
+              name: parsed.name,
+              nome: parsed.name,
+              status: parsed.status || 'Ativo',
+              onboarding: 'completo',
+              plan: parsed.plan || 'Mensal',
+              plano: parsed.plan || 'Mensal',
+              phoneWhatsApp: parsed.phone || '',
+              telefone: parsed.phone || '',
+              trainerId: parsed.trainerId || 't_default',
+              joinedAt: parsed.joinedAt || new Date().toLocaleDateString('pt-BR'),
+              weight: parsed.weight || 70,
+              height: parsed.height || 1.70,
+              gender: parsed.gender || 'Masculino',
+              objective: parsed.objective || 'Hipertrofia',
+              observations: parsed.observations || '',
+              isProfileComplete: true,
+              history: '',
+              activeSheetId: '',
+              lastActiveAt: new Date().toLocaleDateString('pt-BR'),
+              avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+              age: parsed.age || 25,
+              restrictions: parsed.restrictions || '',
+              nextPayment: parsed.nextPayment || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+              value: parsed.value || 0
+            };
+            console.log("[Auth Fallback] Student profile reconstructed from Auth displayName successfully:", authFallbackStudent);
+          }
+        } catch (e) {
+          console.warn("[Auth Fallback] Failed to parse JSON displayName:", e);
+        }
+      }
     } catch (authErr: any) {
       console.error(`[GymPulse Auth Error] Falha de login para o e-mail: ${emailClean}`, authErr);
       setLoading(false);
       
       // Map error codes to friendly custom messages
       if (authErr.code === 'auth/wrong-password' || authErr.code === 'auth/invalid-credential') {
-        const dbStudent = await fetchStudentByEmail(emailClean);
+        let dbStudent = null;
+        try {
+          dbStudent = await fetchStudentByEmail(emailClean);
+        } catch (fetchErr) {
+          console.warn("[LoginScreen] fetchStudentByEmail failed during wrong password check:", fetchErr);
+        }
         if (dbStudent) {
           setErrorMsg(`Senha incorreta! Encontramos o perfil do aluno "${dbStudent.name}", mas a senha digitada não confere. Certifique-se de usar a senha provisória de 6 caracteres criada pelo seu treinador.`);
         } else {
@@ -728,6 +777,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         setErrorMsg(`E-mail não cadastrado! Não encontramos o e-mail "${studentLoginEmail.trim()}". Confirme se escreveu corretamente ou verifique com seu Personal Trainer.`);
       } else if (authErr.code === 'auth/invalid-email') {
         setErrorMsg('Formato de e-mail inválido. Por favor, corrija-o para avançar.');
+      } else if (authErr.code === 'auth/network-request-failed' || authErr.message?.toLowerCase().includes('network') || authErr.message?.toLowerCase().includes('offline')) {
+        setErrorMsg(`Você parece estar offline ou com problemas temporários de conexão. Verifique sua rede e tente novamente.`);
       } else {
         setErrorMsg(`Não foi possível autenticar: E-mail não cadastrado ou credencial inválida.`);
       }
@@ -736,11 +787,27 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
     try {
       // Agora que passou pelo Firebase Auth, vamos buscar o documento correspondente no Firestore usando o UID!
-      let dbStudent = await fetchStudent(uid);
+      let dbStudent = null;
+      try {
+        dbStudent = await fetchStudent(uid);
+      } catch (fetchErr) {
+        console.warn("[LoginScreen] Firestore fetchStudent failed, falling back to Auth payload...", fetchErr);
+      }
+
+      if (!dbStudent && authFallbackStudent) {
+        console.log("[LoginScreen] Using Auth fallback student profile!");
+        dbStudent = authFallbackStudent;
+      }
+
       if (!dbStudent) {
         // Se caso por algum motivo antigo ou para manter compatibilidade
         console.log(`[GymPulse Login] Aluno não encontrado pelo UID ${uid}. Fazendo busca de correlação por e-mail: ${emailClean}`);
-        const foundByEmail = await fetchStudentByEmail(emailClean);
+        let foundByEmail = null;
+        try {
+          foundByEmail = await fetchStudentByEmail(emailClean);
+        } catch (emailFetchErr) {
+          console.warn("[LoginScreen] fetchStudentByEmail correlation search failed:", emailFetchErr);
+        }
         if (foundByEmail) {
           dbStudent = foundByEmail;
           // Se o ID antigo for diferente, vamos migrar ele para UID!
@@ -809,9 +876,82 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }
       }
 
+      // Caso o documento não exista após as buscas e migrações, criá-lo automaticamente!
+      if (!dbStudent) {
+        console.log(`[GymPulse Login/Fix] Perfil não localizado para UID ${uid}. Criando perfil automaticamente...`);
+        let autoName = authFallbackStudent?.name || (userCredential && userCredential.user?.displayName) || emailClean.split('@')[0];
+        let autoPlan = 'Mensal';
+        let autoAge = 25;
+        let autoWeight = 70;
+        let autoHeight = 1.70;
+        let autoObjective = 'Hipertrofia';
+        let autoTrainerId = 't_default';
+        let autoPhone = '';
+        let autoGender = 'Masculino';
+        let autoObservations = '';
+
+        const userDisp = userCredential?.user?.displayName || authFallbackStudent?.name;
+        if (userDisp && userDisp.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(userDisp);
+            autoName = parsed.name || autoName;
+            autoPlan = parsed.plan || autoPlan;
+            autoAge = parsed.age || autoAge;
+            autoWeight = parsed.weight || autoWeight;
+            autoHeight = parsed.height || autoHeight;
+            autoObjective = parsed.objective || autoObjective;
+            autoTrainerId = parsed.trainerId || autoTrainerId;
+            autoPhone = parsed.phone || autoPhone;
+            autoGender = parsed.gender || autoGender;
+            autoObservations = parsed.observations || autoObservations;
+          } catch(e) {
+            console.warn("[GymPulse Login/Fix] Falha ao analisar displayName JSON para auto-criação:", e);
+          }
+        }
+
+        const autoStudent: Student = {
+          id: uid,
+          uid: uid,
+          name: autoName,
+          nome: autoName,
+          email: emailClean,
+          password: passClean,
+          phoneWhatsApp: autoPhone || undefined,
+          telefone: autoPhone || '',
+          age: autoAge,
+          weight: autoWeight,
+          height: autoHeight,
+          objective: autoObjective as Objective,
+          plan: autoPlan as PlanType,
+          plano: autoPlan,
+          status: 'Ativo',
+          trainerId: autoTrainerId,
+          joinedAt: new Date().toLocaleDateString('pt-BR'),
+          createdAt: new Date().toISOString(),
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+          restrictions: 'Nenhuma restrição informada.',
+          history: 'Cadastro automático gerado por login de segurança.',
+          observations: autoObservations,
+          gender: autoGender,
+          isProfileComplete: true,
+          nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+          value: 150.00
+        };
+
+        try {
+          console.log(`[GymPulse Login/Fix] Salvando documento auto-criado no Firestore (UID: ${uid})`, autoStudent);
+          await saveStudent(autoStudent);
+          console.log(`[Documento Salvo] Aluno salvo com sucesso após auto-criação no Login. UID: ${uid}`);
+          dbStudent = autoStudent;
+        } catch (saveErr) {
+          console.error("[GymPulse Login/Fix] Erro ao salvar perfil auto-criado:", saveErr);
+          dbStudent = autoStudent;
+        }
+      }
+
       if (dbStudent) {
         matchedStudent = dbStudent;
-        console.log(`[GymPulse Login] Aluno logado e perfil carregado: "${matchedStudent.name}"`);
+        console.log(`[Documento Carregado] Aluno logado e perfil carregado com sucesso: "${matchedStudent.name}" (UID: ${uid})`);
         setSuccessMsg(`Sucesso! Bem vindo ao GymPulse, carregando seus treinos...`);
 
         // Sincroniza estado e ativa se necessário
@@ -898,18 +1038,24 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           setErrorMsg(`Senha incorreta! Encontramos o perfil do aluno "${(localDoc as Student).name}", mas a senha digitada não confere. Digite a senha cadastrada pelo seu treinador.`);
         } else {
           let systemErrorDesc = '';
+          let isOfflineError = false;
           if (err) {
             try {
-              if (typeof err === 'object') {
-                systemErrorDesc = err.message || JSON.stringify(err);
+              const errStr = typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err);
+              const errLower = errStr.toLowerCase();
+              if (errLower.includes('offline') || errLower.includes('network') || errLower.includes('failed to get document') || errLower.includes('unreachable')) {
+                isOfflineError = true;
+                systemErrorDesc = 'O cliente está sem conexão à internet';
               } else {
-                systemErrorDesc = String(err);
+                systemErrorDesc = err.message || JSON.stringify(err);
               }
             } catch (jsonErr) {
               systemErrorDesc = String(err);
             }
           }
-          if (systemErrorDesc && !systemErrorDesc.toLowerCase().includes('not-found') && !systemErrorDesc.toLowerCase().includes('inexist')) {
+          if (isOfflineError) {
+            setErrorMsg(`Conexão de rede indisponível. Tentamos recuperar seus dados da nuvem, mas o sistema está temporariamente offline. Os seus dados estão seguros e serão sincronizados automaticamente assim que você estiver online novamente!`);
+          } else if (systemErrorDesc && !systemErrorDesc.toLowerCase().includes('not-found') && !systemErrorDesc.toLowerCase().includes('inexist')) {
             setErrorMsg(`Falha ao obter perfil em nuvem: ${systemErrorDesc}. Entre em contato com seu Personal.`);
           } else {
             setErrorMsg(`E-mail ou credencial inválida! Não localizamos cadastro ativo para "${studentLoginEmail.trim()}" no banco local ou em nuvem.`);
