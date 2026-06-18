@@ -164,6 +164,37 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
   // Handle custom trainer referral / landing page links
   useEffect(() => {
+    let trainerRefId: string | null = null;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      trainerRefId = params.get('trainerId') || localStorage.getItem('gympulse_referred_trainer_id_raw');
+    }
+
+    if (trainerRefId) {
+      console.log(`[GymPulse Invite/Load] Buscando personal com ID "${trainerRefId}" no Firestore...`);
+      fetchTrainer(trainerRefId)
+        .then((dbTrainer) => {
+          if (dbTrainer) {
+            console.log(`[GymPulse Invite/Success] Personal Trainer encontrado e carregado do Firestore: "${dbTrainer.name}" (ID: ${dbTrainer.id})`);
+            setReferredTrainer(dbTrainer);
+            setRegStudentTrainerId(dbTrainer.id);
+            setActiveTab('student');
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('gympulse_referred_trainer_id', dbTrainer.id);
+              localStorage.setItem('gympulse_referred_trainer_id_raw', trainerRefId || '');
+            }
+          } else {
+            console.warn(`[GymPulse Invite/Warning] Personal Trainer não correspondente a documento no Firestore para "${trainerRefId}". Buscando nos locais...`);
+          }
+        })
+        .catch((dbErr) => {
+          console.error(`[GymPulse Invite/Error] Falha ao consultar o Firestore para carregar o personal:`, dbErr);
+        });
+    }
+  }, []);
+
+  // Sync / reactive local cache backup
+  useEffect(() => {
     let trainerRefId = null;
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -192,7 +223,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     }
 
     if (matchedTrainer) {
-      console.log(`[GymPulse Invite/Fix] Relacionamento com Personal Trainer validado: "${matchedTrainer.name}" (ID: ${matchedTrainer.id})`);
+      console.log(`[GymPulse Invite/Sync] Sincronização em tempo real do personal em cache: "${matchedTrainer.name}" (ID: ${matchedTrainer.id})`);
       setReferredTrainer(matchedTrainer);
       setRegStudentTrainerId(matchedTrainer.id);
       setActiveTab('student');
@@ -1231,12 +1262,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       // Link Account if matched pre-registration matches the logged Google Email!
       if (matchedStudent) {
         const resolvedTrainerId = getResolvedTrainerId(matchedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
+        const resolvedTrainerName = trainers.find(t => t.id === resolvedTrainerId)?.name || referredTrainer?.name || 'Consultoria Geral';
         const updatedData: Partial<Student> = {
           email: emailClean,
           accessMethod: 'google',
           isProfileComplete: matchedStudent.isProfileComplete || false,
           status: 'Ativo',
-          trainerId: resolvedTrainerId
+          trainerId: resolvedTrainerId,
+          trainerName: resolvedTrainerName,
+          nomePersonal: resolvedTrainerName
         };
 
         if (onUpdateStudent) {
@@ -1263,6 +1297,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       
       const newStudentId = 'st_g_' + Date.now().toString();
       const resolvedNewStudentTrainerId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
+      const resolvedTrainerName = trainers.find(t => t.id === resolvedNewStudentTrainerId)?.name || referredTrainer?.name || 'Consultoria Geral';
       const newStudent: Student = {
         id: newStudentId,
         name: generatedName,
@@ -1283,7 +1318,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         history: 'Cadastro instantâneo via Google Account.',
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 120,
-        trainerId: resolvedNewStudentTrainerId
+        trainerId: resolvedNewStudentTrainerId,
+        trainerName: resolvedTrainerName,
+        nomePersonal: resolvedTrainerName
       };
 
       setTimeout(async () => {
