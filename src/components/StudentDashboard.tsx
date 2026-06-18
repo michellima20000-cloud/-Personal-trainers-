@@ -125,6 +125,33 @@ export default function StudentDashboard({
 }: StudentDashboardProps) {
   const currentStudent = students.find(s => s.id === activeStudentId);
   
+  const studentTrainer = useMemo(() => {
+    if (!currentStudent) return undefined;
+    // 1. Try to find trainer by student's assigned trainerId (must be a real trainer, not t_default)
+    const assignedId = currentStudent?.trainerId;
+    if (assignedId && assignedId !== 't_default') {
+      const match = (trainers || []).find(t => t.id === assignedId);
+      if (match) return match;
+    }
+    
+    // 2. Try to find trainer by active trainer context if it's a real trainer
+    if (activeTrainer && activeTrainer.id !== 't_default') {
+      const match = (trainers || []).find(t => t.id === activeTrainer.id) || activeTrainer;
+      if (match) return match;
+    }
+    
+    // 3. Fall back to the first real trainer in the synced trainers array
+    const firstReal = (trainers || []).find(t => t.id !== 't_default');
+    if (firstReal) return firstReal;
+    
+    // 4. If absolutely no trainers exist in DB, only then use activeTrainer context or trainers[0]
+    if (activeTrainer && activeTrainer.id !== 't_default') {
+      return activeTrainer;
+    }
+    
+    return trainers && trainers.length > 0 ? trainers[0] : undefined;
+  }, [currentStudent, trainers, activeTrainer]);
+
   const studentAccessLogs = useMemo(() => {
     if (!currentStudent) return [];
     return accessLogs.filter(log => log.role === 'student' && log.userId === currentStudent.id);
@@ -662,6 +689,10 @@ export default function StudentDashboard({
 
             <div className="bg-[#0C0C0E] border border-neutral-800 rounded-xl p-4 text-left space-y-2.5">
               <div className="flex items-center justify-between text-[11px] text-neutral-400 border-b border-neutral-850 pb-1.5">
+                <span>Personal Trainer:</span>
+                <strong className="text-[#39FF14] font-mono">{studentTrainer?.name || 'Seu Personal Trainer'}</strong>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-neutral-400 border-b border-neutral-850 pb-1.5">
                 <span>Plano Validado:</span>
                 <strong className="text-white font-mono">{currentStudent.plan}</strong>
               </div>
@@ -671,7 +702,7 @@ export default function StudentDashboard({
               </div>
               <div className="flex items-center justify-between text-[11px] text-neutral-400">
                 <span>Método de Acesso:</span>
-                <strong className="text-[#39FF14] text-[10.5px] font-mono">
+                <strong className="text-white text-[10.5px] font-mono">
                   {currentStudent.accessMethod === 'google' ? '⚡ Conta do Google (Gmail)' : '🔒 E-mail e Senha'}
                 </strong>
               </div>
@@ -1113,31 +1144,6 @@ export default function StudentDashboard({
   };
 
   const currentStudentEvolution = evolution[currentStudent?.id] || [];
-  const studentTrainer = (() => {
-    // 1. Try to find trainer by student's assigned trainerId (must be a real trainer, not t_default)
-    const assignedId = currentStudent?.trainerId;
-    if (assignedId && assignedId !== 't_default') {
-      const match = (trainers || []).find(t => t.id === assignedId);
-      if (match) return match;
-    }
-    
-    // 2. Try to find trainer by active trainer context if it's a real trainer
-    if (activeTrainer && activeTrainer.id !== 't_default') {
-      const match = (trainers || []).find(t => t.id === activeTrainer.id) || activeTrainer;
-      if (match) return match;
-    }
-    
-    // 3. Fall back to the first real trainer in the synced trainers array
-    const firstReal = (trainers || []).find(t => t.id !== 't_default');
-    if (firstReal) return firstReal;
-    
-    // 4. If absolutely no trainers exist in DB, only then use activeTrainer context or trainers[0]
-    if (activeTrainer && activeTrainer.id !== 't_default') {
-      return activeTrainer;
-    }
-    
-    return trainers && trainers.length > 0 ? trainers[0] : undefined;
-  })();
 
   const renderBillingPortal = () => {
     return (

@@ -687,6 +687,33 @@ export async function deleteMarketingPlan(planId: string): Promise<void> {
 }
 
 // 10. Trainers collection
+export async function fetchTrainer(trainerId: string): Promise<Trainer | null> {
+  const p = `trainers/${trainerId}`;
+  try {
+    const snap = await getDoc(doc(db, 'trainers', trainerId));
+    if (snap.exists()) {
+      return snap.data() as Trainer;
+    }
+    // Check if any trainer has this as customIdLink or id case-insensitively
+    const snapDocs = await getDocs(collection(db, 'trainers'));
+    let found: Trainer | null = null;
+    snapDocs.forEach((d) => {
+      const data = d.data() as Trainer;
+      if (data.id === trainerId || (data.customIdLink && data.customIdLink.toLowerCase() === trainerId.toLowerCase())) {
+        found = data;
+      }
+    });
+    if (found) {
+      console.log(`[GymPulse DB] Trainer encontrado em busca secundária: "${found.name}" (ID: ${found.id})`);
+      return found;
+    }
+    return null;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, p);
+    return null;
+  }
+}
+
 export async function fetchTrainers(): Promise<Trainer[]> {
   const p = 'trainers';
   try {

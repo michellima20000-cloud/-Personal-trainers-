@@ -34,6 +34,8 @@ export interface Student {
   lastActiveAt?: string;
   createdAt?: string;
   uid?: string;
+  trainerName?: string;
+  nomePersonal?: string;
   // Portuguese mappings for absolute compatibility
   nome?: string;
   telefone?: string;

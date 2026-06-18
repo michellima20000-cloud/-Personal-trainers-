@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Student, Trainer, PlanType, Objective } from '../types';
 import SimulatedStripeCheckout from './SimulatedStripeCheckout';
-import { fetchStudents, fetchStudent, fetchStudentByEmail, auth, saveStudent, db, saveSheet, saveEvolutionRecord, saveChatMessage, fetchSheets, fetchAllEvolutionRecords, fetchAllChatMessages } from '../utils/firebase';
+import { fetchStudents, fetchStudent, fetchStudentByEmail, auth, saveStudent, db, saveSheet, saveEvolutionRecord, saveChatMessage, fetchSheets, fetchAllEvolutionRecords, fetchAllChatMessages, fetchTrainer } from '../utils/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { deleteDoc, doc } from 'firebase/firestore';
 
@@ -1476,14 +1476,33 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       let finalTrainerId: string | undefined = undefined;
       let chosenTrainerName = 'Consultoria Geral';
 
-      // 1. Prioritize dynamic trainer from invite URL / local storage cache
+      // 1. Prioritize dynamic trainer from invite URL / local storage cache and query Firestore dynamically
       const urlResolvedId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
       if (urlResolvedId && urlResolvedId !== 't_default') {
-        const foundTrainer = trainers.find(t => t.id === urlResolvedId);
-        if (foundTrainer) {
-          finalTrainerId = foundTrainer.id;
-          chosenTrainerName = foundTrainer.name;
-          console.log(`[GymPulse Invite/SelfReg] URL/Storage trainerId resolvido dinamicamente: "${foundTrainer.name}" (ID: ${foundTrainer.id})`);
+        try {
+          console.log(`[GymPulse Invite/SelfReg] Iniciando busca direta no Firestore para carregar dados do trainerId: "${urlResolvedId}"`);
+          const dbTrainer = await fetchTrainer(urlResolvedId);
+          if (dbTrainer) {
+            finalTrainerId = dbTrainer.id;
+            chosenTrainerName = dbTrainer.name;
+            console.log(`[GymPulse Invite/SelfReg] Sucesso! Personal Trainer encontrado no Firestore: "${dbTrainer.name}" (ID do Personal: ${dbTrainer.id})`);
+          } else {
+            console.warn(`[GymPulse Invite/SelfReg Warning] Trainer não localizado no Firestore para ID "${urlResolvedId}". Buscando no cache local...`);
+            const foundTrainer = trainers.find(t => t.id === urlResolvedId);
+            if (foundTrainer) {
+              finalTrainerId = foundTrainer.id;
+              chosenTrainerName = foundTrainer.name;
+              console.log(`[GymPulse Invite/SelfReg] Personal carregado com sucesso do cache local: "${foundTrainer.name}" (ID: ${foundTrainer.id})`);
+            }
+          }
+        } catch (dbErr) {
+          console.error(`[GymPulse Invite/SelfReg Error] Erro ao buscar personal no Firestore:`, dbErr);
+          // Fallback to memory
+          const foundTrainer = trainers.find(t => t.id === urlResolvedId);
+          if (foundTrainer) {
+            finalTrainerId = foundTrainer.id;
+            chosenTrainerName = foundTrainer.name;
+          }
         }
       }
 
@@ -1512,6 +1531,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }
       }
 
+      console.log(`[GymPulse Cadastro Aluno] Vinculando Estudante com Personal (ID: "${finalTrainerId}", Nome: "${chosenTrainerName}")`);
+
       const createdStudent: Student = {
         id: tempStudentId,
         name: regName.trim(),
@@ -1525,13 +1546,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         restrictions: regRestrictions ? regRestrictions.trim() : 'Nenhuma restrição informada pelo próprio aluno.',
         history: referredTrainer 
           ? `Cadastrado automaticamente via indicação do treinador ${referredTrainer.name}.`
-          : `Cadastrado no portal direto e vinculado ao treinador ${chosenTrainerName}.`,
+          : `Cadastrado no portal direto e enviado para o personal ${chosenTrainerName}.`,
         plan: 'Mensal',
         status: 'Inativo',
         joinedAt: new Date().toLocaleDateString('pt-BR'),
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 150.00,
         trainerId: finalTrainerId,
+        trainerName: chosenTrainerName,
+        nomePersonal: chosenTrainerName,
         phoneWhatsApp: regPhone.trim() || undefined
       };
 
