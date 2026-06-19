@@ -422,6 +422,36 @@ export async function fetchStudentByEmail(email: string): Promise<Student | null
 export async function saveStudent(student: Student): Promise<void> {
   const p = `students/${student.id}`;
   try {
+    let resolvedTrainerName = student.trainerName || student.nomePersonal;
+    let resolvedTrainerEmail = student.trainerEmail;
+    let resolvedTrainerPhone = student.trainerPhone;
+
+    if (student.trainerId && student.trainerId !== 't_default' && (!resolvedTrainerName || resolvedTrainerName === 'Consultoria Geral')) {
+      try {
+        const snap = await getDoc(doc(db, 'trainers', student.trainerId));
+        if (snap.exists()) {
+          const tData = snap.data();
+          resolvedTrainerName = tData.name;
+          resolvedTrainerEmail = tData.email;
+          resolvedTrainerPhone = tData.phoneWhatsApp;
+        } else {
+          const snapDocs = await getDocs(collection(db, 'trainers'));
+          snapDocs.forEach((d) => {
+            const data = d.data();
+            if (data.id === student.trainerId || (data.customIdLink && data.customIdLink.toLowerCase() === student.trainerId!.toLowerCase())) {
+              resolvedTrainerName = data.name;
+              resolvedTrainerEmail = data.email;
+              resolvedTrainerPhone = data.phoneWhatsApp;
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("[saveStudent] Failed to fetch personal data directly:", err);
+      }
+    }
+
+    const trainerNameFinal = resolvedTrainerName || 'Consultoria Geral';
+
     const mappedStudent = {
       ...student,
       id: student.id,
@@ -439,6 +469,10 @@ export async function saveStudent(student: Student): Promise<void> {
       plano: student.plan || 'Mensal',
       status: student.status || 'Ativo',
       trainerId: student.trainerId || 't_default',
+      trainerName: trainerNameFinal,
+      nomePersonal: trainerNameFinal,
+      trainerEmail: resolvedTrainerEmail,
+      trainerPhone: resolvedTrainerPhone,
       createdAt: student.createdAt || student.joinedAt || new Date().toISOString()
     };
     
@@ -455,6 +489,8 @@ export async function saveStudent(student: Student): Promise<void> {
       plan: mappedStudent.plan,
       status: mappedStudent.status,
       trainerId: mappedStudent.trainerId,
+      trainerName: mappedStudent.trainerName,
+      nomePersonal: mappedStudent.nomePersonal,
       createdAt: mappedStudent.createdAt
     });
 
