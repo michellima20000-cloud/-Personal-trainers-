@@ -33,7 +33,7 @@ import {
   fetchRevenueLogs, saveRevenueLog,
   fetchAccessLogs, saveAccessLog,
   fetchMarketingPlans, saveMarketingPlan, deleteMarketingPlan,
-  fetchTrainers, saveTrainer,
+  fetchTrainers, fetchTrainer, saveTrainer,
   purgeTestAccountsFirestore,
   purgeEntireDatabaseFirestore
 } from './utils/firebase';
@@ -1051,6 +1051,20 @@ export default function App() {
         if (matched) {
           resolvedTrainerId = matched.id;
           console.log(`[GymPulse App/Firebase Login] Capturado e resolvido trainerId da URL/Storage com sucesso: "${matched.name}" (ID: ${matched.id})`);
+        } else {
+          // Dynamic query from Firestore to ensure no generic personal falls back
+          try {
+            console.log(`[GymPulse App/Firebase Login] Buscando personal "${urlTrainerId}" diretamente em nuvem...`);
+            const dbTrainer = await fetchTrainer(urlTrainerId);
+            if (dbTrainer) {
+              resolvedTrainerId = dbTrainer.id;
+              std.trainerName = dbTrainer.name;
+              std.nomePersonal = dbTrainer.name;
+              console.log(`[GymPulse App/Firebase Login] Sucesso! Personal resolvido da nuvem: "${dbTrainer.name}" (ID: ${dbTrainer.id})`);
+            }
+          } catch (dbErr) {
+            console.error("Erro ao buscar personal em nuvem no handleAddStudent:", dbErr);
+          }
         }
       }
     }
@@ -1112,7 +1126,19 @@ export default function App() {
     std.onboarding = std.isProfileComplete ? 'completo' : 'pendente';
 
     std.trainerId = finalTrainerIdToAssign;
-    const trainerObj = trainers.find(t => t.id === finalTrainerIdToAssign);
+    let trainerObj = trainers.find(t => t.id === finalTrainerIdToAssign);
+    if (!trainerObj && finalTrainerIdToAssign && finalTrainerIdToAssign !== 't_default') {
+      try {
+        console.log(`[GymPulse App/Firebase saveState] Aluno registrado sem cache na memória, buscando personal em nuvem para "${finalTrainerIdToAssign}"...`);
+        const dbTrainer = await fetchTrainer(finalTrainerIdToAssign);
+        if (dbTrainer) {
+          trainerObj = dbTrainer;
+        }
+      } catch (err) {
+        console.warn("Could not query trainer from Firestore during save validation:", err);
+      }
+    }
+
     if (trainerObj) {
       std.trainerName = trainerObj.name;
       std.nomePersonal = trainerObj.name;

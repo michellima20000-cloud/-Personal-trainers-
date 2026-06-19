@@ -127,24 +127,47 @@ export default function StudentDashboard({
   
   const studentTrainer = useMemo(() => {
     if (!currentStudent) return undefined;
-    // 1. Try to find trainer by student's assigned trainerId (must be a real trainer, not t_default)
     const assignedId = currentStudent?.trainerId;
+    const embeddedName = currentStudent?.trainerName || currentStudent?.nomePersonal;
+
+    // 1. Try to find trainer by student's assigned trainerId (must be a real trainer, not t_default)
     if (assignedId && assignedId !== 't_default') {
-      const match = (trainers || []).find(t => t.id === assignedId);
+      const match = trainers.find(t => t.id === assignedId);
       if (match) return match;
     }
     
-    // 2. Try to find trainer by active trainer context if it's a real trainer
+    // 2. Try matching by embeddedName if we have a custom name
+    if (embeddedName && embeddedName !== 'Consultoria Geral') {
+      const matchByName = trainers.find(t => t.name.toLowerCase() === embeddedName.toLowerCase());
+      if (matchByName) return matchByName;
+    }
+
+    // 3. Create a stable Virtual Trainer object based on the student's actual database profile attributes (so the student sees the real personal)
+    if (embeddedName && embeddedName !== 'Consultoria Geral') {
+      return {
+        id: assignedId || 't_default',
+        name: embeddedName,
+        email: 'suporte@gympulse.com.br',
+        selectedPlan: 'Mensal',
+        trialStartDate: '',
+        trialExpiresAt: '',
+        subscriptionStatus: 'paid',
+        customIdLink: assignedId || 't_default',
+        phoneWhatsApp: currentStudent?.phoneWhatsApp || ''
+      } as Trainer;
+    }
+
+    // 4. Try to find trainer by active trainer context if it's a real trainer
     if (activeTrainer && activeTrainer.id !== 't_default') {
-      const match = (trainers || []).find(t => t.id === activeTrainer.id) || activeTrainer;
+      const match = trainers.find(t => t.id === activeTrainer.id) || activeTrainer;
       if (match) return match;
     }
     
-    // 3. Fall back to the first real trainer in the synced trainers array
-    const firstReal = (trainers || []).find(t => t.id !== 't_default');
+    // 5. Fall back to the first real trainer in the synced trainers array
+    const firstReal = trainers.find(t => t.id !== 't_default');
     if (firstReal) return firstReal;
     
-    // 4. If absolutely no trainers exist in DB, only then use activeTrainer context or trainers[0]
+    // 6. If absolutely no trainers exist in DB, only then use activeTrainer context or trainers[0]
     if (activeTrainer && activeTrainer.id !== 't_default') {
       return activeTrainer;
     }
