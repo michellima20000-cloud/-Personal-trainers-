@@ -1084,7 +1084,9 @@ export default function App() {
       }
     }
 
-    const finalTrainerIdToAssign = resolvedTrainerId || (activeTrainer && activeTrainer.id !== 't_default' ? activeTrainer.id : 't_default');
+    const finalTrainerIdToAssign = (resolvedTrainerId && resolvedTrainerId !== 't_default') 
+      ? resolvedTrainerId 
+      : (activeTrainer && activeTrainer.id !== 't_default' ? activeTrainer.id : 't_default');
 
     const profileMetaObj = {
       name: std.name,
@@ -1547,9 +1549,13 @@ export default function App() {
       // If we got the direct student object from LoginScreen (which queried Firestore directly),
       // we can merge it into the students state if it's missing or update it to match the login credentials!
       let activeStudent = finalStudents.find(s => s.id === targetStudentId);
-      if (!activeStudent && loggedInStudent) {
-        activeStudent = loggedInStudent;
-        if (!finalStudents.some(s => s.id === loggedInStudent.id)) {
+      if (loggedInStudent) {
+        if (activeStudent) {
+          activeStudent = { ...activeStudent, ...loggedInStudent };
+          finalStudents = finalStudents.map(s => s.id === targetStudentId ? activeStudent! : s);
+          setStudents(finalStudents);
+        } else {
+          activeStudent = loggedInStudent;
           finalStudents = [...finalStudents, loggedInStudent];
           setStudents(finalStudents);
         }
@@ -1621,6 +1627,20 @@ export default function App() {
 
       if (foundTrainerId) {
         trainerToSet = trainers.find(t => t.id === foundTrainerId) || null;
+        if (!trainerToSet && foundTrainerId !== 't_default') {
+          // Construct a highly robust Virtual Trainer using the student's pre-saved trainer attributes so they always view their real coach details even during load states
+          trainerToSet = {
+            id: foundTrainerId,
+            name: activeStudent?.trainerName || activeStudent?.nomePersonal || 'Personal Coach',
+            email: activeStudent?.trainerEmail || 'suporte@gympulse.com.br',
+            selectedPlan: 'Mensal',
+            trialStartDate: '',
+            trialExpiresAt: '',
+            subscriptionStatus: 'paid',
+            customIdLink: foundTrainerId,
+            phoneWhatsApp: activeStudent?.trainerPhone || ''
+          } as Trainer;
+        }
       }
 
       if (!trainerToSet && trainers.length > 0) {
