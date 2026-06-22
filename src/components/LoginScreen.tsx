@@ -102,28 +102,22 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     referredTrainerId: string | undefined, 
     regTrainerId: string | undefined
   ) => {
-    // 1. Explicit referredTrainer from URL or state (the absolute source of truth for the invite link)
+    // 1. Existing student's current trainer ID (if it is a valid database trainer ID) - Absolute priority for logged in user!
+    if (currentTrainerId && currentTrainerId !== 't_default') {
+      return currentTrainerId;
+    }
+    // 2. Explicit referredTrainer from URL or state (the absolute source of truth for the invite link)
     if (referredTrainerId && referredTrainerId !== 't_default') {
       return referredTrainerId;
     }
-    // 2. Explicit registered student trainer ID from URL
+    // 3. Explicit registered student trainer ID from URL
     if (regTrainerId && regTrainerId !== 't_default') {
       return regTrainerId;
-    }
-    // 3. Fallback to localStorage matched trainer
-    if (typeof window !== 'undefined') {
-      const storedTrainerId = localStorage.getItem('gympulse_referred_trainer_id');
-      if (storedTrainerId && storedTrainerId !== 't_default' && trainers && trainers.length > 0) {
-        const matched = trainers.find(t => t.id === storedTrainerId);
-        if (matched) {
-          return matched.id;
-        }
-      }
     }
     // 4. Fallback to direct look up in URL query parameters at execution time
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const urlTrainerId = params.get('trainerId') || localStorage.getItem('gympulse_referred_trainer_id_raw');
+      const urlTrainerId = params.get('trainerId');
       if (urlTrainerId && trainers && trainers.length > 0) {
         const matched = trainers.find(t => 
           (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
@@ -135,9 +129,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }
       }
     }
-    // 5. Existing student's current trainer ID (if it is a valid database trainer ID)
-    if (currentTrainerId && currentTrainerId !== 't_default') {
-      return currentTrainerId;
+    // 5. Fallback to localStorage matched trainer
+    if (typeof window !== 'undefined') {
+      const storedTrainerId = localStorage.getItem('gympulse_referred_trainer_id');
+      if (storedTrainerId && storedTrainerId !== 't_default' && trainers && trainers.length > 0) {
+        const matched = trainers.find(t => t.id === storedTrainerId);
+        if (matched) {
+          return matched.id;
+        }
+      }
     }
     // 6. Fallback to first real trainer available in the database snapshot
     if (trainers && trainers.length > 0) {
@@ -782,12 +782,18 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           }
         }
 
+        const resolvedTrainerId = getResolvedTrainerId(invitedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
+        const resolvedTrainerName = trainers.find(t => t.id === resolvedTrainerId)?.name || invitedStudent.trainerName || referredTrainer?.name || 'Consultoria Geral';
+
         const updatedData: Partial<Student> = {
           email: emailClean,
           password: passClean,
           status: 'Ativo',
           isProfileComplete: invitedStudent.isProfileComplete || false,
-          accessMethod: 'password' as const
+          accessMethod: 'password' as const,
+          trainerId: resolvedTrainerId,
+          trainerName: resolvedTrainerName,
+          nomePersonal: resolvedTrainerName
         };
         if (onUpdateStudent) {
           onUpdateStudent(invitedStudent.id, updatedData);

@@ -314,7 +314,10 @@ export default function StudentDashboard({
             restrictions: obRestrictions.trim() || 'Nenhuma restrição declarada.',
             isProfileComplete: true,
             paymentDetailsConfirmed: true,
-            status: 'Ativo' // Set status to 'Ativo' so they are fully active and their trainer can see their active progress!
+            status: 'Ativo', // Set status to 'Ativo' so they are fully active and their trainer can see their active progress!
+            trainerId: currentStudent.trainerId || studentTrainer?.id || 't_default',
+            trainerName: currentStudent.trainerName || studentTrainer?.name || 'Consultoria Geral',
+            nomePersonal: currentStudent.nomePersonal || studentTrainer?.name || 'Consultoria Geral'
           });
           setObStep(4);
           setObPayingStatus('idle');
@@ -351,7 +354,10 @@ export default function StudentDashboard({
           password: obPassword,
           accessMethod: obAccessMethod,
           isProfileComplete: true,
-          status: 'Ativo' // Instantly activate the student so they bypass blocking screens! The cashier will do the correct payment / billing updates in the backend.
+          status: 'Ativo', // Instantly activate the student so they bypass blocking screens! The cashier will do the correct payment / billing updates in the backend.
+          trainerId: currentStudent.trainerId || studentTrainer?.id || 't_default',
+          trainerName: currentStudent.trainerName || studentTrainer?.name || 'Consultoria Geral',
+          nomePersonal: currentStudent.nomePersonal || studentTrainer?.name || 'Consultoria Geral'
         });
         setObPayingStatus('idle');
       }, 1000);
@@ -394,8 +400,20 @@ export default function StudentDashboard({
                   Seja bem-vindo, {obName}!
                 </h2>
                 <p className="text-xs text-neutral-400 leading-relaxed max-w-sm mx-auto">
-                  Seu Personal Trainer / Recepção já preparou o seu pré-cadastro. Ative seu acesso agora para visualizar sua planilha de treinos!
+                  Sua conta está associada ao portal da consultoria e pronta para ativação!
                 </p>
+                {studentTrainer && (
+                  <div className="mt-3 p-3 bg-neutral-950/80 border border-neutral-800 rounded-2xl flex items-center gap-3 text-left">
+                    <div className="w-9 h-9 rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/25 flex items-center justify-center font-black text-[#39FF14] text-xs shrink-0 uppercase tracking-wider font-mono">
+                      {studentTrainer.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[8px] text-[#39FF14] font-mono uppercase font-black tracking-widest leading-none">Personal Trainer Oficial</span>
+                      <strong className="block text-xs text-white truncate my-0.5">{studentTrainer.name}</strong>
+                      <span className="block text-[9.5px] text-neutral-400 font-mono truncate leading-none">{studentTrainer.email || 'contato@gympulse.com.br'}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Error banner */}
@@ -480,7 +498,10 @@ export default function StudentDashboard({
                         password: obPassword,
                         accessMethod: 'google',
                         isProfileComplete: true,
-                        status: 'Ativo' // Instantly activate!
+                        status: 'Ativo', // Instantly activate!
+                        trainerId: currentStudent.trainerId || studentTrainer?.id || 't_default',
+                        trainerName: currentStudent.trainerName || studentTrainer?.name || 'Consultoria Geral',
+                        nomePersonal: currentStudent.nomePersonal || studentTrainer?.name || 'Consultoria Geral'
                       });
                       setObPayingStatus('idle');
                     }, 1000);
@@ -523,7 +544,10 @@ export default function StudentDashboard({
                         password: obPassword,
                         accessMethod: 'password',
                         isProfileComplete: true,
-                        status: 'Ativo' // Instantly activate!
+                        status: 'Ativo', // Instantly activate!
+                        trainerId: currentStudent.trainerId || studentTrainer?.id || 't_default',
+                        trainerName: currentStudent.trainerName || studentTrainer?.name || 'Consultoria Geral',
+                        nomePersonal: currentStudent.nomePersonal || studentTrainer?.name || 'Consultoria Geral'
                       });
                       setObPayingStatus('idle');
                     }, 1000);
