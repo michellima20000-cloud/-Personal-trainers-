@@ -143,6 +143,21 @@ const getInitialStates = () => {
     const urlStudentId = params.get('studentId');
     const urlTrainerId = params.get('trainerId');
     
+    if (urlTrainerId) {
+      console.log(`[GymPulse Init] Capturado trainerId da URL: "${urlTrainerId}". Salvando em cache temporário.`);
+      localStorage.setItem('gympulse_referred_trainer_id_raw', urlTrainerId);
+      
+      // Look up and store matched ID if present in cached trainers list
+      const matched = (initial.trainers || []).find((t: any) => 
+        (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
+        t.id.toLowerCase() === urlTrainerId.toLowerCase() ||
+        (t.email || '').split('@')[0].toLowerCase() === urlTrainerId.toLowerCase()
+      );
+      if (matched) {
+        localStorage.setItem('gympulse_referred_trainer_id', matched.id);
+      }
+    }
+
     // Auto-login disabled so students must go through LoginScreen, authenticate with Google, and link their Gmail!
     if (urlStudentId) {
       if (initial.isLoggedIn && initial.role === 'student' && initial.activeStudentId === urlStudentId) {
@@ -1551,32 +1566,55 @@ export default function App() {
       
       let foundTrainerId: string | undefined = undefined;
       
-      // 1. Look up trainerId directly from URL referral params first (it is the invite/professional origin!)
-      const params = new URLSearchParams(window.location.search);
-      const urlTrainerId = params.get('trainerId');
-      if (urlTrainerId) {
-        const matched = trainers.find(
-          t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
-               t.id.toLowerCase() === urlTrainerId.toLowerCase() ||
-               (t.email || '').split('@')[0].toLowerCase() === urlTrainerId.toLowerCase()
-        );
-        if (matched) {
-          foundTrainerId = matched.id;
+      // 1. Absolute Priority: if student has a valid pre-assigned trainer in their profile from registration, preserve it!
+      if (activeStudent && activeStudent.trainerId && activeStudent.trainerId !== 't_default') {
+        foundTrainerId = activeStudent.trainerId;
+        console.log(`[GymPulse LoginSuccess] Aluno já possui personal vinculado em seu cadastro: "${activeStudent.trainerName || activeStudent.nomePersonal || ''}" (ID: ${foundTrainerId})`);
+      }
+      
+      // 2. Secondary Priority: if no trainer assigned (or t_default), try resolving from URL query param
+      if (!foundTrainerId) {
+        const params = new URLSearchParams(window.location.search);
+        const urlTrainerId = params.get('trainerId');
+        if (urlTrainerId) {
+          const matched = trainers.find(
+            t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
+                 t.id.toLowerCase() === urlTrainerId.toLowerCase() ||
+                 (t.email || '').split('@')[0].toLowerCase() === urlTrainerId.toLowerCase()
+          );
+          if (matched) {
+            foundTrainerId = matched.id;
+            console.log(`[GymPulse LoginSuccess] Resolvido personal do parâmetro da URL: "${matched.name}" (ID: ${matched.id})`);
+          }
         }
       }
       
-      // 2. Look up trainerId from localStorage stored cache fallback
+      // 3. Fallback: Lookup trainerId from localStorage stored cache
       if (!foundTrainerId && typeof window !== 'undefined') {
         const storedTrainerId = localStorage.getItem('gympulse_referred_trainer_id');
         if (storedTrainerId && storedTrainerId !== 't_default') {
           foundTrainerId = storedTrainerId;
+          console.log(`[GymPulse LoginSuccess] Resolvido personal do cache local: ID "${foundTrainerId}"`);
         }
       }
       
-      if (!foundTrainerId && activeStudent && activeStudent.trainerId && activeStudent.trainerId !== 't_default') {
-        foundTrainerId = activeStudent.trainerId;
+      // 4. Fallback: Lookup raw trainerId from localStorage stored cache
+      if (!foundTrainerId && typeof window !== 'undefined') {
+        const rawId = localStorage.getItem('gympulse_referred_trainer_id_raw');
+        if (rawId) {
+          const matched = trainers.find(
+            t => (t.customIdLink || '').toLowerCase() === rawId.toLowerCase() || 
+                 t.id.toLowerCase() === rawId.toLowerCase() ||
+                 (t.email || '').split('@')[0].toLowerCase() === rawId.toLowerCase()
+          );
+          if (matched) {
+            foundTrainerId = matched.id;
+            console.log(`[GymPulse LoginSuccess] Resolvido personal do cache raw local: "${matched.name}" (ID: ${matched.id})`);
+          }
+        }
       }
       
+      // 5. Fallback: Look at current activeTrainer context
       if (!foundTrainerId && activeTrainer && activeTrainer.id !== 't_default') {
         foundTrainerId = activeTrainer.id;
       }
@@ -1591,8 +1629,15 @@ export default function App() {
       }
       
       // Auto-bind student to trainer persistently in the database if there is a mismatch or missing trainerId!
-      if (activeStudent && trainerToSet && activeStudent.trainerId !== trainerToSet.id) {
-        const updatedStudent = { ...activeStudent, trainerId: trainerToSet.id };
+      if (activeStudent && trainerToSet && (!activeStudent.trainerId || activeStudent.trainerId === 't_default')) {
+        const updatedStudent = { 
+          ...activeStudent, 
+          trainerId: trainerToSet.id,
+          trainerName: trainerToSet.name,
+          nomePersonal: trainerToSet.name,
+          trainerEmail: trainerToSet.email,
+          trainerPhone: trainerToSet.phoneWhatsApp
+        };
         finalStudents = finalStudents.map(s => s.id === activeStudent.id ? updatedStudent : s);
         setStudents(finalStudents);
         saveStudent(updatedStudent).then(() => {

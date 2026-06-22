@@ -1515,24 +1515,36 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       // Select the linked trainer: either the referredTrainer from invitation link, or matched by typed name, or first/general
       let finalTrainerId: string | undefined = undefined;
       let chosenTrainerName = 'Consultoria Geral';
+      let chosenTrainerEmail: string | undefined = undefined;
+      let chosenTrainerPhone: string | undefined = undefined;
 
-      // 1. Prioritize dynamic trainer from invite URL / local storage cache and query Firestore dynamically
-      const urlResolvedId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
+      // Exhaustive look up for referral trainer id using URL and cached parameters
+      const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+      const urlResolvedId = params.get('trainerId') || 
+                            localStorage.getItem('gympulse_referred_trainer_id_raw') || 
+                            localStorage.getItem('gympulse_referred_trainer_id') ||
+                            (referredTrainer ? referredTrainer.id : undefined) ||
+                            regStudentTrainerId;
+
       if (urlResolvedId && urlResolvedId !== 't_default') {
         try {
-          console.log(`[GymPulse Invite/SelfReg] Iniciando busca direta no Firestore para carregar dados do trainerId: "${urlResolvedId}"`);
+          console.log(`[GymPulse Invite/SelfReg Exhaustive] Buscando personal por ID ou link amigável: "${urlResolvedId}"`);
           const dbTrainer = await fetchTrainer(urlResolvedId);
           if (dbTrainer) {
             finalTrainerId = dbTrainer.id;
             chosenTrainerName = dbTrainer.name;
-            console.log(`[GymPulse Invite/SelfReg] Sucesso! Personal Trainer encontrado no Firestore: "${dbTrainer.name}" (ID do Personal: ${dbTrainer.id})`);
+            chosenTrainerEmail = dbTrainer.email;
+            chosenTrainerPhone = dbTrainer.phoneWhatsApp;
+            console.log(`[GymPulse Invite/SelfReg Success] Personal resolvido: "${dbTrainer.name}" (ID: ${dbTrainer.id})`);
           } else {
             console.warn(`[GymPulse Invite/SelfReg Warning] Trainer não localizado no Firestore para ID "${urlResolvedId}". Buscando no cache local...`);
             const foundTrainer = trainers.find(t => t.id === urlResolvedId);
             if (foundTrainer) {
               finalTrainerId = foundTrainer.id;
               chosenTrainerName = foundTrainer.name;
-              console.log(`[GymPulse Invite/SelfReg] Personal carregado com sucesso do cache local: "${foundTrainer.name}" (ID: ${foundTrainer.id})`);
+              chosenTrainerEmail = foundTrainer.email;
+              chosenTrainerPhone = foundTrainer.phoneWhatsApp;
+              console.log(`[GymPulse Invite/SelfReg] Personal carregado do cache local: "${foundTrainer.name}" (ID: ${foundTrainer.id})`);
             }
           }
         } catch (dbErr) {
@@ -1542,15 +1554,19 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           if (foundTrainer) {
             finalTrainerId = foundTrainer.id;
             chosenTrainerName = foundTrainer.name;
+            chosenTrainerEmail = foundTrainer.email;
+            chosenTrainerPhone = foundTrainer.phoneWhatsApp;
           }
         }
       }
 
-      // 2. Fallbacks
+      // 2. Fallbacks if no URL / localStorage trainer resolved
       if (!finalTrainerId) {
         if (referredTrainer) {
           finalTrainerId = referredTrainer.id;
           chosenTrainerName = referredTrainer.name;
+          chosenTrainerEmail = referredTrainer.email;
+          chosenTrainerPhone = referredTrainer.phoneWhatsApp;
         } else if (regStudentTrainerNameInput.trim()) {
           const typedClean = regStudentTrainerNameInput.trim().toLowerCase();
           const matchedTrainer = trainers.find(
@@ -1559,6 +1575,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           if (matchedTrainer) {
             finalTrainerId = matchedTrainer.id;
             chosenTrainerName = matchedTrainer.name;
+            chosenTrainerEmail = matchedTrainer.email;
+            chosenTrainerPhone = matchedTrainer.phoneWhatsApp;
           } else {
             // If typed name doesn't match a stored trainer, associate with first trainer but record the trainer name
             finalTrainerId = trainers.find(t => t.id !== 't_default')?.id || trainers[0]?.id || 't_default';
@@ -1567,7 +1585,13 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         } else {
           finalTrainerId = trainers.find(t => t.id !== 't_default')?.id || trainers[0]?.id || 't_default';
           const foundT = trainers.find(t => t.id === finalTrainerId);
-          chosenTrainerName = foundT ? foundT.name : 'Consultoria Geral';
+          if (foundT) {
+            chosenTrainerName = foundT.name;
+            chosenTrainerEmail = foundT.email;
+            chosenTrainerPhone = foundT.phoneWhatsApp;
+          } else {
+            chosenTrainerName = 'Consultoria Geral';
+          }
         }
       }
 
@@ -1595,6 +1619,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         trainerId: finalTrainerId,
         trainerName: chosenTrainerName,
         nomePersonal: chosenTrainerName,
+        trainerEmail: chosenTrainerEmail,
+        trainerPhone: chosenTrainerPhone,
         phoneWhatsApp: regPhone.trim() || undefined
       };
 
