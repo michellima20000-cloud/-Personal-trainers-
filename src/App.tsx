@@ -19,7 +19,7 @@ import StudentDashboard from './components/StudentDashboard';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 
-import { deleteDoc, doc, collection, onSnapshot } from 'firebase/firestore';
+import { deleteDoc, doc, collection, onSnapshot, query, where } from 'firebase/firestore';
 import { 
   db,
   auth,
@@ -686,15 +686,25 @@ export default function App() {
   useEffect(() => {
     if (loadingFirebase) return;
 
-    const q = collection(db, 'students');
-    const unsub = onSnapshot(q, (snapshot) => {
+    // Standard client query path separation depending on active authentication role to avoid Firestore security rule violations
+    const q = (role === 'student' && activeStudentId)
+      ? doc(db, 'students', activeStudentId)
+      : collection(db, 'students');
+
+    const unsub = onSnapshot(q as any, (snapshot: any) => {
       const list: Student[] = [];
-      snapshot.forEach((d) => {
-        list.push(d.data() as Student);
-      });
+      if (role === 'student' && activeStudentId) {
+        if (snapshot.exists && snapshot.exists()) {
+          list.push(snapshot.data() as Student);
+        }
+      } else {
+        snapshot.forEach((d: any) => {
+          list.push(d.data() as Student);
+        });
+      }
 
       // Filter out test students (match initial load filter)
-      const filtered = list.filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id));
+      const filtered = list.filter(s => s && s.id && !['s1', 's2', 's3', 's4', 's5'].includes(s.id));
 
       setStudents((prev) => {
         // Deep compare to prevent unnecessary state triggers
@@ -710,7 +720,7 @@ export default function App() {
     return () => {
       unsub();
     };
-  }, [loadingFirebase]);
+  }, [loadingFirebase, role, activeStudentId]);
 
   // Real-time synchronization of trainers from Firebase Firestore
   useEffect(() => {
@@ -754,18 +764,29 @@ export default function App() {
   useEffect(() => {
     if (loadingFirebase) return;
 
-    const q = collection(db, 'sheets');
-    const unsub = onSnapshot(q, (snapshot) => {
+    // Standard client query path separation depending on active authentication role to avoid Firestore security rule violations
+    const q = (role === 'student' && activeStudentId)
+      ? doc(db, 'sheets', activeStudentId)
+      : collection(db, 'sheets');
+
+    const unsub = onSnapshot(q as any, (snapshot: any) => {
       const sheetsMap: Record<string, TrainingSheet> = {};
-      snapshot.forEach((d) => {
-        sheetsMap[d.id] = d.data() as TrainingSheet;
-      });
+      if (role === 'student' && activeStudentId) {
+        if (snapshot.exists && snapshot.exists()) {
+          sheetsMap[activeStudentId] = snapshot.data() as TrainingSheet;
+        }
+      } else {
+        snapshot.forEach((d: any) => {
+          sheetsMap[d.id] = d.data() as TrainingSheet;
+        });
+      }
 
       setSheets((prev) => {
-        if (JSON.stringify(prev) === JSON.stringify(sheetsMap)) {
+        const merged = { ...prev, ...sheetsMap };
+        if (JSON.stringify(prev) === JSON.stringify(merged)) {
           return prev;
         }
-        return sheetsMap;
+        return merged;
       });
     }, (error) => {
       console.error("Error syncing training sheets in real-time:", error);
@@ -774,13 +795,17 @@ export default function App() {
     return () => {
       unsub();
     };
-  }, [loadingFirebase]);
+  }, [loadingFirebase, role, activeStudentId]);
 
   // Real-time synchronization of agenda events from Firebase Firestore
   useEffect(() => {
     if (loadingFirebase) return;
 
-    const q = collection(db, 'agenda');
+    // Standard client query path separation depending on active authentication role to avoid Firestore security rule violations
+    const q = (role === 'student' && activeStudentId)
+      ? query(collection(db, 'agenda'), where('studentId', '==', activeStudentId))
+      : collection(db, 'agenda');
+
     const unsub = onSnapshot(q, (snapshot) => {
       const list: AgendaEvent[] = [];
       snapshot.forEach((d) => {
@@ -800,7 +825,7 @@ export default function App() {
     return () => {
       unsub();
     };
-  }, [loadingFirebase]);
+  }, [loadingFirebase, role, activeStudentId]);
 
   // Trial validation side effect to verify if a trial account is expired
   useEffect(() => {
@@ -1273,22 +1298,27 @@ export default function App() {
     // Persist to local storage synchronously and immediately
     saveState(updated, updatedSheets, updatedEvol, agenda, updatedChats, updatedNotifs, revenueLogs);
 
-    // Save to Cloud securely in the background so that the UI updates instantly and feels blazingly fast!
-    addSyncLog(`[Firebase] Iniciando persistência de dados do aluno no Firestore em segundo plano (UID: ${uid})...`);
-    Promise.all([
-      saveStudent(std),
-      saveSheet(std.id, initSheet),
-      saveEvolutionRecord(std.id, initRecord),
-      saveChatMessage(std.id, initChat),
-      saveNotification(initNotif)
-    ])
-      .then(() => {
-        addSyncLog(`[Firebase] Aluno "${std.name}" e dados de suporte (ficha, evolução, chat, notificações) persistidos com sucesso no Firestore.`);
-      })
-      .catch((saveErr: any) => {
-        console.error("[Firebase Save Failure] Falha ao persistir no Firestore (Background):", saveErr);
-        addSyncLog(`[Error] Falha ao persistir os dados complementares de "${std.name}" no Firestore em segundo plano.`);
-      });
+    // Save to Cloud securely in the background, but serialized so the student document exists before the sub-resources (avoiding security rules race conditions)
+    addSyncLog(`[Firebase] Iniciando persistência de dados do aluno no Firestore (UID: ${uid})...`);
+    (async () => {
+      try {
+        // Save student document FIRST
+        await saveStudent(std);
+        addSyncLog(`[Firebase] Documento do aluno "${std.name}" criado com sucesso.`);
+
+        // Now save secondary documents that reference the student document
+        await Promise.all([
+          saveSheet(std.id, initSheet),
+          saveEvolutionRecord(std.id, initRecord),
+          saveChatMessage(std.id, initChat),
+          saveNotification(initNotif)
+        ]);
+        addSyncLog(`[Firebase] Ficha, evolução, chat e notificações de "${std.name}" persistidos com sucesso.`);
+      } catch (saveErr: any) {
+        console.error("[Firebase Save Failure] Falha ao persistir no Firestore:", saveErr);
+        addSyncLog(`[Error] Falha ao persistir os dados complementares de "${std.name}" no Firestore.`);
+      }
+    })();
 
     return std;
   };
