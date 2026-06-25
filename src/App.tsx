@@ -469,6 +469,9 @@ export default function App() {
         setSyncingStatus('synced');
         setLoadingFirebase(false);
 
+        // Run automatic migration routine for existing student-trainer links
+        migrateExistingData(remoteStudents, remoteTrainers);
+
         // Background synchronization of subcollections (biometrics/chats) to guarantee instantaneous loading
         (async () => {
           try {
@@ -799,6 +802,58 @@ export default function App() {
     };
   }, [loadingFirebase]);
 
+  // Trial validation side effect to verify if a trial account is expired
+  useEffect(() => {
+    if (loadingFirebase) return;
+    if (!activeTrainer || activeTrainer.id === 't_default') return;
+
+    const today = new Date();
+    let isExpired = false;
+
+    // Check ISO trialEndDate first
+    if (activeTrainer.trialEndDate) {
+      try {
+        const endDate = new Date(activeTrainer.trialEndDate);
+        if (today > endDate) {
+          isExpired = true;
+        }
+      } catch (e) {
+        console.error("Error parsing trialEndDate:", e);
+      }
+    } else if (activeTrainer.trialExpiresAt) {
+      // Fallback to checking trialExpiresAt (locale string format DD/MM/YYYY)
+      try {
+        const parts = activeTrainer.trialExpiresAt.split('/');
+        if (parts.length === 3) {
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const year = parseInt(parts[2], 10);
+          const endDate = new Date(year, month, day, 23, 59, 59);
+          if (today > endDate) {
+            isExpired = true;
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing trialExpiresAt:", e);
+      }
+    }
+
+    // Exclude trainers that are active with paid plans from auto-expiration
+    if (activeTrainer.subscriptionStatus === 'paid' || activeTrainer.plan === 'monthly' || activeTrainer.plan === 'annual') {
+      isExpired = false;
+    }
+
+    if (isExpired && activeTrainer.subscriptionStatus !== 'expired') {
+      console.log(`[Trial Expiry Checker] Active trainer trial expired. Setting status to expired.`);
+      const updatedTrainer = {
+        ...activeTrainer,
+        subscriptionStatus: 'expired' as const,
+        status: 'expired' as const
+      };
+      handleUpdateTrainer(updatedTrainer);
+    }
+  }, [activeTrainer?.id, activeTrainer?.trialEndDate, activeTrainer?.trialExpiresAt, activeTrainer?.subscriptionStatus, activeTrainer?.plan, loadingFirebase]);
+
   // Real-time synchronization of notifications from Firebase Firestore
   useEffect(() => {
     if (loadingFirebase) return;
@@ -928,6 +983,8 @@ export default function App() {
           const pendingTrainer = JSON.parse(pendingTrainerStr) as Trainer;
           pendingTrainer.subscriptionStatus = 'paid';
           pendingTrainer.selectedPlan = plan as any;
+          pendingTrainer.plan = plan === 'Anual' ? 'annual' : 'monthly';
+          pendingTrainer.status = 'active';
           
           addSyncLog(`[Stripe Checkout] Novo personal cadastrado e ativado via retorno do Stripe: ${pendingTrainer.name}`);
           
@@ -953,7 +1010,9 @@ export default function App() {
           handleUpdateTrainer({
             ...targetTrainer,
             subscriptionStatus: 'paid',
-            selectedPlan: plan as any
+            selectedPlan: plan as any,
+            plan: plan === 'Anual' ? 'annual' : 'monthly',
+            status: 'active'
           }).then(() => {
             const newUrl = window.location.origin + window.location.pathname;
             window.history.replaceState({}, document.title, newUrl);
@@ -1143,6 +1202,11 @@ export default function App() {
     std.onboarding = std.isProfileComplete ? 'completo' : 'pendente';
 
     std.trainerId = finalTrainerIdToAssign;
+    std.trainerUid = finalTrainerIdToAssign;
+    std.studentName = std.name;
+    std.studentEmail = emailClean;
+    std.createdAt = std.createdAt || std.joinedAt || new Date().toISOString();
+    
     let trainerObj = trainers.find(t => t.id === finalTrainerIdToAssign);
     if (!trainerObj && finalTrainerIdToAssign && finalTrainerIdToAssign !== 't_default') {
       try {
@@ -2178,4 +2242,78 @@ export default function App() {
 
     </div>
   );
+}
+
+// Automatic Migration and Backfill Routine to enforce the new Architecture
+async function migrateExistingData(allStudents: Student[], allTrainers: Trainer[]) {
+  console.log("[Migration Routine] Starting check for broken or older student-trainer links...");
+  
+  const uidTrainers = allTrainers.filter(t => t.id && !t.id.startsWith('t_'));
+  const oldTrainers = allTrainers.filter(t => t.id && t.id.startsWith('t_'));
+  
+  let migratedCount = 0;
+  
+  for (const newTrainer of uidTrainers) {
+    const trainerEmail = (newTrainer.email || '').toLowerCase().trim();
+    if (!trainerEmail) continue;
+    
+    // Find older trainer records with the same email
+    const correspondingOldTrainers = oldTrainers.filter(t => (t.email || '').toLowerCase().trim() === trainerEmail);
+    const oldIds = correspondingOldTrainers.map(t => t.id);
+    
+    if (oldIds.length > 0) {
+      console.log(`[Migration Routine] Found older trainer IDs ${JSON.stringify(oldIds)} for trainer "${newTrainer.name}" (${trainerEmail})`);
+      
+      // Find students linked to old trainer IDs
+      const studentsToMigrate = allStudents.filter(s => s.trainerId && oldIds.includes(s.trainerId));
+      
+      for (const student of studentsToMigrate) {
+        console.log(`[Migration Routine] Migrating student "${student.name}" (ID: ${student.id}) to new trainer UID: ${newTrainer.id}`);
+        
+        const updatedStudent: Student = {
+          ...student,
+          trainerId: newTrainer.id,
+          trainerUid: newTrainer.id,
+          studentName: student.name,
+          studentEmail: student.email || '',
+          createdAt: student.createdAt || student.joinedAt || new Date().toISOString()
+        };
+        
+        try {
+          await saveStudent(updatedStudent);
+          migratedCount++;
+        } catch (err) {
+          console.error(`[Migration Routine] Failed to save migrated student "${student.name}":`, err);
+        }
+      }
+    }
+  }
+  
+  // Backfill studentName, studentEmail, trainerUid for students already mapped to a UID trainer but missing these specific fields
+  const studentsToBackfill = allStudents.filter(s => s.trainerId && (!s.trainerUid || !s.studentName || !s.studentEmail));
+  for (const student of studentsToBackfill) {
+    const matchedTrainer = allTrainers.find(t => t.id === student.trainerId);
+    const resolvedUid = matchedTrainer?.id || student.trainerId;
+    
+    const updatedStudent: Student = {
+      ...student,
+      trainerUid: student.trainerUid || resolvedUid,
+      studentName: student.studentName || student.name,
+      studentEmail: student.studentEmail || student.email || '',
+      createdAt: student.createdAt || student.joinedAt || new Date().toISOString()
+    };
+    
+    try {
+      await saveStudent(updatedStudent);
+      migratedCount++;
+    } catch (err) {
+      console.error(`[Migration Routine] Failed to backfill student "${student.name}":`, err);
+    }
+  }
+
+  if (migratedCount > 0) {
+    console.log(`[Migration Routine] Successfully migrated/backfilled ${migratedCount} student-trainer links!`);
+  } else {
+    console.log(`[Migration Routine] No broken or old student-trainer links found. All database records are clean.`);
+  }
 }

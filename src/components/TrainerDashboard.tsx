@@ -63,7 +63,12 @@ export default function TrainerDashboard({
   onPurgeTestAccounts
 }: TrainerDashboardProps) {
   const students = useMemo(() => {
-    return rawStudents.filter(s => activeTrainer ? s.trainerId === activeTrainer.id : true);
+    return rawStudents.filter(s => {
+      if (!activeTrainer) return true;
+      const trainerUid = activeTrainer.uid || activeTrainer.id;
+      const trainerId = activeTrainer.id;
+      return s.trainerUid === trainerUid || s.trainerId === trainerId;
+    });
   }, [rawStudents, activeTrainer]);
 
   const [activeTab, setActiveTab] = useState<'alunos' | 'cadastrar_aluno' | 'agenda' | 'treinos' | 'chat' | 'notificacoes' | 'planos' | 'logs' | 'configuracoes'>('alunos');

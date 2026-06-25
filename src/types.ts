@@ -22,6 +22,9 @@ export interface Student {
   nextPayment: string;
   value: number;
   trainerId?: string;
+  trainerUid?: string;
+  studentName?: string;
+  studentEmail?: string;
   email?: string;
   password?: string;
   phoneWhatsApp?: string;
@@ -156,12 +159,16 @@ export interface MarketingPlan {
 
 export interface Trainer {
   id: string;
+  uid?: string;
   name: string;
   email: string;
   password?: string;
   selectedPlan: PlanType;
+  plan?: 'trial' | 'monthly' | 'annual';
   trialStartDate: string;
   trialExpiresAt: string;
+  trialEndDate?: string;
+  status?: 'active' | 'expired';
   subscriptionStatus: 'trial' | 'paid' | 'expired';
   customIdLink: string; // personalized link key, like 'daniel-personal'
   pixKeyType?: 'CPF' | 'CNPJ' | 'E-mail' | 'Telefone' | 'Chave Aleatória';

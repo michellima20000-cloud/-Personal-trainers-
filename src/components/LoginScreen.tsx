@@ -321,7 +321,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const currentSelectedStudent = students.find(s => s.id === selectedStudentId);
   const currentSelectedTrainer = trainers.find(t => t.id === selectedTrainerId);
 
-  const handleTrainerLogin = (e: React.FormEvent) => {
+  const handleTrainerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -333,100 +333,85 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
     const emailClean = trainerEmail.trim().toLowerCase();
     
-    if (emailClean === 'michel.lima20000@gmail.com') {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setSuccessMsg(`Acesso de Administrador Supremo verificado! Seja bem-vindo, Michel Lima 👋`);
-        setTimeout(() => {
-          onLoginSuccess('admin', undefined, undefined);
-        }, 1200);
-      }, 1000);
-      return;
-    }
-    
     if (!trainerPassword) {
       setErrorMsg('Por favor, preencha a senha.');
       return;
     }
 
-    const foundTrainer = trainers.find(t => t.email.toLowerCase() === emailClean);
-    
-    if (foundTrainer) {
-      const isPasswordCorrect = foundTrainer.password === trainerPassword || trainerPassword === 'personal123';
-      setLoading(true);
-      setTimeout(() => {
+    setLoading(true);
+    try {
+      // 1. Supreme Admin special check
+      if (emailClean === 'michel.lima20000@gmail.com' && trainerPassword === 'admin123') {
         setLoading(false);
-        if (!isPasswordCorrect) {
-          // Dynamically re-sync or update password to what was typed to avoid credentials mismatch issues entirely
-          foundTrainer.password = trainerPassword;
-          onAddTrainer(foundTrainer);
-          setSuccessMsg(`Senha sincronizada com sucesso para este acesso! Carregando Painel de ${foundTrainer.name}...`);
+        setSuccessMsg(`Acesso de Administrador Supremo verificado! Seja bem-vindo, Michel Lima 👋`);
+        setTimeout(() => {
+          onLoginSuccess('admin', undefined, undefined);
+        }, 1200);
+        return;
+      }
+
+      // 2. Strict Firebase Auth Sign-In
+      const userCredential = await signInWithEmailAndPassword(auth, emailClean, trainerPassword);
+      const uid = userCredential.user.uid;
+
+      // 3. Retrieve or migrate/initialize Trainer Document
+      let trainerDoc = await fetchTrainer(uid);
+      
+      if (!trainerDoc) {
+        // Look up by email to check if there is an existing trainer doc created during the old system, and merge
+        const existingByEmail = trainers.find(t => t.email.toLowerCase() === emailClean);
+        if (existingByEmail) {
+          console.log(`[Trainer Migration on Login] Migrating older trainer record ${existingByEmail.id} to UID: ${uid}`);
+          const migratedTrainer: Trainer = {
+            ...existingByEmail,
+            id: uid,
+            uid: uid,
+            password: trainerPassword,
+          };
+          await onAddTrainer(migratedTrainer);
+          trainerDoc = migratedTrainer;
         } else {
-          setSuccessMsg(`Verificado com sucesso! Carregando Painel Administrativo de ${foundTrainer.name}...`);
+          // Fallback if auth exists but no trainer document was initialized
+          const cleanSlug = emailClean.split('@')[0];
+          trainerDoc = {
+            id: uid,
+            uid: uid,
+            name: userCredential.user.displayName || 'Personal Trainer',
+            email: emailClean,
+            password: trainerPassword,
+            selectedPlan: 'Mensal',
+            plan: 'trial',
+            trialStartDate: new Date().toISOString(),
+            trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+            trialEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            status: 'active',
+            subscriptionStatus: 'trial',
+            customIdLink: cleanSlug,
+            pixKeyType: 'Chave Aleatória',
+            pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
+            phoneWhatsApp: '+5511999999999',
+            stripeEnabled: true,
+            stripePublishableKey: 'pk_test_sample_key',
+            stripeSecretKey: ''
+          };
+          await onAddTrainer(trainerDoc);
         }
-        setTimeout(() => {
-          onLoginSuccess('trainer', undefined, foundTrainer);
-        }, 1200);
-      }, 1000);
-    } else if (emailClean === 'personal@gympulse.com.br' && trainerPassword === 'personal123') {
-      // Default fallback
-      const defaultMatch = trainers.find(t => t.email === 'personal@gympulse.com.br');
-      setLoading(true);
+      }
+
+      setLoading(false);
+      setSuccessMsg(`Verificado com sucesso! Carregando Painel Administrativo de ${trainerDoc.name}...`);
       setTimeout(() => {
-        setLoading(false);
-        setSuccessMsg('Verificado com sucesso! Carregando Painel Administrativo...');
-        setTimeout(() => {
-          onLoginSuccess('trainer', undefined, defaultMatch);
-        }, 1200);
-      }, 1000);
-    } else {
-      // Auto-create trainer account on login to avoid any "invalid credentials" issues during testing
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        const namePrefix = emailClean.split('@')[0];
-        const suggestedName = namePrefix
-          .split(/[._\-]/)
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
+        onLoginSuccess('trainer', undefined, trainerDoc);
+      }, 1200);
 
-        const cleanSlug = namePrefix
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/(^-|-$)+/g, '');
-
-        const customId = cleanSlug || 'trainer-' + Math.floor(Math.random() * 1000);
-        const newTrainerId = 't_' + Date.now();
-
-        const autoTrainer: Trainer = {
-          id: newTrainerId,
-          name: suggestedName || 'Personal Trainer',
-          email: emailClean,
-          password: trainerPassword,
-          selectedPlan: 'Mensal',
-          trialStartDate: new Date().toLocaleDateString('pt-BR'),
-          trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-          subscriptionStatus: 'trial',
-          customIdLink: customId,
-          pixKeyType: 'Chave Aleatória',
-          pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-          phoneWhatsApp: '+5511999999999',
-          stripeEnabled: true,
-          stripePublishableKey: 'pk_test_sample_key',
-          stripeSecretKey: ''
-        };
-
-        // Add trainer securely
-        onAddTrainer(autoTrainer);
-
-        setSuccessMsg(`Sua conta como Personal Trainer foi conectada diretamente com sucesso como Teste Grátis de 7 dias! Carregando seu Painel...`);
-        setTimeout(() => {
-          onLoginSuccess('trainer', undefined, autoTrainer);
-        }, 1200);
-      }, 1000);
+    } catch (err: any) {
+      setLoading(false);
+      console.error("[Trainer Login Error] Strict Auth Failed:", err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+        setErrorMsg('E-mail ou senha incorretos. Por favor, verifique suas credenciais.');
+      } else {
+        setErrorMsg('Erro ao realizar o login. Verifique suas credenciais ou conexão.');
+      }
     }
   };
 
@@ -471,12 +456,18 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     }
   };
 
-  const handleConfirmTrainerSubscription = (isPaid: boolean) => {
+  const handleConfirmTrainerSubscription = async (isPaid: boolean) => {
     setLoading(true);
     setSuccessMsg('');
     setErrorMsg('');
     
-    setTimeout(() => {
+    const emailClean = regTrainerEmail.trim().toLowerCase();
+    
+    try {
+      // 1. Create User in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, emailClean, regTrainerPassword);
+      const uid = userCredential.user.uid;
+
       const cleanSlug = regTrainerName
         .trim()
         .toLowerCase()
@@ -487,37 +478,49 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
       const customId = cleanSlug || 'trainer-' + Math.floor(Math.random() * 1000);
 
-      // Check if this email already exists in our database. If so, reuse their ID and update them!
-      const emailClean = regTrainerEmail.trim().toLowerCase();
-      const existing = trainers.find(t => t.email.toLowerCase() === emailClean);
-
-      const trainerId = existing ? existing.id : 't_' + Date.now();
-
+      // 2. Build Trainer structure aligning with architecture requirements
       const newTrainer: Trainer = {
-        id: trainerId,
+        id: uid,
+        uid: uid,
         name: regTrainerName.trim(),
         email: emailClean,
-        password: regTrainerPassword || (existing ? existing.password : '123456'),
+        password: regTrainerPassword,
         selectedPlan: regTrainerPlan,
-        trialStartDate: existing?.trialStartDate || new Date().toLocaleDateString('pt-BR'),
-        trialExpiresAt: existing?.trialExpiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-        subscriptionStatus: isPaid ? 'paid' : (existing?.subscriptionStatus || 'trial'),
-        customIdLink: existing?.customIdLink || customId,
-        pixKeyType: existing?.pixKeyType || 'Chave Aleatória',
-        pixKey: existing?.pixKey || '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-        phoneWhatsApp: regTrainerWhatsApp.trim() || existing?.phoneWhatsApp || '+5511999999999',
+        plan: isPaid ? (regTrainerPlan === 'Anual' ? 'annual' : 'monthly') : 'trial',
+        trialStartDate: new Date().toISOString(),
+        trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+        trialEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        status: 'active',
+        subscriptionStatus: isPaid ? 'paid' : 'trial',
+        customIdLink: customId,
+        pixKeyType: 'Chave Aleatória',
+        pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
+        phoneWhatsApp: regTrainerWhatsApp.trim() || '+5511999999999',
         stripeEnabled: true,
         stripePublishableKey: 'pk_test_sample_key',
         stripeSecretKey: ''
       };
 
-      onAddTrainer(newTrainer);
+      // 3. Save to state and database
+      await onAddTrainer(newTrainer);
+      
       setLoading(false);
       setSuccessMsg(`Parabéns! Sua conta como Personal Trainer foi ativada (${isPaid ? 'Plano Ativo Integral' : 'Teste de 7 dias grátis'}). Redirecionando...`);
       setTimeout(() => {
         onLoginSuccess('trainer', undefined, newTrainer);
       }, 1500);
-    }, 1200);
+
+    } catch (err: any) {
+      setLoading(false);
+      console.error("[Trainer Registration Error] Auth Failed:", err);
+      if (err.code === 'auth/email-already-in-use') {
+        setErrorMsg('Este e-mail profissional já está cadastrado. Por favor, faça login.');
+      } else if (err.code === 'auth/weak-password') {
+        setErrorMsg('A senha informada é considerada fraca. Escolha uma senha de no mínimo 6 caracteres.');
+      } else {
+        setErrorMsg(err.message || 'Erro ao realizar o cadastro. Tente novamente.');
+      }
+    }
   };
 
   const handleStripeCheckoutRegistration = async () => {
@@ -526,6 +529,27 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setSuccessMsg('');
     setCheckoutMethod('stripe');
     setLicensePaymentStep(1); // Set state to 1 to show visual loading: "Contatando API Stripe (v3)..."
+
+    const emailClean = regTrainerEmail.trim().toLowerCase();
+    
+    let uid = '';
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, emailClean, regTrainerPassword);
+      uid = userCredential.user.uid;
+    } catch (authErr: any) {
+      setLicensePaymentStep(0);
+      setCheckoutMethod(null);
+      setLoading(false);
+      console.error("[Stripe Registration Auth Error]", authErr);
+      if (authErr.code === 'auth/email-already-in-use') {
+        setErrorMsg('Este e-mail profissional já está cadastrado. Por favor, faça login.');
+      } else if (authErr.code === 'auth/weak-password') {
+        setErrorMsg('A senha informada é considerada fraca. Escolha uma senha de no mínimo 6 caracteres.');
+      } else {
+        setErrorMsg(authErr.message || 'Erro ao realizar pré-cadastro. Tente novamente.');
+      }
+      return;
+    }
 
     const cleanSlug = regTrainerName
       .trim()
@@ -536,23 +560,24 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       .replace(/(^-|-$)+/g, '');        // remove leading/trailing hyphens
 
     const customId = cleanSlug || 'trainer-' + Math.floor(Math.random() * 1000);
-    const emailClean = regTrainerEmail.trim().toLowerCase();
-    const existing = trainers.find(t => t.email.toLowerCase() === emailClean);
-    const trainerId = existing ? existing.id : 't_' + Date.now();
 
     const newTrainer: Trainer = {
-      id: trainerId,
+      id: uid,
+      uid: uid,
       name: regTrainerName.trim(),
       email: emailClean,
-      password: regTrainerPassword || (existing ? existing.password : '123456'),
+      password: regTrainerPassword,
       selectedPlan: regTrainerPlan,
-      trialStartDate: existing?.trialStartDate || new Date().toLocaleDateString('pt-BR'),
-      trialExpiresAt: existing?.trialExpiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
-      subscriptionStatus: existing?.subscriptionStatus || 'trial', // starts as trial and will upgrade to paid immediately on successful return via successUrl
-      customIdLink: existing?.customIdLink || customId,
-      pixKeyType: existing?.pixKeyType || 'Chave Aleatória',
-      pixKey: existing?.pixKey || '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
-      phoneWhatsApp: regTrainerWhatsApp.trim() || existing?.phoneWhatsApp || '+5511999999999',
+      plan: 'trial',
+      trialStartDate: new Date().toISOString(),
+      trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+      trialEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'active',
+      subscriptionStatus: 'trial', // starts as trial and will upgrade to paid immediately on successful return via successUrl
+      customIdLink: customId,
+      pixKeyType: 'Chave Aleatória',
+      pixKey: '9bbf9c81-8077-4cdd-bb85-055ee56bfd31',
+      phoneWhatsApp: regTrainerWhatsApp.trim() || '+5511999999999',
       stripeEnabled: true,
       stripePublishableKey: 'pk_sample_publishable',
       stripeSecretKey: ''
@@ -580,7 +605,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           price: price,
           successUrl: window.location.origin + window.location.pathname + `?license_payment=success&plan=${regTrainerPlan}`,
           cancelUrl: window.location.origin + window.location.pathname + `?role=trainer`,
-          trainerId: trainerId
+          trainerId: uid
         })
       });
 

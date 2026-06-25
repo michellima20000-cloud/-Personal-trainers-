@@ -7,118 +7,100 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Reuseable global helpers
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-    
-    function incoming() {
-      return request.resource.data;
-    }
-    
-    function existing() {
-      return resource.data;
+    // Reusable global helpers
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Simple permissive check for demonstration sandbox, keeping validations strict and zero-trust structure checking
-    function isAllowed() {
-      return true;
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Helper to check if the current user is a registered trainer
+    function isTrainer() {
+      return isSignedIn() && exists(/databases/$(database)/documents/trainers/$(request.auth.uid));
+    }
+
+    // Helper to check if a student belongs to the current trainer
+    function studentBelongsToTrainer(studentId) {
+      let studentData = get(/databases/$(database)/documents/students/$(studentId)).data;
+      return studentData.trainerUid == request.auth.uid || studentData.trainerId == request.auth.uid;
     }
 
     // 1. Students collection
     match /students/{studentId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(studentId) && isValidStudent(incoming());
-      allow delete: if isAllowed();
+      // Students can read their own profile. Trainers can read students linked to them.
+      allow read: if isOwner(studentId) || (isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid));
+      
+      // Trainers can create or update students that belong to them.
+      // Students can update their own profiles.
+      allow create: if isSignedIn() && (isOwner(studentId) || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid);
+      allow update: if isSignedIn() && (isOwner(studentId) || resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid);
+      allow delete: if isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid);
     }
 
+    // Duplicate path backup (legacy matching '/alunos/')
     match /alunos/{studentId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(studentId) && isValidStudent(incoming());
-      allow delete: if isAllowed();
-    }
-
-    function isValidStudent(data) {
-      return data.id is string && data.id.size() <= 128;
+      allow read: if isOwner(studentId) || (isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid));
+      allow create: if isSignedIn() && (isOwner(studentId) || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid);
+      allow update: if isSignedIn() && (isOwner(studentId) || resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid);
+      allow delete: if isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid);
     }
 
     // 2. Sheets collection
     match /sheets/{studentId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(studentId);
-      allow delete: if isAllowed();
+      // Students can read their own sheets. Trainers can read sheets of students linked to them.
+      allow read: if isOwner(studentId) || (isSignedIn() && studentBelongsToTrainer(studentId));
+      allow write: if isOwner(studentId) || (isSignedIn() && studentBelongsToTrainer(studentId));
     }
 
     // 3. Evolution subcollection under students
     match /students/{studentId}/evolution/{recordId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(studentId) && isValidId(recordId) && isValidEvolution(incoming());
-      allow delete: if isAllowed();
-    }
-
-    function isValidEvolution(data) {
-      return data.id is string && data.id.size() <= 128;
+      allow read: if isOwner(studentId) || (isSignedIn() && studentBelongsToTrainer(studentId));
+      allow write: if isOwner(studentId) || (isSignedIn() && studentBelongsToTrainer(studentId));
     }
 
     // 4. Chats subcollection under students
     match /students/{studentId}/chats/{messageId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(studentId) && isValidId(messageId) && isValidChat(incoming());
-      allow delete: if isAllowed();
-    }
-
-    function isValidChat(data) {
-      return data.id is string && data.id.size() <= 128;
+      allow read: if isOwner(studentId) || (isSignedIn() && studentBelongsToTrainer(studentId));
+      allow write: if isOwner(studentId) || (isSignedIn() && studentBelongsToTrainer(studentId));
     }
 
     // 5. Agenda collection
     match /agenda/{eventId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(eventId) && isValidAgenda(incoming());
-      allow delete: if isAllowed();
-    }
-
-    function isValidAgenda(data) {
-      return data.id is string && data.id.size() <= 128;
+      // Trainers can read/write events. Students can only read/write their own events.
+      allow read: if isSignedIn() && (resource.data.studentId == request.auth.uid || resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || isTrainer());
+      allow write: if isSignedIn();
     }
 
     // 6. Notifications collection
     match /notifications/{notifId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(notifId) && isValidNotification(incoming());
-      allow delete: if isAllowed();
-    }
-
-    function isValidNotification(data) {
-      return data.id is string && data.id.size() <= 128;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // 7. Revenue logs
     match /revenueLogs/{month} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(month);
-      allow delete: if isAllowed();
+      allow read, write: if isTrainer();
     }
 
     // 8. Access logs
     match /accessLogs/{logId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(logId);
-      allow delete: if isAllowed();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // 9. Marketing Plans
     match /plans/{planId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(planId);
-      allow delete: if isAllowed();
+      allow read: if isSignedIn();
+      allow write: if isTrainer();
     }
 
     // 10. Trainers
     match /trainers/{trainerId} {
-      allow read: if isAllowed();
-      allow create, update: if isAllowed() && isValidId(trainerId);
-      allow delete: if isAllowed();
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(trainerId);
+      allow delete: if isOwner(trainerId);
     }
   }
 }
