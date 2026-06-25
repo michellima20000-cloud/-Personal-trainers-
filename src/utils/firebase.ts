@@ -424,24 +424,28 @@ export async function saveStudent(student: Student): Promise<void> {
   try {
     let resolvedTrainerName = student.trainerName || student.nomePersonal;
     let resolvedTrainerEmail = student.trainerEmail;
-    let resolvedTrainerPhone = student.trainerPhone;
+    let resolvedTrainerPhone = student.trainerPhone || student.phoneWhatsApp;
+    let resolvedTrainerPhoto = student.trainerPhoto || student.avatar;
 
-    if (student.trainerId && student.trainerId !== 't_default' && (!resolvedTrainerName || resolvedTrainerName === 'Consultoria Geral')) {
+    const queryTrainerId = student.trainerUid || student.trainerId;
+    if (queryTrainerId && queryTrainerId !== 't_default') {
       try {
-        const snap = await getDoc(doc(db, 'trainers', student.trainerId));
+        const snap = await getDoc(doc(db, 'trainers', queryTrainerId));
         if (snap.exists()) {
           const tData = snap.data();
-          resolvedTrainerName = tData.name;
-          resolvedTrainerEmail = tData.email;
-          resolvedTrainerPhone = tData.phoneWhatsApp;
+          resolvedTrainerName = tData.name || resolvedTrainerName;
+          resolvedTrainerEmail = tData.email || resolvedTrainerEmail;
+          resolvedTrainerPhone = tData.phoneWhatsApp || resolvedTrainerPhone;
+          resolvedTrainerPhoto = tData.photo || tData.avatar || resolvedTrainerPhoto;
         } else {
           const snapDocs = await getDocs(collection(db, 'trainers'));
           snapDocs.forEach((d) => {
             const data = d.data();
-            if (data.id === student.trainerId || (data.customIdLink && data.customIdLink.toLowerCase() === student.trainerId!.toLowerCase())) {
-              resolvedTrainerName = data.name;
-              resolvedTrainerEmail = data.email;
-              resolvedTrainerPhone = data.phoneWhatsApp;
+            if (data.id === queryTrainerId || data.uid === queryTrainerId || (data.customIdLink && data.customIdLink.toLowerCase() === queryTrainerId.toLowerCase())) {
+              resolvedTrainerName = data.name || resolvedTrainerName;
+              resolvedTrainerEmail = data.email || resolvedTrainerEmail;
+              resolvedTrainerPhone = data.phoneWhatsApp || resolvedTrainerPhone;
+              resolvedTrainerPhoto = data.photo || data.avatar || resolvedTrainerPhoto;
             }
           });
         }
@@ -450,7 +454,7 @@ export async function saveStudent(student: Student): Promise<void> {
       }
     }
 
-    const trainerNameFinal = resolvedTrainerName || 'Consultoria Geral';
+    const trainerNameFinal = resolvedTrainerName || '';
 
     const mappedStudent = {
       ...student,
@@ -470,12 +474,13 @@ export async function saveStudent(student: Student): Promise<void> {
       plan: student.plan || 'Mensal',
       plano: student.plan || 'Mensal',
       status: student.status || 'Ativo',
-      trainerId: student.trainerId || 't_default',
-      trainerUid: student.trainerUid || student.trainerId || 't_default',
+      trainerId: queryTrainerId || '',
+      trainerUid: queryTrainerId || '',
       trainerName: trainerNameFinal,
       nomePersonal: trainerNameFinal,
-      trainerEmail: resolvedTrainerEmail,
-      trainerPhone: resolvedTrainerPhone,
+      trainerEmail: resolvedTrainerEmail || '',
+      trainerPhone: resolvedTrainerPhone || '',
+      trainerPhoto: resolvedTrainerPhoto || '',
       createdAt: student.createdAt || student.joinedAt || new Date().toISOString()
     };
     

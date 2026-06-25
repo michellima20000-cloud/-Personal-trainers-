@@ -127,53 +127,13 @@ export default function StudentDashboard({
   
   const studentTrainer = useMemo(() => {
     if (!currentStudent) return undefined;
-    const assignedId = currentStudent?.trainerId;
-    const embeddedName = currentStudent?.trainerName || currentStudent?.nomePersonal;
-
-    // 1. Try to find trainer by student's assigned trainerId (must be a real trainer, not t_default)
-    if (assignedId && assignedId !== 't_default') {
-      const match = trainers.find(t => t.id === assignedId);
+    const assignedUid = currentStudent.trainerUid;
+    if (assignedUid) {
+      const match = trainers.find(t => t.id === assignedUid || t.uid === assignedUid);
       if (match) return match;
     }
-    
-    // 2. Try matching by embeddedName if we have a custom name
-    if (embeddedName && embeddedName !== 'Consultoria Geral') {
-      const matchByName = trainers.find(t => t.name.toLowerCase() === embeddedName.toLowerCase());
-      if (matchByName) return matchByName;
-    }
-
-    // 3. Create a stable Virtual Trainer object based on the student's actual database profile attributes (so the student sees the real personal)
-    if (embeddedName && embeddedName !== 'Consultoria Geral') {
-      return {
-        id: assignedId || 't_default',
-        name: embeddedName,
-        email: 'suporte@gympulse.com.br',
-        selectedPlan: 'Mensal',
-        trialStartDate: '',
-        trialExpiresAt: '',
-        subscriptionStatus: 'paid',
-        customIdLink: assignedId || 't_default',
-        phoneWhatsApp: currentStudent?.phoneWhatsApp || ''
-      } as Trainer;
-    }
-
-    // 4. Try to find trainer by active trainer context if it's a real trainer
-    if (activeTrainer && activeTrainer.id !== 't_default') {
-      const match = trainers.find(t => t.id === activeTrainer.id) || activeTrainer;
-      if (match) return match;
-    }
-    
-    // 5. Fall back to the first real trainer in the synced trainers array
-    const firstReal = trainers.find(t => t.id !== 't_default');
-    if (firstReal) return firstReal;
-    
-    // 6. If absolutely no trainers exist in DB, only then use activeTrainer context or trainers[0]
-    if (activeTrainer && activeTrainer.id !== 't_default') {
-      return activeTrainer;
-    }
-    
-    return trainers && trainers.length > 0 ? trainers[0] : undefined;
-  }, [currentStudent, trainers, activeTrainer]);
+    return undefined;
+  }, [currentStudent, trainers]);
 
   const studentAccessLogs = useMemo(() => {
     if (!currentStudent) return [];
@@ -207,6 +167,40 @@ export default function StudentDashboard({
               className="w-full bg-[#39FF14] text-black font-extrabold text-xs py-3.5 rounded-xl hover:shadow-lg hover:shadow-[#39FF14]/15 cursor-pointer transition block text-center border-none outline-none"
             >
               Voltar ao Login / Cadastrar Aluno
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!studentTrainer) {
+    return (
+      <div className="flex-1 min-h-screen bg-[#0C0C0E] flex flex-col items-center justify-center p-6 text-center font-sans text-white">
+        <div className="max-w-md w-full bg-[#121214] border border-neutral-800 rounded-3xl p-8 shadow-2xl relative">
+          <div className="absolute top-0 right-0 left-0 h-[3px] bg-gradient-to-r from-red-500/80 via-rose-400 to-transparent rounded-t-3xl"></div>
+          <div className="inline-flex items-center justify-center bg-red-500/15 border border-red-500/40 text-red-500 p-4 rounded-2xl mb-4">
+            <AlertCircle className="w-10 h-10 animate-pulse text-red-500" />
+          </div>
+          <h2 className="text-xl font-black uppercase tracking-wider text-white">Erro de Vínculo</h2>
+          <p className="text-sm text-neutral-400 mt-2">
+            Treinador não vinculado corretamente.
+          </p>
+          <p className="text-xs text-neutral-500 mt-2 font-mono uppercase bg-neutral-950 py-2.5 px-3 rounded-lg border border-neutral-800">
+            UID do Treinador: {currentStudent.trainerUid || 'Nenhum'}
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
+            <button
+              onClick={() => {
+                if (onLogout) {
+                  onLogout();
+                } else {
+                  window.location.href = window.location.origin;
+                }
+              }}
+              className="w-full bg-[#39FF14] text-black font-extrabold text-xs py-3.5 rounded-xl hover:shadow-lg hover:shadow-[#39FF14]/15 cursor-pointer transition block text-center border-none outline-none"
+            >
+              Sair da Conta
             </button>
           </div>
         </div>
@@ -404,13 +398,25 @@ export default function StudentDashboard({
                 </p>
                 {studentTrainer && (
                   <div className="mt-3 p-3 bg-neutral-950/80 border border-neutral-800 rounded-2xl flex items-center gap-3 text-left">
-                    <div className="w-9 h-9 rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/25 flex items-center justify-center font-black text-[#39FF14] text-xs shrink-0 uppercase tracking-wider font-mono">
-                      {studentTrainer.name.charAt(0).toUpperCase()}
-                    </div>
+                    {studentTrainer.photo || studentTrainer.avatar ? (
+                      <img 
+                        src={studentTrainer.photo || studentTrainer.avatar} 
+                        alt={studentTrainer.name} 
+                        className="w-9 h-9 rounded-xl object-cover border border-[#39FF14]/25 shrink-0" 
+                        referrerPolicy="no-referrer" 
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/25 flex items-center justify-center font-black text-[#39FF14] text-xs shrink-0 uppercase tracking-wider font-mono">
+                        {studentTrainer.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <span className="block text-[8px] text-[#39FF14] font-mono uppercase font-black tracking-widest leading-none">Personal Trainer Oficial</span>
                       <strong className="block text-xs text-white truncate my-0.5">{studentTrainer.name}</strong>
-                      <span className="block text-[9.5px] text-neutral-400 font-mono truncate leading-none">{studentTrainer.email || 'contato@gympulse.com.br'}</span>
+                      <span className="block text-[9.5px] text-neutral-400 font-mono truncate leading-none">{studentTrainer.email}</span>
+                      {studentTrainer.phoneWhatsApp && (
+                        <span className="block text-[8.5px] text-neutral-500 font-mono truncate leading-none mt-0.5">Tel: {studentTrainer.phoneWhatsApp}</span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2286,25 +2292,11 @@ export default function StudentDashboard({
         {/* Tab 4 Content: Subscriptions detailing & simulated billing updates */}
         {activeTab === 'plano' && (() => {
           // Identify the current student's trainer safely
-          const trainerList = trainers || [];
-          const trainer = (trainerList.find(t => t.id === currentStudent.trainerId) || activeTrainer || trainerList[0] || {
-            id: 'default-trainer',
-            name: 'Seu Personal Trainer',
-            email: 'contato@gympulse.com.br',
-            selectedPlan: 'Mensal',
-            trialStartDate: '',
-            trialExpiresAt: '',
-            subscriptionStatus: 'trial' as const,
-            customIdLink: 'personal',
-            pixKeyType: 'Chave Aleatória' as const,
-            pixKey: 'Chave não cadastrada',
-            phoneWhatsApp: '',
-            stripeEnabled: false
-          }) as Trainer;
+          const trainer = studentTrainer;
 
           const trainerPixType = trainer.pixKeyType || 'Chave Aleatória';
-          const trainerPixKey = trainer.pixKey || '9bbf9c81-8077-4cdd-bb85-055ee56bfd31';
-          const trainerWhatsApp = trainer.phoneWhatsApp || '+5511999999999';
+          const trainerPixKey = trainer.pixKey || 'Chave não cadastrada';
+          const trainerWhatsApp = trainer.phoneWhatsApp || '';
 
           // Handle WhatsApp confirmation redirect
           const handleWhatsAppConfirmation = () => {
@@ -3249,9 +3241,18 @@ export default function StudentDashboard({
               <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-[#39FF14]/5 rounded-full blur-xl pointer-events-none" />
               
               <div className="relative shrink-0">
-                <div className="w-12 h-12 bg-[#39FF14]/15 text-[#39FF14] rounded-xl border border-[#39FF14]/30 flex items-center justify-center font-black text-lg shadow-inner">
-                  {studentTrainer?.name?.charAt(0).toUpperCase() || 'P'}
-                </div>
+                {studentTrainer?.photo || studentTrainer?.avatar ? (
+                  <img 
+                    src={studentTrainer.photo || studentTrainer.avatar} 
+                    alt={studentTrainer.name} 
+                    className="w-12 h-12 rounded-xl object-cover border border-[#39FF14]/30" 
+                    referrerPolicy="no-referrer" 
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-[#39FF14]/15 text-[#39FF14] rounded-xl border border-[#39FF14]/30 flex items-center justify-center font-black text-lg shadow-inner">
+                    {studentTrainer?.name?.charAt(0).toUpperCase() || 'P'}
+                  </div>
+                )}
                 <div className="absolute -bottom-1 -right-1 bg-[#39FF14] text-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-neutral-950 shadow">
                   <Check size={8} strokeWidth={4} />
                 </div>
@@ -3260,11 +3261,16 @@ export default function StudentDashboard({
               <div className="min-w-0 flex-1">
                 <span className="text-[9px] text-[#39FF14] font-mono tracking-widest uppercase font-black">Meu Personal Coach</span>
                 <h4 className="text-[14px] font-black text-white truncate my-0 leading-tight">
-                  {studentTrainer?.name || 'Seu Consultor Esportivo'}
+                  {studentTrainer?.name}
                 </h4>
                 <p className="text-[10px] text-neutral-400 truncate mt-0.5">
-                  {studentTrainer?.email || 'contato@gympulse.com.br'}
+                  {studentTrainer?.email}
                 </p>
+                {studentTrainer?.phoneWhatsApp && (
+                  <p className="text-[9px] text-neutral-500 font-mono mt-0.5 truncate">
+                    Tel: {studentTrainer.phoneWhatsApp}
+                  </p>
+                )}
               </div>
             </div>
 

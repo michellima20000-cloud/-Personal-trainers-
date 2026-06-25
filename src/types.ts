@@ -41,6 +41,7 @@ export interface Student {
   nomePersonal?: string;
   trainerEmail?: string;
   trainerPhone?: string;
+  trainerPhoto?: string;
   // Portuguese mappings for absolute compatibility
   nome?: string;
   telefone?: string;
@@ -179,5 +180,7 @@ export interface Trainer {
   stripePublishableKey?: string;
   stripeSecretKey?: string;
   themeColor?: string;
+  photo?: string;
+  avatar?: string;
 }
 

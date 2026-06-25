@@ -2276,74 +2276,93 @@ export default function App() {
 
 // Automatic Migration and Backfill Routine to enforce the new Architecture
 async function migrateExistingData(allStudents: Student[], allTrainers: Trainer[]) {
-  console.log("[Migration Routine] Starting check for broken or older student-trainer links...");
+  console.log("[Migration/Correction Routine] Starting comprehensive check for unlinked, mock, or broken student-trainer associations...");
   
-  const uidTrainers = allTrainers.filter(t => t.id && !t.id.startsWith('t_'));
-  const oldTrainers = allTrainers.filter(t => t.id && t.id.startsWith('t_'));
+  const realTrainers = allTrainers.filter(t => t.id && !t.id.startsWith('t_') && t.id !== 't_default');
+  const defaultTrainer = realTrainers[0]; // First real trainer available is our target for broken links
   
   let migratedCount = 0;
   
-  for (const newTrainer of uidTrainers) {
-    const trainerEmail = (newTrainer.email || '').toLowerCase().trim();
-    if (!trainerEmail) continue;
+  for (const student of allStudents) {
+    let needsUpdate = false;
+    let updatedTrainerUid = student.trainerUid || student.trainerId;
     
-    // Find older trainer records with the same email
-    const correspondingOldTrainers = oldTrainers.filter(t => (t.email || '').toLowerCase().trim() === trainerEmail);
-    const oldIds = correspondingOldTrainers.map(t => t.id);
+    // Check if the trainerUid is missing, invalid or belongs to t_default/mock
+    const isMockTrainer = !updatedTrainerUid || 
+                         updatedTrainerUid === 't_default' || 
+                         updatedTrainerUid.startsWith('t_') || 
+                         ['demoTrainer', 'mockTrainer', 'fakeTrainer', 'sampleTrainer', 'defaultTrainer'].includes(updatedTrainerUid);
+                         
+    // Check if linked trainer exists
+    const linkedTrainerExists = !isMockTrainer && allTrainers.some(t => t.id === updatedTrainerUid || t.uid === updatedTrainerUid);
     
-    if (oldIds.length > 0) {
-      console.log(`[Migration Routine] Found older trainer IDs ${JSON.stringify(oldIds)} for trainer "${newTrainer.name}" (${trainerEmail})`);
-      
-      // Find students linked to old trainer IDs
-      const studentsToMigrate = allStudents.filter(s => s.trainerId && oldIds.includes(s.trainerId));
-      
-      for (const student of studentsToMigrate) {
-        console.log(`[Migration Routine] Migrating student "${student.name}" (ID: ${student.id}) to new trainer UID: ${newTrainer.id}`);
-        
-        const updatedStudent: Student = {
-          ...student,
-          trainerId: newTrainer.id,
-          trainerUid: newTrainer.id,
-          studentName: student.name,
-          studentEmail: student.email || '',
-          createdAt: student.createdAt || student.joinedAt || new Date().toISOString()
-        };
-        
-        try {
-          await saveStudent(updatedStudent);
-          migratedCount++;
-        } catch (err) {
-          console.error(`[Migration Routine] Failed to save migrated student "${student.name}":`, err);
-        }
+    if (isMockTrainer || !linkedTrainerExists) {
+      // Student is unlinked or linked incorrectly! Re-associate to first real trainer.
+      if (defaultTrainer) {
+        console.log(`[Correction Routine] Aluno "${student.name}" (ID: ${student.id}) estava sem treinador real ou com vínculo incorreto. Associando ao treinador real "${defaultTrainer.name}" (UID: ${defaultTrainer.id}).`);
+        updatedTrainerUid = defaultTrainer.id;
+        needsUpdate = true;
+      } else {
+        console.warn(`[Correction Routine] Aluno "${student.name}" (ID: ${student.id}) precisa ser corrigido, mas nenhum treinador real existe no banco.`);
       }
     }
-  }
-  
-  // Backfill studentName, studentEmail, trainerUid for students already mapped to a UID trainer but missing these specific fields
-  const studentsToBackfill = allStudents.filter(s => s.trainerId && (!s.trainerUid || !s.studentName || !s.studentEmail));
-  for (const student of studentsToBackfill) {
-    const matchedTrainer = allTrainers.find(t => t.id === student.trainerId);
-    const resolvedUid = matchedTrainer?.id || student.trainerId;
     
-    const updatedStudent: Student = {
-      ...student,
-      trainerUid: student.trainerUid || resolvedUid,
-      studentName: student.studentName || student.name,
-      studentEmail: student.studentEmail || student.email || '',
-      createdAt: student.createdAt || student.joinedAt || new Date().toISOString()
-    };
+    // Get final values from the resolved trainer
+    const matchedTrainer = allTrainers.find(t => t.id === updatedTrainerUid || t.uid === updatedTrainerUid) || defaultTrainer;
     
-    try {
-      await saveStudent(updatedStudent);
-      migratedCount++;
-    } catch (err) {
-      console.error(`[Migration Routine] Failed to backfill student "${student.name}":`, err);
+    const finalTrainerUid = updatedTrainerUid || (matchedTrainer ? matchedTrainer.id : '');
+    const finalTrainerName = matchedTrainer ? matchedTrainer.name : (student.trainerName || '');
+    const finalTrainerEmail = matchedTrainer ? matchedTrainer.email : (student.trainerEmail || '');
+    const finalTrainerPhoto = matchedTrainer ? (matchedTrainer.photo || matchedTrainer.avatar || '') : (student.trainerPhoto || '');
+    const finalTrainerPhone = matchedTrainer ? (matchedTrainer.phoneWhatsApp || '') : (student.trainerPhone || '');
+
+    // Check if fields need to be updated or backfilled
+    if (!student.trainerUid || student.trainerUid !== finalTrainerUid) {
+      needsUpdate = true;
+    }
+    if (!student.trainerName || student.trainerName !== finalTrainerName) {
+      needsUpdate = true;
+    }
+    if (!student.trainerEmail || student.trainerEmail !== finalTrainerEmail) {
+      needsUpdate = true;
+    }
+    if (!student.trainerPhoto || student.trainerPhoto !== finalTrainerPhoto) {
+      needsUpdate = true;
+    }
+    if (!student.studentName || student.studentName !== student.name) {
+      needsUpdate = true;
+    }
+    if (!student.studentEmail || student.studentEmail !== (student.email || '')) {
+      needsUpdate = true;
+    }
+    
+    if (needsUpdate && finalTrainerUid) {
+      const updatedStudent: Student = {
+        ...student,
+        trainerId: finalTrainerUid,
+        trainerUid: finalTrainerUid,
+        trainerName: finalTrainerName,
+        nomePersonal: finalTrainerName,
+        trainerEmail: finalTrainerEmail,
+        trainerPhone: finalTrainerPhone,
+        trainerPhoto: finalTrainerPhoto,
+        studentName: student.name,
+        studentEmail: student.email || '',
+        createdAt: student.createdAt || student.joinedAt || new Date().toISOString()
+      };
+      
+      try {
+        await saveStudent(updatedStudent);
+        migratedCount++;
+      } catch (err) {
+        console.error(`[Correction Routine] Falha ao corrigir/salvar aluno "${student.name}":`, err);
+      }
     }
   }
 
   if (migratedCount > 0) {
-    console.log(`[Migration Routine] Successfully migrated/backfilled ${migratedCount} student-trainer links!`);
+    console.log(`[Correction Routine] Sucesso! ${migratedCount} alunos foram corrigidos e auditados com sucesso.`);
   } else {
-    console.log(`[Migration Routine] No broken or old student-trainer links found. All database records are clean.`);
+    console.log(`[Correction Routine] Auditoria concluída. Nenhum aluno com pendência ou erro de vínculo foi encontrado.`);
   }
 }
