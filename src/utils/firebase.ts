@@ -426,8 +426,9 @@ export async function saveStudent(student: Student): Promise<void> {
     let resolvedTrainerEmail = student.trainerEmail;
     let resolvedTrainerPhone = student.trainerPhone || student.phoneWhatsApp;
     let resolvedTrainerPhoto = student.trainerPhoto || student.avatar;
+    let resolvedTrainerCode = student.trainerCode || '';
 
-    const queryTrainerId = student.trainerUid || student.trainerId;
+    const queryTrainerId = student.trainerUid || student.trainerId || 't_default';
     if (queryTrainerId && queryTrainerId !== 't_default') {
       try {
         const snap = await getDoc(doc(db, 'trainers', queryTrainerId));
@@ -437,6 +438,7 @@ export async function saveStudent(student: Student): Promise<void> {
           resolvedTrainerEmail = tData.email || resolvedTrainerEmail;
           resolvedTrainerPhone = tData.phoneWhatsApp || resolvedTrainerPhone;
           resolvedTrainerPhoto = tData.photo || tData.avatar || resolvedTrainerPhoto;
+          resolvedTrainerCode = tData.personalCode || resolvedTrainerCode;
         } else {
           const snapDocs = await getDocs(collection(db, 'trainers'));
           snapDocs.forEach((d) => {
@@ -446,6 +448,7 @@ export async function saveStudent(student: Student): Promise<void> {
               resolvedTrainerEmail = data.email || resolvedTrainerEmail;
               resolvedTrainerPhone = data.phoneWhatsApp || resolvedTrainerPhone;
               resolvedTrainerPhoto = data.photo || data.avatar || resolvedTrainerPhoto;
+              resolvedTrainerCode = data.personalCode || resolvedTrainerCode;
             }
           });
         }
@@ -460,6 +463,7 @@ export async function saveStudent(student: Student): Promise<void> {
       ...student,
       id: student.id,
       uid: student.uid || student.id,
+      studentUid: student.uid || student.id,
       name: student.name,
       nome: student.name,
       studentName: student.name,
@@ -476,6 +480,7 @@ export async function saveStudent(student: Student): Promise<void> {
       status: student.status || 'Ativo',
       trainerId: queryTrainerId || '',
       trainerUid: queryTrainerId || '',
+      trainerCode: resolvedTrainerCode || 'PT-DEFAULT',
       trainerName: trainerNameFinal,
       nomePersonal: trainerNameFinal,
       trainerEmail: resolvedTrainerEmail || '',
@@ -487,18 +492,14 @@ export async function saveStudent(student: Student): Promise<void> {
     console.log(`[Documento Salvo] Aluno persistido no Firestore (caminho: ${p}). ID: ${student.id}, UID: ${mappedStudent.uid}`, {
       id: mappedStudent.id,
       uid: mappedStudent.uid,
+      studentUid: mappedStudent.studentUid,
       name: mappedStudent.name,
       email: mappedStudent.email,
-      phoneWhatsApp: mappedStudent.phoneWhatsApp,
-      age: mappedStudent.age,
-      weight: mappedStudent.weight,
-      height: mappedStudent.height,
-      objective: mappedStudent.objective,
-      plan: mappedStudent.plan,
       status: mappedStudent.status,
       trainerId: mappedStudent.trainerId,
+      trainerUid: mappedStudent.trainerUid,
+      trainerCode: mappedStudent.trainerCode,
       trainerName: mappedStudent.trainerName,
-      nomePersonal: mappedStudent.nomePersonal,
       createdAt: mappedStudent.createdAt
     });
 
@@ -743,7 +744,9 @@ export async function fetchTrainer(trainerId: string): Promise<Trainer | null> {
     let found: Trainer | null = null;
     snapDocs.forEach((d) => {
       const data = d.data() as Trainer;
-      if (data.id === trainerId || (data.customIdLink && data.customIdLink.toLowerCase() === trainerId.toLowerCase())) {
+      if (data.id === trainerId || 
+          (data.personalCode && data.personalCode.toLowerCase() === trainerId.toLowerCase()) || 
+          (data.customIdLink && data.customIdLink.toLowerCase() === trainerId.toLowerCase())) {
         found = data;
       }
     });
@@ -773,9 +776,43 @@ export async function fetchTrainers(): Promise<Trainer[]> {
   }
 }
 
+export function getTrainerLink(personalCode: string, trainerId: string): string {
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://app.gympulse.com';
+  return `${base}/convite/${personalCode || trainerId}`;
+}
+
+export async function generateUniquePersonalCode(): Promise<string> {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  let isUnique = false;
+  let attempts = 0;
+  while (!isUnique && attempts < 100) {
+    attempts++;
+    let randomPart = '';
+    for (let i = 0; i < 6; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    code = `PT-${randomPart}`;
+    try {
+      const q = query(collection(db, 'trainers'), where('personalCode', '==', code));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        isUnique = true;
+      }
+    } catch (e) {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
 export async function saveTrainer(trainer: Trainer): Promise<void> {
   const p = `trainers/${trainer.id}`;
   try {
+    if (!trainer.personalCode) {
+      trainer.personalCode = await generateUniquePersonalCode();
+    }
+    trainer.personalLink = getTrainerLink(trainer.personalCode, trainer.id);
     await setDoc(doc(db, 'trainers', trainer.id), cleanUndefined(trainer));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, p);

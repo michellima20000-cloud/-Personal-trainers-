@@ -1156,27 +1156,34 @@ export default function TrainerDashboard({
                 <div className="bg-[#121214] border border-neutral-800 p-4 rounded-xl flex flex-col justify-between relative overflow-hidden group">
                   <div className="absolute top-0 right-0 h-20 w-20 bg-emerald-500/5 blur-xl rounded-full" />
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="p-1.5 rounded-lg bg-[#39FF14]/15 border border-[#39FF14]/30 text-[#39FF14]">
-                        <Copy size={16} />
-                      </span>
-                      <h3 className="text-xs font-black tracking-wider uppercase text-neutral-200 font-mono">Link de Onboarding de Alunos</h3>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1.5 rounded-lg bg-[#39FF14]/15 border border-[#39FF14]/30 text-[#39FF14]">
+                          <Copy size={16} />
+                        </span>
+                        <h3 className="text-xs font-black tracking-wider uppercase text-neutral-200 font-mono">Link de Onboarding de Alunos</h3>
+                      </div>
+                      {activeTrainer?.personalCode && (
+                        <span className="text-[10px] font-mono bg-neutral-900 border border-neutral-800 text-[#39FF14] px-2 py-0.5 rounded-md font-bold">
+                          {activeTrainer.personalCode}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-neutral-400 leading-relaxed mb-3">
-                      Envie o link abaixo para seus alunos se cadastrarem direto. Eles serão automaticamente associados ao seu painel administrativo.
+                      Envie o link exclusivo abaixo para seus alunos se cadastrarem direto. Eles serão vinculados automaticamente e permanentemente.
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       readOnly
-                      value={window.location.origin + '/?trainerId=' + (activeTrainer?.customIdLink || activeTrainer?.id || '')}
+                      value={window.location.origin + '/convite/' + (activeTrainer?.personalCode || activeTrainer?.id || '')}
                       className="flex-1 bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-300 px-3 py-2 rounded-lg font-mono focus:outline-none focus:border-[#39FF14]"
                     />
                     <button
                       type="button"
                       onClick={() => {
-                        const link = window.location.origin + '/?trainerId=' + (activeTrainer?.customIdLink || activeTrainer?.id || '');
+                        const link = window.location.origin + '/convite/' + (activeTrainer?.personalCode || activeTrainer?.id || '');
                         navigator.clipboard.writeText(link);
                         setCopiedRecruitmentLink(true);
                         setTimeout(() => setCopiedRecruitmentLink(false), 2000);

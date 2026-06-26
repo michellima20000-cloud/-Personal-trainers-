@@ -17,12 +17,14 @@ export interface Student {
   restrictions: string;
   history: string;
   plan: PlanType;
-  status: 'Ativo' | 'Inativo';
+  status: 'Ativo' | 'Inativo' | 'active' | 'inactive';
   joinedAt: string;
   nextPayment: string;
   value: number;
   trainerId?: string;
   trainerUid?: string;
+  trainerCode?: string;
+  studentUid?: string;
   studentName?: string;
   studentEmail?: string;
   email?: string;
@@ -172,6 +174,8 @@ export interface Trainer {
   status?: 'active' | 'expired';
   subscriptionStatus: 'trial' | 'paid' | 'expired';
   customIdLink: string; // personalized link key, like 'daniel-personal'
+  personalCode?: string;
+  personalLink?: string;
   pixKeyType?: 'CPF' | 'CNPJ' | 'E-mail' | 'Telefone' | 'Chave Aleatória';
   pixKey?: string;
   pixQrCode?: string;

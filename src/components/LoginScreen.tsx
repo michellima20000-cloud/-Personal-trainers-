@@ -24,7 +24,15 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
   const [activeTab, setActiveTab] = useState<'trainer' | 'student'>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('trainerId') || params.get('role') === 'student' || params.get('studentId')) {
+      const path = window.location.pathname;
+      if (
+        params.get('trainer') || 
+        params.get('trainerId') || 
+        params.get('role') === 'student' || 
+        params.get('studentId') ||
+        path.includes('/convite/') ||
+        path.includes('/register/')
+      ) {
         return 'student';
       }
     }
@@ -150,28 +158,35 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     return 't_default';
   };
 
+  const getTrainerRefIdFromUrlOrStorage = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    let id = params.get('trainer') || params.get('trainerId');
+    if (!id) {
+      const path = window.location.pathname;
+      if (path.includes('/convite/')) {
+        id = path.split('/convite/')[1]?.split('/')[0];
+      } else if (path.includes('/register/')) {
+        id = path.split('/register/')[1]?.split('/')[0];
+      }
+    }
+    return id || localStorage.getItem('gympulse_referred_trainer_id_raw');
+  };
+
   // Instantly preserve raw trainer Ref ID from URL to local storage to make sure it's never lost
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const trainerRefId = params.get('trainerId');
-      if (trainerRefId && trainerRefId !== 't_default') {
-        console.log(`[GymPulse Invite/Referral] URL trainerId detected: "${trainerRefId}". Preserving in localStorage raw...`);
-        localStorage.setItem('gympulse_referred_trainer_id_raw', trainerRefId);
-      }
+    const trainerRefId = getTrainerRefIdFromUrlOrStorage();
+    if (trainerRefId && trainerRefId !== 't_default') {
+      console.log(`[GymPulse Invite/Referral] URL trainer referral detected: "${trainerRefId}". Preserving in localStorage raw...`);
+      localStorage.setItem('gympulse_referred_trainer_id_raw', trainerRefId);
     }
   }, []);
 
   // Handle custom trainer referral / landing page links
   useEffect(() => {
-    let trainerRefId: string | null = null;
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      trainerRefId = params.get('trainerId') || localStorage.getItem('gympulse_referred_trainer_id_raw');
-    }
-
+    const trainerRefId = getTrainerRefIdFromUrlOrStorage();
     if (trainerRefId) {
-      console.log(`[GymPulse Invite/Load] Buscando personal com ID "${trainerRefId}" no Firestore...`);
+      console.log(`[GymPulse Invite/Load] Buscando personal com ID/Código "${trainerRefId}" no Firestore...`);
       fetchTrainer(trainerRefId)
         .then((dbTrainer) => {
           if (dbTrainer) {
@@ -184,7 +199,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
               localStorage.setItem('gympulse_referred_trainer_id_raw', trainerRefId || '');
             }
           } else {
-            console.warn(`[GymPulse Invite/Warning] Personal Trainer não correspondente a documento no Firestore para "${trainerRefId}". Buscando nos locais...`);
+            console.warn(`[GymPulse Invite/Warning] Personal Trainer não correspondente a documento no Firestore para "${trainerRefId}".`);
           }
         })
         .catch((dbErr) => {
@@ -195,17 +210,13 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
   // Sync / reactive local cache backup
   useEffect(() => {
-    let trainerRefId = null;
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      trainerRefId = params.get('trainerId') || localStorage.getItem('gympulse_referred_trainer_id_raw');
-    }
-    
+    const trainerRefId = getTrainerRefIdFromUrlOrStorage();
     let matchedTrainer: Trainer | null = null;
 
     if (trainerRefId && trainers && trainers.length > 0) {
       const match = trainers.find(
-        t => (t.customIdLink || '').toLowerCase() === trainerRefId.toLowerCase() || 
+        t => (t.personalCode || '').toLowerCase() === trainerRefId.toLowerCase() ||
+             (t.customIdLink || '').toLowerCase() === trainerRefId.toLowerCase() || 
              t.id.toLowerCase() === trainerRefId.toLowerCase() ||
              (t.email || '').split('@')[0].toLowerCase() === trainerRefId.toLowerCase()
       );

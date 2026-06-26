@@ -34,6 +34,7 @@ import {
   fetchAccessLogs, saveAccessLog,
   fetchMarketingPlans, saveMarketingPlan, deleteMarketingPlan,
   fetchTrainers, fetchTrainer, saveTrainer,
+  generateUniquePersonalCode, getTrainerLink,
   purgeTestAccountsFirestore,
   purgeEntireDatabaseFirestore
 } from './utils/firebase';
@@ -1237,6 +1238,7 @@ export default function App() {
 
     std.trainerId = finalTrainerIdToAssign;
     std.trainerUid = finalTrainerIdToAssign;
+    std.studentUid = uid;
     std.studentName = std.name;
     std.studentEmail = emailClean;
     std.createdAt = std.createdAt || std.joinedAt || new Date().toISOString();
@@ -1254,14 +1256,30 @@ export default function App() {
       }
     }
 
+    if (trainerObj && !trainerObj.personalCode) {
+      try {
+        const uniqueCode = await generateUniquePersonalCode();
+        trainerObj.personalCode = uniqueCode;
+        trainerObj.personalLink = getTrainerLink(uniqueCode, trainerObj.id);
+        await saveTrainer(trainerObj);
+        setTrainers(prev => prev.map(t => t.id === trainerObj!.id ? trainerObj! : t));
+      } catch (err) {
+        console.warn("Could not save updated trainer with new code on-the-fly in handleAddStudent:", err);
+      }
+    }
+
+    std.trainerCode = trainerObj?.personalCode || 'PT-DEFAULT';
+
     if (trainerObj) {
       std.trainerName = trainerObj.name;
       std.nomePersonal = trainerObj.name;
+      std.trainerEmail = trainerObj.email;
+      std.trainerPhoto = trainerObj.photo || trainerObj.avatar || '';
     } else {
       std.trainerName = std.trainerName || 'Consultoria Geral';
       std.nomePersonal = std.nomePersonal || 'Consultoria Geral';
     }
-    console.log(`[GymPulse App/Firebase saveState] Aluno registrado vinculando definitivamente ao trainerId: "${std.trainerId}" (${std.trainerName})`);
+    console.log(`[GymPulse App/Firebase saveState] Aluno registrado vinculando definitivamente ao trainerId: "${std.trainerId}" (${std.trainerName}) com o código do personal: "${std.trainerCode}"`);
 
     const updated = [...students, std];
     setStudents(updated);
@@ -1681,19 +1699,28 @@ export default function App() {
         console.log(`[GymPulse LoginSuccess] Aluno já possui personal vinculado em seu cadastro: "${activeStudent.trainerName || activeStudent.nomePersonal || ''}" (ID: ${foundTrainerId})`);
       }
       
-      // 2. Secondary Priority: if no trainer assigned (or t_default), try resolving from URL query param
+      // 2. Secondary Priority: if no trainer assigned (or t_default), try resolving from URL query param / pathname
       if (!foundTrainerId) {
         const params = new URLSearchParams(window.location.search);
-        const urlTrainerId = params.get('trainerId');
+        let urlTrainerId = params.get('trainer') || params.get('trainerId');
+        if (!urlTrainerId) {
+          const path = window.location.pathname;
+          if (path.includes('/convite/')) {
+            urlTrainerId = path.split('/convite/')[1]?.split('/')[0];
+          } else if (path.includes('/register/')) {
+            urlTrainerId = path.split('/register/')[1]?.split('/')[0];
+          }
+        }
         if (urlTrainerId) {
           const matched = trainers.find(
-            t => (t.customIdLink || '').toLowerCase() === urlTrainerId.toLowerCase() || 
-                 t.id.toLowerCase() === urlTrainerId.toLowerCase() ||
-                 (t.email || '').split('@')[0].toLowerCase() === urlTrainerId.toLowerCase()
+            t => (t.personalCode || '').toLowerCase() === urlTrainerId!.toLowerCase() ||
+                 (t.customIdLink || '').toLowerCase() === urlTrainerId!.toLowerCase() || 
+                 t.id.toLowerCase() === urlTrainerId!.toLowerCase() ||
+                 (t.email || '').split('@')[0].toLowerCase() === urlTrainerId!.toLowerCase()
           );
           if (matched) {
             foundTrainerId = matched.id;
-            console.log(`[GymPulse LoginSuccess] Resolvido personal do parâmetro da URL: "${matched.name}" (ID: ${matched.id})`);
+            console.log(`[GymPulse LoginSuccess] Resolvido personal do parâmetro da URL/pathname: "${matched.name}" (ID: ${matched.id})`);
           }
         }
       }
@@ -1712,7 +1739,8 @@ export default function App() {
         const rawId = localStorage.getItem('gympulse_referred_trainer_id_raw');
         if (rawId) {
           const matched = trainers.find(
-            t => (t.customIdLink || '').toLowerCase() === rawId.toLowerCase() || 
+            t => (t.personalCode || '').toLowerCase() === rawId.toLowerCase() ||
+                 (t.customIdLink || '').toLowerCase() === rawId.toLowerCase() || 
                  t.id.toLowerCase() === rawId.toLowerCase() ||
                  (t.email || '').split('@')[0].toLowerCase() === rawId.toLowerCase()
           );
