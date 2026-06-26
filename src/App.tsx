@@ -1338,23 +1338,53 @@ export default function App() {
 
     // Save to Cloud securely in the background, but serialized so the student document exists before the sub-resources (avoiding security rules race conditions)
     addSyncLog(`[Firebase] Iniciando persistência de dados do aluno no Firestore (UID: ${uid})...`);
+    console.log(`[Debug handleAddStudent] Usando o UID "${uid}" para ID e UID do aluno para garantir que ambos os registros usem o mesmo UID. (std.id = ${std.id}, std.uid = ${std.uid}, std.studentUid = ${std.studentUid})`);
+
     (async () => {
       try {
+        console.log(`[Debug handleAddStudent] Iniciando rotina de persistência do aluno no Firestore... UID: ${uid}, ID do objeto: ${std.id}`);
+        
         // Save student document FIRST
-        await saveStudent(std);
-        addSyncLog(`[Firebase] Documento do aluno "${std.name}" criado com sucesso.`);
+        try {
+          console.log(`[Debug handleAddStudent] Gravando documento do aluno no Firestore (coleções 'students' e 'alunos')... Payload:`, JSON.stringify(std));
+          await saveStudent(std);
+          addSyncLog(`[Firebase] Documento do aluno "${std.name}" criado com sucesso no Firestore.`);
+          console.log(`[Debug handleAddStudent Success] Documento principal do aluno "${std.name}" persistido com sucesso no Firestore (UID: ${uid}).`);
+        } catch (stdSaveErr: any) {
+          console.error(`[Debug handleAddStudent Error] FALHA ao salvar o documento do aluno "${std.name}" no Firestore (UID: ${uid}):`, {
+            errorMessage: stdSaveErr.message,
+            errorCode: stdSaveErr.code,
+            errorStack: stdSaveErr.stack,
+            errorObj: stdSaveErr,
+            studentData: std
+          });
+          addSyncLog(`[Error] Falha ao persistir o documento de "${std.name}" no Firestore. Erro: ${stdSaveErr.message || stdSaveErr}`);
+          throw stdSaveErr;
+        }
 
         // Now save secondary documents that reference the student document
-        await Promise.all([
-          saveSheet(std.id, initSheet),
-          saveEvolutionRecord(std.id, initRecord),
-          saveChatMessage(std.id, initChat),
-          saveNotification(initNotif)
-        ]);
-        addSyncLog(`[Firebase] Ficha, evolução, chat e notificações de "${std.name}" persistidos com sucesso.`);
+        console.log(`[Debug handleAddStudent] Gravando documentos secundários associados ao UID: ${uid}...`);
+        try {
+          await Promise.all([
+            saveSheet(std.id, initSheet),
+            saveEvolutionRecord(std.id, initRecord),
+            saveChatMessage(std.id, initChat),
+            saveNotification(initNotif)
+          ]);
+          addSyncLog(`[Firebase] Ficha, evolução, chat e notificações de "${std.name}" persistidos com sucesso.`);
+          console.log(`[Debug handleAddStudent Success] Todos os registros secundários de "${std.name}" foram persistidos com sucesso no Firestore.`);
+        } catch (subSaveErr: any) {
+          console.error(`[Debug handleAddStudent Error] Falha ao persistir registros complementares (ficha, evolução, chat, notificação) de "${std.name}" no Firestore (UID: ${uid}):`, {
+            errorMessage: subSaveErr.message,
+            errorCode: subSaveErr.code,
+            errorStack: subSaveErr.stack,
+            errorObj: subSaveErr
+          });
+          addSyncLog(`[Error] Falha ao persistir os dados complementares de "${std.name}" no Firestore. Erro: ${subSaveErr.message || subSaveErr}`);
+        }
       } catch (saveErr: any) {
-        console.error("[Firebase Save Failure] Falha ao persistir no Firestore:", saveErr);
-        addSyncLog(`[Error] Falha ao persistir os dados complementares de "${std.name}" no Firestore.`);
+        console.error("[Firebase Save Failure Global] Erro crítico geral na persistência pós-criação de Auth para o aluno:", std.name, "UID:", uid, saveErr);
+        addSyncLog(`[Error] Falha geral ao persistir os dados de "${std.name}" no Firestore. Conta criada no Auth, mas Firestore falhou.`);
       }
     })();
 
