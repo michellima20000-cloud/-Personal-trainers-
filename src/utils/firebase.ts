@@ -1,5 +1,5 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, setPersistence, inMemoryPersistence } from 'firebase/auth';
 import { 
   getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   getDocFromServer, query, where, limit, enableIndexedDbPersistence
@@ -106,6 +106,11 @@ try {
 }
 
 export const registrationAuth = registrationApp ? getAuth(registrationApp) : null;
+if (registrationAuth) {
+  setPersistence(registrationAuth, inMemoryPersistence).catch((err) => {
+    console.error("Failed to configure in-memory persistence for registrationAuth:", err);
+  });
+}
 
 export async function registerAuthUser(email: string, pass: string, profileMeta?: string) {
   const targetAuth = registrationAuth || auth;
@@ -348,10 +353,18 @@ function cleanUndefined<T>(obj: T): T {
 }
 
 // 1. Students CRUD
-export async function fetchStudents(): Promise<Student[]> {
+export async function fetchStudents(trainerId?: string, studentId?: string): Promise<Student[]> {
   const p = 'students';
   try {
-    const snap = await getDocs(collection(db, p));
+    let q: any = collection(db, p);
+    if (trainerId && trainerId !== 't_default') {
+      q = query(collection(db, p), where('trainerId', '==', trainerId));
+    } else if (studentId) {
+      q = query(collection(db, p), where('uid', '==', studentId));
+    } else if (auth.currentUser) {
+      q = query(collection(db, p), where('trainerId', '==', auth.currentUser.uid));
+    }
+    const snap = await getDocs(q);
     const list: Student[] = [];
     snap.forEach((d) => {
       list.push(d.data() as Student);

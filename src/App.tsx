@@ -259,7 +259,7 @@ export default function App() {
             fetchedMarketingPlans,
             fetchedTrainers
           ] = await Promise.all([
-            fetchStudents().catch(err => { console.error("fetchStudents failed:", err); return []; }),
+            fetchStudents(preloadedState.activeTrainer?.id || undefined, preloadedState.activeStudentId || undefined).catch(err => { console.error("fetchStudents failed:", err); return []; }),
             fetchSheets().catch(err => { console.error("fetchSheets failed:", err); return {}; }),
             fetchAgendaEvents().catch(err => { console.error("fetchAgendaEvents failed:", err); return []; }),
             fetchNotifications().catch(err => { console.error("fetchNotifications failed:", err); return []; }),
@@ -688,9 +688,14 @@ export default function App() {
     if (loadingFirebase) return;
 
     // Standard client query path separation depending on active authentication role to avoid Firestore security rule violations
-    const q = (role === 'student' && activeStudentId)
-      ? doc(db, 'students', activeStudentId)
-      : collection(db, 'students');
+    let q: any;
+    if (role === 'student' && activeStudentId) {
+      q = doc(db, 'students', activeStudentId);
+    } else if (role === 'trainer' && auth.currentUser) {
+      q = query(collection(db, 'students'), where('trainerId', '==', auth.currentUser.uid));
+    } else {
+      q = collection(db, 'students');
+    }
 
     const unsub = onSnapshot(q as any, (snapshot: any) => {
       const list: Student[] = [];
@@ -774,38 +779,44 @@ export default function App() {
   useEffect(() => {
     if (loadingFirebase) return;
 
-    // Standard client query path separation depending on active authentication role to avoid Firestore security rule violations
-    const q = (role === 'student' && activeStudentId)
-      ? doc(db, 'sheets', activeStudentId)
-      : collection(db, 'sheets');
-
-    const unsub = onSnapshot(q as any, (snapshot: any) => {
-      const sheetsMap: Record<string, TrainingSheet> = {};
-      if (role === 'student' && activeStudentId) {
-        if (snapshot.exists && snapshot.exists()) {
-          sheetsMap[activeStudentId] = snapshot.data() as TrainingSheet;
+    if (role === 'student' && activeStudentId) {
+      const q = doc(db, 'sheets', activeStudentId);
+      const unsub = onSnapshot(q, (snapshot) => {
+        if (snapshot.exists()) {
+          const sheetData = snapshot.data() as TrainingSheet;
+          setSheets((prev) => {
+            const merged = { ...prev, [activeStudentId]: sheetData };
+            if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+            return merged;
+          });
         }
-      } else {
-        snapshot.forEach((d: any) => {
-          sheetsMap[d.id] = d.data() as TrainingSheet;
-        });
-      }
-
-      setSheets((prev) => {
-        const merged = { ...prev, ...sheetsMap };
-        if (JSON.stringify(prev) === JSON.stringify(merged)) {
-          return prev;
-        }
-        return merged;
+      }, (error) => {
+        console.error("Error syncing training sheets for student:", error);
       });
-    }, (error) => {
-      console.error("Error syncing training sheets in real-time:", error);
-    });
-
-    return () => {
-      unsub();
-    };
-  }, [loadingFirebase, role, activeStudentId]);
+      return () => unsub();
+    } else if (role === 'trainer' && students.length > 0) {
+      const unsubscribes: (() => void)[] = [];
+      students.forEach((student) => {
+        const q = doc(db, 'sheets', student.id);
+        const unsub = onSnapshot(q, (snapshot) => {
+          if (snapshot.exists()) {
+            const sheetData = snapshot.data() as TrainingSheet;
+            setSheets((prev) => {
+              const merged = { ...prev, [student.id]: sheetData };
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              return merged;
+            });
+          }
+        }, (error) => {
+          console.error(`Error syncing training sheet for student ${student.id}:`, error);
+        });
+        unsubscribes.push(unsub);
+      });
+      return () => {
+        unsubscribes.forEach((unsub) => unsub());
+      };
+    }
+  }, [loadingFirebase, role, activeStudentId, students]);
 
   // Real-time synchronization of agenda events from Firebase Firestore
   useEffect(() => {

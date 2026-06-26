@@ -30,20 +30,20 @@ service cloud.firestore {
     // 1. Students collection
     match /students/{studentId} {
       // Students can read their own profile. Trainers can read students linked to them.
-      allow read: if isOwner(studentId) || (isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid));
+      allow read: if isOwner(studentId) || (isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || resource.data.email == request.auth.token.email));
       
       // Trainers can create or update students that belong to them.
       // Students can update their own profiles.
-      allow create: if isSignedIn() && (isOwner(studentId) || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid);
-      allow update: if isSignedIn() && (isOwner(studentId) || resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid);
+      allow create: if isSignedIn() && (isOwner(studentId) || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid || request.resource.data.email == request.auth.token.email);
+      allow update: if isSignedIn() && (isOwner(studentId) || resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid || resource.data.email == request.auth.token.email);
       allow delete: if isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid);
     }
 
     // Duplicate path backup (legacy matching '/alunos/')
     match /alunos/{studentId} {
-      allow read: if isOwner(studentId) || (isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid));
-      allow create: if isSignedIn() && (isOwner(studentId) || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid);
-      allow update: if isSignedIn() && (isOwner(studentId) || resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid);
+      allow read: if isOwner(studentId) || (isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || resource.data.email == request.auth.token.email));
+      allow create: if isSignedIn() && (isOwner(studentId) || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid || request.resource.data.email == request.auth.token.email);
+      allow update: if isSignedIn() && (isOwner(studentId) || resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid || request.resource.data.trainerUid == request.auth.uid || request.resource.data.trainerId == request.auth.uid || resource.data.email == request.auth.token.email);
       allow delete: if isSignedIn() && (resource.data.trainerUid == request.auth.uid || resource.data.trainerId == request.auth.uid);
     }
 
