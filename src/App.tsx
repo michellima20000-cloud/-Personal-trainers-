@@ -695,11 +695,17 @@ export default function App() {
       const list: Student[] = [];
       if (role === 'student' && activeStudentId) {
         if (snapshot.exists && snapshot.exists()) {
-          list.push(snapshot.data() as Student);
+          const data = snapshot.data();
+          if (data) {
+            list.push({ id: snapshot.id, ...data } as Student);
+          }
         }
       } else {
         snapshot.forEach((d: any) => {
-          list.push(d.data() as Student);
+          const data = d.data();
+          if (data) {
+            list.push({ id: d.id, ...data } as Student);
+          }
         });
       }
 
@@ -730,7 +736,10 @@ export default function App() {
     const unsub = onSnapshot(q, (snapshot) => {
       const list: Trainer[] = [];
       snapshot.forEach((d) => {
-        list.push(d.data() as Trainer);
+        const data = d.data();
+        if (data) {
+          list.push({ id: d.id, ...data } as Trainer);
+        }
       });
 
       const filtered = list.filter(t => t.id !== 't_default');

@@ -1224,6 +1224,19 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     if (invitedStudent) {
       setTimeout(async () => {
         try {
+          // Log in or register user in Firebase Auth to synchronize session UID
+          try {
+            await signInWithEmailAndPassword(auth, emailClean, invitedStudent.password || '123456');
+            console.log(`[GymPulse Auth] Sucesso ao conectar no Firebase Auth para Google Mock Linkage.`);
+          } catch (authErr: any) {
+            console.warn("[GymPulse Auth] Erro ao conectar no Firebase Auth durante Google Mock Linkage, tentando criar:", authErr);
+            try {
+              await createUserWithEmailAndPassword(auth, emailClean, invitedStudent.password || '123456');
+            } catch (createErr) {
+              console.error("[GymPulse Auth] Falha ao criar no Firebase Auth:", createErr);
+            }
+          }
+
           const resolvedTrainerId = getResolvedTrainerId(invitedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
           console.log(`[GymPulse Invite/Login] Vinculando Gmail ao convite de "${invitedStudent.name}" com o Personal ID: "${resolvedTrainerId}"`);
           if (onUpdateStudent) {
@@ -1295,6 +1308,18 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
       // Link Account if matched pre-registration matches the logged Google Email!
       if (matchedStudent) {
+        try {
+          await signInWithEmailAndPassword(auth, emailClean, matchedStudent.password || '123456');
+          console.log(`[GymPulse Auth] Sucesso ao conectar no Firebase Auth para Google Mock.`);
+        } catch (authErr: any) {
+          console.warn("[GymPulse Auth] Erro ao conectar no Firebase Auth durante Google Mock, tentando criar:", authErr);
+          try {
+            await createUserWithEmailAndPassword(auth, emailClean, matchedStudent.password || '123456');
+          } catch (createErr) {
+            console.error("[GymPulse Auth] Falha ao criar no Firebase Auth:", createErr);
+          }
+        }
+
         const resolvedTrainerId = getResolvedTrainerId(matchedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
         const resolvedTrainerName = trainers.find(t => t.id === resolvedTrainerId)?.name || referredTrainer?.name || 'Consultoria Geral';
         const updatedData: Partial<Student> = {
@@ -1330,10 +1355,29 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         : 'Aluno Convidado';
       
       const newStudentId = 'st_g_' + Date.now().toString();
+      let finalStudentId = newStudentId;
+
+      try {
+        const userCred = await createUserWithEmailAndPassword(auth, emailClean, '123456');
+        finalStudentId = userCred.user.uid;
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/email-already-in-use') {
+          try {
+            const userCred = await signInWithEmailAndPassword(auth, emailClean, '123456');
+            finalStudentId = userCred.user.uid;
+          } catch (signInErr) {
+            console.error("Auth signin error for dynamic student:", signInErr);
+          }
+        } else {
+          console.error("Auth creation error for dynamic student:", authErr);
+        }
+      }
+
       const resolvedNewStudentTrainerId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
       const resolvedTrainerName = trainers.find(t => t.id === resolvedNewStudentTrainerId)?.name || referredTrainer?.name || 'Consultoria Geral';
       const newStudent: Student = {
-        id: newStudentId,
+        id: finalStudentId,
+        uid: finalStudentId,
         name: generatedName,
         email: emailClean,
         phoneWhatsApp: '',
@@ -1360,14 +1404,14 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       setTimeout(async () => {
         try {
           if (onAddStudent) {
-            onAddStudent(newStudent);
+            await onAddStudent(newStudent);
           }
           setLoading(false);
           setSuccessMsg(`Bem-vindo ao GymPulse! Criamos seu portal de acesso rápido para ${generatedName}.`);
           setShowGoogleModal(false);
           setGooglePendingRoleEmail(null);
           setTimeout(() => {
-            onLoginSuccess('student', newStudentId, undefined, newStudent);
+            onLoginSuccess('student', finalStudentId, undefined, newStudent);
           }, 1000);
         } catch (err) {
           setLoading(false);
@@ -1382,13 +1426,23 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     }
   };
 
-  const executeGoogleLoginAsTrainerOrAdmin = (emailClean: string) => {
+  const executeGoogleLoginAsTrainerOrAdmin = async (emailClean: string) => {
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
 
     // 1. Check if the email belongs to the Admin Supremo (Michel Lima)
     if (emailClean === 'michel.lima20000@gmail.com') {
+      try {
+        await signInWithEmailAndPassword(auth, 'michel.lima20000@gmail.com', '123456');
+      } catch (authErr: any) {
+        try {
+          await createUserWithEmailAndPassword(auth, 'michel.lima20000@gmail.com', '123456');
+        } catch (createErr) {
+          console.error("Admin Auth failure:", createErr);
+        }
+      }
+
       setTimeout(() => {
         setLoading(false);
         setSuccessMsg(`Acesso de Administrador Supremo verificado via Google! Seja bem-vindo, Michel Lima 👋`);
@@ -1404,6 +1458,16 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     // 2. Check if the email belongs to any registered Coach/Trainer
     const foundTrainer = trainers.find(t => t.email.toLowerCase() === emailClean);
     if (foundTrainer) {
+      try {
+        await signInWithEmailAndPassword(auth, emailClean, foundTrainer.password || '123456');
+      } catch (authErr: any) {
+        try {
+          await createUserWithEmailAndPassword(auth, emailClean, foundTrainer.password || '123456');
+        } catch (createErr) {
+          console.error("Trainer Auth failure:", createErr);
+        }
+      }
+
       setTimeout(() => {
         setLoading(false);
         setSuccessMsg(`Verificado com sucesso via Google! Carregando Painel de ${foundTrainer.name}...`);
@@ -1422,8 +1486,25 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       ? trainerNameParts.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
       : 'Personal Trainer';
 
+    let finalTrainerId = 'tr_' + Date.now().toString();
+    try {
+      const userCred = await createUserWithEmailAndPassword(auth, emailClean, '123456');
+      finalTrainerId = userCred.user.uid;
+    } catch (authErr: any) {
+      if (authErr.code === 'auth/email-already-in-use') {
+        try {
+          const userCred = await signInWithEmailAndPassword(auth, emailClean, '123456');
+          finalTrainerId = userCred.user.uid;
+        } catch (signInErr) {
+          console.error("Trainer Auth signin failure:", signInErr);
+        }
+      } else {
+        console.error("Trainer Auth creation failure:", authErr);
+      }
+    }
+
     const newTrainer: Trainer = {
-      id: 'tr_' + Date.now().toString(),
+      id: finalTrainerId,
       name: trainerName + ' (Coach)',
       email: emailClean,
       password: '123456',
@@ -1439,7 +1520,7 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
     setTimeout(async () => {
       try {
         if (onAddTrainer) {
-          onAddTrainer(newTrainer);
+          await onAddTrainer(newTrainer);
         }
         setLoading(false);
         setSuccessMsg(`Bem-vindo, Coach! Criamos seu perfil de Personal Trainer para ${trainerName}.`);
