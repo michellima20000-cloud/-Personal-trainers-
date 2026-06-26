@@ -127,13 +127,81 @@ export default function StudentDashboard({
   
   const studentTrainer = useMemo(() => {
     if (!currentStudent) return undefined;
-    const assignedUid = currentStudent.trainerUid;
-    if (assignedUid) {
+    
+    // 1. First priority: Exact match by trainerUid or trainerId
+    const assignedUid = currentStudent.trainerUid || currentStudent.trainerId;
+    if (assignedUid && assignedUid !== 't_default') {
       const match = trainers.find(t => t.id === assignedUid || t.uid === assignedUid);
       if (match) return match;
     }
-    return undefined;
-  }, [currentStudent, trainers]);
+    
+    // 2. Second priority: Match by trainerName or nomePersonal
+    const embeddedName = currentStudent.trainerName || currentStudent.nomePersonal;
+    if (embeddedName && embeddedName !== 'Consultoria Geral' && embeddedName !== 'Seu Consultor Esportivo') {
+      const matchByName = trainers.find(t => t.name.toLowerCase() === embeddedName.toLowerCase());
+      if (matchByName) return matchByName;
+    }
+
+    // 3. Third priority: Fallback to the first real trainer in the list
+    const firstReal = trainers.find(t => t.id !== 't_default');
+    if (firstReal) return firstReal;
+
+    // 4. Fourth priority: Fallback to activeTrainer if it's a real trainer
+    if (activeTrainer && activeTrainer.id !== 't_default') {
+      return activeTrainer;
+    }
+
+    // 5. Fifth priority: Hard fallback to the very first trainer in the array
+    if (trainers.length > 0) {
+      return trainers[0];
+    }
+
+    // 6. Final virtual fallback: return a stable Virtual Trainer object so the app never blocks on loading
+    return {
+      id: assignedUid || 't_default',
+      name: embeddedName || 'Consultoria Geral',
+      email: currentStudent.trainerEmail || 'suporte@gympulse.com.br',
+      selectedPlan: 'Mensal',
+      trialStartDate: '',
+      trialExpiresAt: '',
+      subscriptionStatus: 'paid',
+      customIdLink: assignedUid || 't_default',
+      phoneWhatsApp: currentStudent.trainerPhone || ''
+    } as Trainer;
+  }, [currentStudent, trainers, activeTrainer]);
+
+  // Auto-correct / Auto-heal broken student-trainer associations in real-time
+  useEffect(() => {
+    if (currentStudent && studentTrainer && studentTrainer.id !== 't_default') {
+      const currentUid = currentStudent.trainerUid || currentStudent.trainerId;
+      const targetUid = studentTrainer.id;
+      const targetName = studentTrainer.name;
+      const targetEmail = studentTrainer.email || '';
+      const targetPhone = studentTrainer.phoneWhatsApp || '';
+      const targetPhoto = studentTrainer.photo || studentTrainer.avatar || '';
+
+      const needsFix = !currentUid || 
+                        currentUid === 't_default' || 
+                        currentUid !== targetUid || 
+                        currentStudent.trainerName !== targetName ||
+                        currentStudent.trainerEmail !== targetEmail ||
+                        currentStudent.trainerPhone !== targetPhone ||
+                        currentStudent.trainerPhoto !== targetPhoto;
+
+      if (needsFix) {
+        console.log(`[Auto-Heal] Corrigindo/Sincronizando vínculo do aluno "${currentStudent.name}" com o treinador "${targetName}" (${targetUid})`);
+        onUpdateStudent?.(currentStudent.id, {
+          trainerId: targetUid,
+          trainerUid: targetUid,
+          trainerName: targetName,
+          nomePersonal: targetName,
+          trainerEmail: targetEmail,
+          trainerPhone: targetPhone,
+          trainerPhoto: targetPhoto
+        });
+      }
+    }
+  }, [currentStudent, studentTrainer, onUpdateStudent]);
 
   const studentAccessLogs = useMemo(() => {
     if (!currentStudent) return [];
