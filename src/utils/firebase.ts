@@ -106,13 +106,26 @@ try {
 }
 
 export const registrationAuth = registrationApp ? getAuth(registrationApp) : null;
+export let registrationAuthReady: Promise<void> = Promise.resolve();
+
 if (registrationAuth) {
-  setPersistence(registrationAuth, inMemoryPersistence).catch((err) => {
-    console.error("Failed to configure in-memory persistence for registrationAuth:", err);
-  });
+  registrationAuthReady = setPersistence(registrationAuth, inMemoryPersistence)
+    .then(() => {
+      console.log("[Firebase Auth Registration] InMemory persistence configured successfully.");
+    })
+    .catch((err) => {
+      console.error("Failed to configure in-memory persistence for registrationAuth:", err);
+    });
 }
 
 export async function registerAuthUser(email: string, pass: string, profileMeta?: string) {
+  // Ensure persistence is fully configured first to avoid IndexedDB/storage collisions with the main auth instance
+  try {
+    await registrationAuthReady;
+  } catch (err) {
+    console.warn("Failed awaiting registrationAuthReady, proceeding anyway:", err);
+  }
+
   const targetAuth = registrationAuth || auth;
   const cleanEmail = email.trim().toLowerCase();
   console.log(`[Firebase Auth Registration] Registering user ${cleanEmail} using ${registrationAuth ? "RegistrationAuth" : "default Auth"}`);
