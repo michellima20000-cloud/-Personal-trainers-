@@ -23,7 +23,7 @@ import { deleteDoc, doc, collection, onSnapshot, query, where } from 'firebase/f
 import { 
   db,
   auth,
-  initializeAnonymousAuth, registerAuthUser,
+  initializeAnonymousAuth, registerAuthUser, waitForAuthInit,
   fetchStudents, fetchStudent, fetchStudentByEmail, saveStudent,
   fetchSheets, saveSheet,
   fetchAllEvolutionRecords, saveEvolutionRecord,
@@ -244,10 +244,18 @@ export default function App() {
         // Run anonymous authentication in parallel with fetches to eliminate sequential RTT delays
         const parallelFetchPromise = (async () => {
           try {
+            await waitForAuthInit();
+          } catch (e) {
+            console.warn("Skipping auth init wait", e);
+          }
+
+          try {
             await initializeAnonymousAuth();
           } catch (e) {
             console.warn("Skipping anonymous auth wait", e);
           }
+
+          const isUserLoggedIn = !!auth.currentUser;
 
           const [
             fetchedStudents,
@@ -259,12 +267,12 @@ export default function App() {
             fetchedMarketingPlans,
             fetchedTrainers
           ] = await Promise.all([
-            fetchStudents(preloadedState.activeTrainer?.id || undefined, preloadedState.activeStudentId || undefined).catch(err => { console.error("fetchStudents failed:", err); return []; }),
-            fetchSheets().catch(err => { console.error("fetchSheets failed:", err); return {}; }),
-            fetchAgendaEvents().catch(err => { console.error("fetchAgendaEvents failed:", err); return []; }),
-            fetchNotifications().catch(err => { console.error("fetchNotifications failed:", err); return []; }),
-            fetchRevenueLogs().catch(err => { console.error("fetchRevenueLogs failed:", err); return []; }),
-            fetchAccessLogs().catch(err => { console.error("fetchAccessLogs failed:", err); return []; }),
+            isUserLoggedIn ? fetchStudents(preloadedState.activeTrainer?.id || undefined, preloadedState.activeStudentId || undefined).catch(err => { console.error("fetchStudents failed:", err); return []; }) : Promise.resolve([]),
+            isUserLoggedIn ? fetchSheets().catch(err => { console.error("fetchSheets failed:", err); return {}; }) : Promise.resolve({}),
+            isUserLoggedIn ? fetchAgendaEvents().catch(err => { console.error("fetchAgendaEvents failed:", err); return []; }) : Promise.resolve([]),
+            isUserLoggedIn ? fetchNotifications().catch(err => { console.error("fetchNotifications failed:", err); return []; }) : Promise.resolve([]),
+            isUserLoggedIn ? fetchRevenueLogs().catch(err => { console.error("fetchRevenueLogs failed:", err); return []; }) : Promise.resolve([]),
+            isUserLoggedIn ? fetchAccessLogs().catch(err => { console.error("fetchAccessLogs failed:", err); return []; }) : Promise.resolve([]),
             fetchMarketingPlans().catch(err => { console.error("fetchMarketingPlans failed:", err); return []; }),
             fetchTrainers().catch(err => { console.error("fetchTrainers failed:", err); return []; })
           ]);
@@ -283,15 +291,16 @@ export default function App() {
         const dbData = await Promise.race([parallelFetchPromise, timeoutPromise]);
         clearTimeout(timeoutId);
 
-        let remoteStudents = (dbData.students || []).filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id));
+        const isUserLoggedIn = !!auth.currentUser;
+        let remoteStudents = isUserLoggedIn ? (dbData.students || []).filter(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id)) : (preloadedState.students || []);
         
-        // Anti-wipe local-to-cloud auto-synchronization safeguard
+        // Anti-wipe local-to-cloud auto-synchronization safeguard (only active if signed in)
         const localOnlyStudents = (preloadedState.students || []).filter(
           s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id) && 
                !remoteStudents.some(rs => rs.id === s.id)
         );
 
-        if (localOnlyStudents.length > 0) {
+        if (isUserLoggedIn && localOnlyStudents.length > 0) {
           addSyncLog(`[Sync] Sincronizando ${localOnlyStudents.length} aluno(s) locais pendentes para o Firebase...`);
           localOnlyStudents.forEach(s => {
             saveStudent(s)
@@ -320,11 +329,11 @@ export default function App() {
           remoteStudents = [...remoteStudents, ...localOnlyStudents];
         }
 
-        let remoteSheets = dbData.sheets;
-        let remoteAgenda = dbData.agenda;
-        let remoteNotifications = dbData.notifications;
-        let remoteRevenueLogs = dbData.revenueLogs;
-        let remoteAccessLogs = dbData.accessLogs;
+        let remoteSheets = isUserLoggedIn ? dbData.sheets : (preloadedState.sheets || {});
+        let remoteAgenda = isUserLoggedIn ? dbData.agenda : (preloadedState.agenda || []);
+        let remoteNotifications = isUserLoggedIn ? dbData.notifications : (preloadedState.notifications || []);
+        let remoteRevenueLogs = isUserLoggedIn ? dbData.revenueLogs : (preloadedState.revenueLogs || []);
+        let remoteAccessLogs = isUserLoggedIn ? dbData.accessLogs : (preloadedState.accessLogs || []);
         let remoteMarketingPlans = dbData.marketingPlans;
         let remoteTrainers = (dbData.trainers || []).filter(t => t.id !== 't_default');
 
@@ -685,7 +694,7 @@ export default function App() {
 
   // Real-time synchronization of students list from Firebase Firestore
   useEffect(() => {
-    if (loadingFirebase) return;
+    if (loadingFirebase || !isLoggedIn) return;
 
     // Standard client query path separation depending on active authentication role to avoid Firestore security rule violations
     let q: any;
@@ -777,7 +786,7 @@ export default function App() {
 
   // Real-time synchronization of training sheets from Firebase Firestore
   useEffect(() => {
-    if (loadingFirebase) return;
+    if (loadingFirebase || !isLoggedIn) return;
 
     if (role === 'student' && activeStudentId) {
       const q = doc(db, 'sheets', activeStudentId);
@@ -820,7 +829,7 @@ export default function App() {
 
   // Real-time synchronization of agenda events from Firebase Firestore
   useEffect(() => {
-    if (loadingFirebase) return;
+    if (loadingFirebase || !isLoggedIn) return;
 
     // Standard client query path separation depending on active authentication role to avoid Firestore security rule violations
     const q = (role === 'student' && activeStudentId)
@@ -850,7 +859,7 @@ export default function App() {
 
   // Trial validation side effect to verify if a trial account is expired
   useEffect(() => {
-    if (loadingFirebase) return;
+    if (loadingFirebase || !isLoggedIn) return;
     if (!activeTrainer || activeTrainer.id === 't_default') return;
 
     const today = new Date();
@@ -902,7 +911,7 @@ export default function App() {
 
   // Real-time synchronization of notifications from Firebase Firestore
   useEffect(() => {
-    if (loadingFirebase) return;
+    if (loadingFirebase || !isLoggedIn) return;
 
     const q = collection(db, 'notifications');
     const unsub = onSnapshot(q, (snapshot) => {
@@ -931,7 +940,7 @@ export default function App() {
 
   // Real-time synchronization of evolution subcollections for each student
   useEffect(() => {
-    if (loadingFirebase || students.length === 0) return;
+    if (loadingFirebase || !isLoggedIn || students.length === 0) return;
 
     const unsubscribes: (() => void)[] = [];
 

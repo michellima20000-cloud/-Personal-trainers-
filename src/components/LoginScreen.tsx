@@ -304,6 +304,17 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       setStudentLoginEmail(invitedStudent.email || '');
       setStudentLoginPassword(invitedStudent.password || '');
     }
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlEmail = params.get('email');
+      const urlPassword = params.get('password');
+      if (urlEmail) {
+        setStudentLoginEmail(urlEmail);
+      }
+      if (urlPassword) {
+        setStudentLoginPassword(urlPassword);
+      }
+    }
   }, [invitedStudent]);
 
   useEffect(() => {
@@ -819,7 +830,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }
 
         const resolvedTrainerId = getResolvedTrainerId(invitedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
-        const resolvedTrainerName = trainers.find(t => t.id === resolvedTrainerId)?.name || invitedStudent.trainerName || referredTrainer?.name || 'Consultoria Geral';
+        const matchedTrainerObj = trainers.find(t => t.id === resolvedTrainerId);
+        const resolvedTrainerName = matchedTrainerObj?.name || invitedStudent.trainerName || referredTrainer?.name || 'Consultoria Geral';
+        const resolvedTrainerCode = matchedTrainerObj?.personalCode || invitedStudent.trainerCode || 'PT-DEFAULT';
 
         const updatedData: Partial<Student> = {
           email: emailClean,
@@ -828,8 +841,12 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           isProfileComplete: invitedStudent.isProfileComplete || false,
           accessMethod: 'password' as const,
           trainerId: resolvedTrainerId,
+          trainerUid: resolvedTrainerId,
+          trainerCode: resolvedTrainerCode,
           trainerName: resolvedTrainerName,
-          nomePersonal: resolvedTrainerName
+          nomePersonal: resolvedTrainerName,
+          studentName: invitedStudent.name || invitedStudent.nome,
+          studentEmail: emailClean
         };
         if (onUpdateStudent) {
           onUpdateStudent(invitedStudent.id, updatedData);
@@ -1054,15 +1071,20 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
 
         // Final safe resolution to prioritize URL invite trainer or stored referrer over defaults
         autoTrainerId = getResolvedTrainerId(autoTrainerId, referredTrainer?.id, regStudentTrainerId);
-        const resolvedTrainerName = trainers.find(t => t.id === autoTrainerId)?.name || referredTrainer?.name || 'Consultoria Geral';
+        const matchedTrainerObj = trainers.find(t => t.id === autoTrainerId);
+        const resolvedTrainerName = matchedTrainerObj?.name || referredTrainer?.name || 'Consultoria Geral';
+        const resolvedTrainerCode = matchedTrainerObj?.personalCode || 'PT-DEFAULT';
         console.log(`[GymPulse Link / Auto-Criar] Associando aluno "${autoName}" ao Personal Coach ID: "${autoTrainerId}" (${resolvedTrainerName})`);
 
         const autoStudent: Student = {
           id: uid,
           uid: uid,
+          studentUid: uid,
           name: autoName,
           nome: autoName,
+          studentName: autoName,
           email: emailClean,
+          studentEmail: emailClean,
           password: passClean,
           phoneWhatsApp: autoPhone || undefined,
           telefone: autoPhone || '',
@@ -1074,6 +1096,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           plano: autoPlan,
           status: 'Ativo',
           trainerId: autoTrainerId,
+          trainerUid: autoTrainerId,
+          trainerCode: resolvedTrainerCode,
           trainerName: resolvedTrainerName,
           nomePersonal: resolvedTrainerName,
           joinedAt: new Date().toLocaleDateString('pt-BR'),
@@ -1104,6 +1128,11 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         console.log(`[Documento Carregado] Aluno logado e perfil carregado com sucesso: "${matchedStudent.name}" (UID: ${uid})`);
         setSuccessMsg(`Sucesso! Bem vindo ao GymPulse, carregando seus treinos...`);
 
+        const resolvedTrainerId = getResolvedTrainerId(matchedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
+        const matchedTrainerObj = trainers.find(t => t.id === resolvedTrainerId);
+        const resolvedTrainerName = matchedTrainerObj?.name || matchedStudent.trainerName || referredTrainer?.name || 'Consultoria Geral';
+        const resolvedTrainerCode = matchedTrainerObj?.personalCode || matchedStudent.trainerCode || 'PT-DEFAULT';
+
         // Sincroniza estado e ativa se necessário
         const updates: Partial<Student> = {};
         if (matchedStudent.status !== 'Ativo') {
@@ -1113,6 +1142,36 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         if (matchedStudent.password !== passClean) {
           matchedStudent.password = passClean;
           updates.password = passClean;
+        }
+
+        // Garante e preserva os campos necessários do relacionamento
+        if (!matchedStudent.trainerId || matchedStudent.trainerId !== resolvedTrainerId) {
+          matchedStudent.trainerId = resolvedTrainerId;
+          updates.trainerId = resolvedTrainerId;
+        }
+        if (!matchedStudent.trainerUid || matchedStudent.trainerUid !== resolvedTrainerId) {
+          matchedStudent.trainerUid = resolvedTrainerId;
+          updates.trainerUid = resolvedTrainerId;
+        }
+        if (!matchedStudent.trainerName || matchedStudent.trainerName !== resolvedTrainerName) {
+          matchedStudent.trainerName = resolvedTrainerName;
+          updates.trainerName = resolvedTrainerName;
+        }
+        if (!matchedStudent.nomePersonal || matchedStudent.nomePersonal !== resolvedTrainerName) {
+          matchedStudent.nomePersonal = resolvedTrainerName;
+          updates.nomePersonal = resolvedTrainerName;
+        }
+        if (!matchedStudent.trainerCode || matchedStudent.trainerCode !== resolvedTrainerCode) {
+          matchedStudent.trainerCode = resolvedTrainerCode;
+          updates.trainerCode = resolvedTrainerCode;
+        }
+        if (!matchedStudent.studentName || matchedStudent.studentName !== matchedStudent.name) {
+          matchedStudent.studentName = matchedStudent.name;
+          updates.studentName = matchedStudent.name;
+        }
+        if (!matchedStudent.studentEmail || matchedStudent.studentEmail !== emailClean) {
+          matchedStudent.studentEmail = emailClean;
+          updates.studentEmail = emailClean;
         }
 
         if (Object.keys(updates).length > 0 && onUpdateStudent) {
@@ -1249,6 +1308,9 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
           }
 
           const resolvedTrainerId = getResolvedTrainerId(invitedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
+          const matchedTrainerObj = trainers.find(t => t.id === resolvedTrainerId);
+          const resolvedTrainerName = matchedTrainerObj?.name || invitedStudent.trainerName || referredTrainer?.name || 'Consultoria Geral';
+          const resolvedTrainerCode = matchedTrainerObj?.personalCode || invitedStudent.trainerCode || 'PT-DEFAULT';
           console.log(`[GymPulse Invite/Login] Vinculando Gmail ao convite de "${invitedStudent.name}" com o Personal ID: "${resolvedTrainerId}"`);
           if (onUpdateStudent) {
             onUpdateStudent(invitedStudent.id, {
@@ -1256,7 +1318,13 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
               accessMethod: 'google',
               isProfileComplete: invitedStudent.isProfileComplete || false, // Let them complete remaining steps
               status: 'Ativo',
-              trainerId: resolvedTrainerId
+              trainerId: resolvedTrainerId,
+              trainerUid: resolvedTrainerId,
+              trainerCode: resolvedTrainerCode,
+              trainerName: resolvedTrainerName,
+              nomePersonal: resolvedTrainerName,
+              studentName: invitedStudent.name || invitedStudent.nome,
+              studentEmail: emailClean
             });
           }
           setLoading(false);
@@ -1269,7 +1337,13 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
               email: emailClean, 
               status: 'Ativo', 
               accessMethod: 'google',
-              trainerId: resolvedTrainerId 
+              trainerId: resolvedTrainerId,
+              trainerUid: resolvedTrainerId,
+              trainerCode: resolvedTrainerCode,
+              trainerName: resolvedTrainerName,
+              nomePersonal: resolvedTrainerName,
+              studentName: invitedStudent.name || invitedStudent.nome,
+              studentEmail: emailClean
             });
           }, 1000);
         } catch (err) {
@@ -1332,15 +1406,21 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         }
 
         const resolvedTrainerId = getResolvedTrainerId(matchedStudent.trainerId, referredTrainer?.id, regStudentTrainerId);
-        const resolvedTrainerName = trainers.find(t => t.id === resolvedTrainerId)?.name || referredTrainer?.name || 'Consultoria Geral';
+        const matchedTrainerObj = trainers.find(t => t.id === resolvedTrainerId);
+        const resolvedTrainerName = matchedTrainerObj?.name || referredTrainer?.name || 'Consultoria Geral';
+        const resolvedTrainerCode = matchedTrainerObj?.personalCode || matchedStudent.trainerCode || 'PT-DEFAULT';
         const updatedData: Partial<Student> = {
           email: emailClean,
           accessMethod: 'google',
           isProfileComplete: matchedStudent.isProfileComplete || false,
           status: 'Ativo',
           trainerId: resolvedTrainerId,
+          trainerUid: resolvedTrainerId,
+          trainerCode: resolvedTrainerCode,
           trainerName: resolvedTrainerName,
-          nomePersonal: resolvedTrainerName
+          nomePersonal: resolvedTrainerName,
+          studentName: matchedStudent.name || matchedStudent.nome,
+          studentEmail: emailClean
         };
 
         if (onUpdateStudent) {
@@ -1385,12 +1465,18 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
       }
 
       const resolvedNewStudentTrainerId = getResolvedTrainerId(undefined, referredTrainer?.id, regStudentTrainerId);
-      const resolvedTrainerName = trainers.find(t => t.id === resolvedNewStudentTrainerId)?.name || referredTrainer?.name || 'Consultoria Geral';
+      const matchedTrainerObj = trainers.find(t => t.id === resolvedNewStudentTrainerId);
+      const resolvedTrainerName = matchedTrainerObj?.name || referredTrainer?.name || 'Consultoria Geral';
+      const resolvedTrainerCode = matchedTrainerObj?.personalCode || 'PT-DEFAULT';
       const newStudent: Student = {
         id: finalStudentId,
         uid: finalStudentId,
+        studentUid: finalStudentId,
         name: generatedName,
+        nome: generatedName,
+        studentName: generatedName,
         email: emailClean,
+        studentEmail: emailClean,
         phoneWhatsApp: '',
         status: 'Ativo',
         joinedAt: new Date().toLocaleDateString('pt-BR'),
@@ -1408,6 +1494,8 @@ export default function LoginScreen({ students, trainers, onLoginSuccess, onAddS
         nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
         value: 120,
         trainerId: resolvedNewStudentTrainerId,
+        trainerUid: resolvedNewStudentTrainerId,
+        trainerCode: resolvedTrainerCode,
         trainerName: resolvedTrainerName,
         nomePersonal: resolvedTrainerName
       };

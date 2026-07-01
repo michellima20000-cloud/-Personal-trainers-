@@ -1,5 +1,5 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, setPersistence, inMemoryPersistence } from 'firebase/auth';
+import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, setPersistence, inMemoryPersistence, onAuthStateChanged } from 'firebase/auth';
 import { 
   getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   getDocFromServer, query, where, limit, enableIndexedDbPersistence
@@ -166,6 +166,16 @@ export async function initializeAnonymousAuth(): Promise<void> {
       console.log("Anonymous authentication skipped/unconfigured:", error instanceof Error ? error.message : error);
     }
   }
+}
+
+// Helper to wait for Firebase Auth to initialize before doing any fetches
+export function waitForAuthInit(): Promise<any> {
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
 }
 
 // Connection test guard

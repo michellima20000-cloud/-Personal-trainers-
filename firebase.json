@@ -1,0 +1,16 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-gympulse-298dbea7-6b82-4a40-a31a-cc42a6c7d016",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "ai-studio-298dbea7-6b82-4a40-a31a-cc42a6c7d016",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "(default)",
+      "rules": "firestore.rules"
+    }
+  ]
+}
